@@ -1,12 +1,13 @@
 # Codex Inspector — OpenAI Build Week plan
 
-**Status:** Draft for team alignment  
+**Status:** Updated after team alignment
+
 **Track:** Developer Tools  
 **Build window:** July 14–21, 2026  
 **Submission deadline:** July 21, 2026 at 5:00 PM PT
 
 > [!IMPORTANT]
-> This document is a proposal for team discussion, not a set of decisions or assignments. Everything is open for debate: the product thesis, scope, priorities, architecture, schedule, ownership lanes, and submission strategy. The named team lanes are conversation starters only; Dylan, Luis, and Woojun should confirm or replace them together.
+> The product thesis, scope, priorities, architecture, and submission strategy remain open for team discussion. The team has aligned on the immediate execution approach: Dylan, Luis, and Woojun will each build an independent MVP on July 15, then demo their work to one another on July 16 and combine the strongest ideas into a shared product direction.
 
 ## How this proposal was developed
 
@@ -243,63 +244,43 @@ Use one shared evidence representation for deterministic and model-produced find
 
 This is a core product primitive, not implementation polish. It enables trustworthy UI, review validation, reproducible demos, and actionable fix prompts.
 
-## Proposed team lanes
+## MVP exploration and convergence
 
-These are starting points for discussion with Luis and Woojun, not assignments.
+Rather than dividing the product into fixed ownership lanes, Dylan, Luis, and Woojun will each independently build a minimum viable version of Codex Inspector on July 15. Each implementation should express its builder's view of the core user problem, hero workflow, product surface, and smallest credible technical path.
 
-### Luis — ingestion and lifecycle lane
+On July 16, the team will demo the three MVPs to one another. The goal is not to select a winner wholesale, but to identify the strongest product ideas, interactions, technical approaches, and demo moments across all three. The team will then agree on a shared product vision and continue fleshing out one combined build for the rest of Build Week.
 
-- validate the session/state schema and reconstruction limits;
-- implement versioned adapters, SQLite storage, and incremental indexing;
-- package and test hooks;
-- own fixture coverage for parser changes.
-
-### Woojun — product surface and review lane
-
-- implement the local server and dashboard shell;
-- build session/turn/context drill-down;
-- implement review configuration, dry run, and findings presentation;
-- integrate the structured `codex exec` review result.
-
-### Dylan — product, analysis, integration, and submission lane
-
-- resolve product decisions and acceptance criteria;
-- define the context-leakage and tool-thrashing rules with fixtures;
-- dogfood Inspector against local sessions and review evidence quality;
-- coordinate integration and design review;
-- own README collaboration narrative, demo script, video, and Devpost submission.
-
-Because Dylan has less availability, Luis and Woojun should each be able to advance their lane without waiting for synchronous approval. Record interface decisions and short ADRs in the repository. Use the Miami–Seoul time difference for handoffs, with a small daily overlap for integration.
+Keep each MVP intentionally small enough to demo in a few minutes. Record important discoveries and tradeoffs so useful ideas survive even when their implementation is not carried forward.
 
 ## Seven-day execution plan
 
 ### July 14 — align and de-risk
 
-- Confirm this scope, team lanes, stack, and naming.
+- Discuss the initial product thesis, scope, stack, and naming.
 - Spike exact/reconstructed/estimated context visibility against current local records.
 - Commit anonymized schema fixtures, never personal transcript content.
-- Scaffold the plugin, CLI, test harness, and dashboard shell.
-- Agree on the evidence and finding schemas before parallel work begins.
+- Identify the core questions that independent MVPs should explore.
 
-**Exit gate:** a written feasibility matrix for context components and one fixture that all layers can consume.
+**Exit gate:** enough shared context for each team member to pursue an informed MVP direction.
 
-### July 15 — ingest and navigate
+### July 15 — build three independent MVPs
 
-- Parse sessions and turns into SQLite.
-- Implement the first incremental hook path.
-- Render an overview, session list, and basic session timeline from fixtures.
-- Add golden parser tests and an unknown-record fallback.
+- Dylan, Luis, and Woojun each build a minimum viable version of the product.
+- Explore the core user problem, hero workflow, product surface, and technical approach independently.
+- Keep scope tight enough that each implementation can be demonstrated clearly the next day.
+- Capture key discoveries, tradeoffs, and open questions alongside each MVP.
 
-**Exit gate:** clean install can index the fixture and navigate into a turn.
+**Exit gate:** three distinct, demoable MVPs that make the team's options concrete.
 
-### July 16 — make the invisible visible
+### July 16 — demo, synthesize, and converge
 
-- Build context composition and instruction provenance views.
-- Add token/timing/tool summaries with exact-versus-estimated labels.
-- Implement the first high-confidence context-leakage rule.
-- Establish the visual system and reusable UI components.
+- Demo all three MVPs to the team.
+- Compare the product theses, workflows, interactions, technical choices, and strongest demo moments.
+- Select the best ideas from across the implementations rather than adopting one MVP wholesale.
+- Align on a shared product vision, combined scope, and immediate integration plan.
+- Begin fleshing out the shared build from the chosen ideas.
 
-**Exit gate:** the synthetic leakage case is obvious and evidence-backed in the dashboard.
+**Exit gate:** a shared product direction and a concrete plan for the combined build.
 
 ### July 17 — complete the analysis loop
 
@@ -372,12 +353,12 @@ The Build Week version is complete when:
 | AI coaching hallucinates | Require resolvable evidence references and confidence; reject unsupported findings. |
 | Dashboard becomes a dense metrics wall | Design around the hero journey and progressive disclosure; freeze secondary charts early. |
 | Plugin installation does not install CLI runtime cleanly | Prove the clean install on July 18 at the latest; ship compiled assets or a packaged release rather than relying on a source build. |
-| Parallel work drifts across time zones | Lock shared domain schemas early, use fixtures as contracts, and maintain short repository handoffs/ADRs. |
+| Independent MVPs produce incompatible approaches | Compare product and technical choices explicitly during the July 16 demos, preserve useful discoveries, and agree on a shared integration plan before continuing. |
 | Personal data leaks into the demo or repository | Use synthetic fixtures only; add secret scanning and a pre-submission privacy review. |
 
 ## Decisions still requiring team confirmation
 
-1. Confirm or revise the proposed ownership lanes.
+1. Confirm the shared product vision and integration plan after the July 16 MVP demos.
 2. Confirm the TypeScript/React/SQLite implementation shape.
 3. Choose the final product name and CLI command.
 4. Choose the default model and reasoning effort offered by the review dry run.
