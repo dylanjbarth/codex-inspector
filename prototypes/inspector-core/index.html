@@ -187,6 +187,142 @@
         gap: var(--space-6);
       }
 
+      .dashboard-actions,
+      .range-options,
+      .legend,
+      .widget-actions,
+      .dialog-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .dashboard-toolbar {
+        display: grid;
+        grid-template-columns: minmax(14rem, 1fr) minmax(24rem, 2fr);
+        gap: var(--space-4);
+        margin: var(--space-5) 0 var(--space-3);
+        padding: var(--space-4);
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+
+      .dashboard-toolbar .field { min-width: 0; }
+      .range-field { display: grid; gap: var(--space-1); }
+      .range-field > span { color: var(--muted); font-size: 0.82rem; font-weight: 650; }
+      .range-button {
+        min-height: 2.5rem;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+      }
+      .range-button[aria-pressed="true"] { background: var(--focus-soft); border-color: var(--focus); color: #17384d; font-weight: 700; }
+
+      .filter-summary {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-4);
+        margin-bottom: var(--space-5);
+        padding: var(--space-2) var(--space-3);
+        border: 1px dashed var(--border-strong);
+        background: var(--surface);
+      }
+      .filter-summary p { margin: 0; }
+
+      .widget-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: var(--space-4);
+      }
+
+      .widget {
+        grid-column: span 6;
+        min-width: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+      .widget.wide { grid-column: 1 / -1; }
+      .widget.third { grid-column: span 4; }
+      .widget-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
+      .widget-header h2 { margin-bottom: var(--space-1); }
+      .widget-header p { margin: 0; }
+      .widget-body { padding: var(--space-4); }
+      .widget-kicker { color: var(--muted); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+      .hero-value { display: block; margin: var(--space-1) 0; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.1; }
+      .hero-row { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-5); align-items: end; }
+      .attribution { display: grid; gap: var(--space-2); }
+      .attribution-row { display: grid; grid-template-columns: 1fr auto; gap: var(--space-3); }
+      .attribution-row span:last-child { font-weight: 700; }
+
+      .progress-track,
+      .stacked-track,
+      .breakdown-track {
+        display: flex;
+        width: 100%;
+        height: 0.85rem;
+        overflow: hidden;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border);
+      }
+      .progress-fill { width: 68%; background: var(--focus); }
+      .root-fill { background: var(--focus); }
+      .spawned-fill { background: #9b9b95; }
+      .legend { margin-top: var(--space-3); color: var(--muted); font-size: 0.82rem; }
+      .legend-key { display: inline-block; width: 0.8rem; height: 0.8rem; margin-right: var(--space-1); vertical-align: -0.1rem; border: 1px solid var(--border-strong); }
+      .legend-key.root { background: var(--focus); }
+      .legend-key.spawned { background: #9b9b95; }
+      .legend-key.reset { width: 0; border-width: 0 0 0 2px; border-color: var(--danger); border-style: dashed; }
+
+      .bar-chart { display: grid; grid-template-columns: repeat(7, minmax(2.5rem, 1fr)); gap: var(--space-3); min-height: 14rem; align-items: end; padding-top: var(--space-4); }
+      .bar-column { display: grid; grid-template-rows: 10rem auto; gap: var(--space-2); text-align: center; color: var(--muted); font-size: 0.78rem; }
+      .bar-stack { display: flex; flex-direction: column-reverse; justify-content: flex-start; align-self: end; width: min(2.5rem, 80%); height: 10rem; margin: 0 auto; border-bottom: 1px solid var(--border-strong); }
+      .bar-stack span { display: block; width: 100%; }
+
+      .breakdown-list { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+      .breakdown-label { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-1); }
+      .breakdown-fill { display: block; height: 100%; background: var(--focus); }
+
+      .capacity-chart { width: 100%; min-height: 13rem; }
+      .capacity-chart text { fill: var(--muted); font: 12px system-ui, sans-serif; }
+      .capacity-chart .axis { stroke: var(--border); }
+      .capacity-chart .drawdown { fill: none; stroke: var(--focus); stroke-width: 3; }
+      .capacity-chart .reset-line { stroke: var(--danger); stroke-width: 2; stroke-dasharray: 5 4; }
+
+      .session-total { display: grid; gap: var(--space-1); min-width: 9rem; }
+      .session-total .stacked-track { height: 0.55rem; }
+      .child-note { color: var(--muted); font-size: 0.78rem; }
+      .coverage-note { margin: var(--space-3) 0 0; color: var(--muted); font-size: 0.82rem; }
+
+      dialog {
+        width: min(48rem, calc(100% - 2rem));
+        max-height: calc(100vh - 2rem);
+        padding: 0;
+        color: var(--text);
+        background: var(--surface);
+        border: 2px solid var(--border-strong);
+        overflow: auto;
+      }
+      dialog::backdrop { background: rgba(30, 30, 28, 0.35); }
+      .dialog-header { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); border-bottom: 1px solid var(--border); }
+      .dialog-header h2 { margin: 0; }
+      .dialog-body { padding: var(--space-4); }
+      .dialog-actions { justify-content: flex-end; padding: var(--space-4); border-top: 1px solid var(--border); }
+      .icon-button { min-height: 2.25rem; border: 0; background: transparent; font-size: 1.2rem; }
+      .wizard-progress { margin-bottom: var(--space-4); color: var(--muted); font-weight: 700; }
+      .wizard-panel { min-height: 14rem; }
+      .choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+      .choice-card { display: flex; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); }
+      .choice-card input { min-height: auto; }
+      .preview-box { padding: var(--space-4); background: var(--surface-subtle); border: 1px dashed var(--border-strong); }
+      .catalog-list { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+      .catalog-item { padding: var(--space-3); border: 1px solid var(--border); }
+      .catalog-item h3 { margin-bottom: var(--space-1); }
+      .catalog-item p { margin-bottom: var(--space-1); }
+      .catalog-meta { color: var(--muted); font-size: 0.8rem; }
+      .success-note { margin: 0 var(--space-4) var(--space-4); padding: var(--space-3); background: var(--focus-soft); border-left: 3px solid var(--focus); }
+
       .panel {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -345,6 +481,7 @@
         .metrics { grid-template-columns: repeat(3, 1fr); }
         .metric { border-bottom: 1px solid var(--border); }
         .dashboard-grid { grid-template-columns: 1fr; }
+        .widget.third { grid-column: span 6; }
         .inspector-layout { grid-template-columns: 15rem 1fr; }
         .evidence-column { grid-column: 1 / -1; border-top: 1px solid var(--border); }
         .context-column { border-right: 0; }
@@ -359,6 +496,16 @@
         main { padding: var(--space-4); }
         .screen-header { display: block; }
         .filters { margin-top: var(--space-4); }
+        .dashboard-actions { margin-top: var(--space-4); }
+        .dashboard-toolbar { grid-template-columns: 1fr; }
+        .range-options { display: grid; grid-template-columns: repeat(3, 1fr); }
+        .range-button { padding-inline: var(--space-2); }
+        .filter-summary { display: block; }
+        .filter-summary .text-button { margin-top: var(--space-2); }
+        .widget, .widget.third { grid-column: 1 / -1; }
+        .hero-row { grid-template-columns: 1fr; }
+        .bar-chart { overflow-x: auto; grid-template-columns: repeat(7, minmax(3rem, 1fr)); }
+        .choice-grid { grid-template-columns: 1fr; }
         .field { min-width: 100%; }
         .metrics { grid-template-columns: repeat(2, 1fr); }
         .metric:nth-child(even) { border-right: 0; }
@@ -397,80 +544,141 @@
         <section id="dashboard-screen" class="screen" aria-labelledby="dashboard-title">
           <div class="screen-header">
             <div>
-              <h1 id="dashboard-title">Dashboard</h1>
-              <p class="lede">Recent Codex activity across local projects. Metrics are descriptive; there is no combined health score.</p>
+              <p class="widget-kicker">Dashboard template</p>
+              <h1 id="dashboard-title">Token &amp; Capacity</h1>
+              <p class="lede">See when and how recorded Codex capacity was spent, then trace the usage back to user-initiated sessions and their agent trees.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button class="button-secondary" type="button" data-open-catalog>Metrics Catalog</button>
+              <button class="button-primary" type="button" data-open-wizard>Add widget</button>
             </div>
           </div>
 
           <div id="dashboard-populated">
-            <form class="filters" id="dashboard-filters">
-              <div class="field grow">
-                <label for="session-search">Find a session</label>
-                <input id="session-search" type="search" placeholder="Search project, session ID, or task" autocomplete="off" />
+            <section class="dashboard-toolbar" aria-label="Dashboard controls">
+              <div class="field">
+                <label for="template-select">Template</label>
+                <select id="template-select">
+                  <option>Token &amp; Capacity</option>
+                  <option disabled>Workflow Profile — next</option>
+                  <option disabled>Efficiency &amp; Friction — next</option>
+                  <option disabled>Outcomes &amp; Reviews — next</option>
+                </select>
               </div>
+              <div class="range-field">
+                <span id="global-range-label">Global relative time</span>
+                <div class="range-options" role="group" aria-labelledby="global-range-label">
+                  <button class="range-button" type="button" data-range="24 hours" aria-pressed="false">24h</button>
+                  <button class="range-button" type="button" data-range="7 days" aria-pressed="true">7d</button>
+                  <button class="range-button" type="button" data-range="14 days" aria-pressed="false">14d</button>
+                  <button class="range-button" type="button" data-range="30 days" aria-pressed="false">30d</button>
+                  <button class="range-button" type="button" data-range="90 days" aria-pressed="false">90d</button>
+                  <button class="range-button" type="button" data-range="Custom range" aria-pressed="false">Custom</button>
+                </div>
+              </div>
+            </section>
+
+            <form class="filters" id="dashboard-filters">
               <div class="field">
                 <label for="project-filter">Project</label>
                 <select id="project-filter">
                   <option value="all">All projects</option>
-                  <option value="payments-api">payments-api</option>
-                  <option value="design-system">design-system</option>
-                  <option value="docs-site">docs-site</option>
+                  <option value="api-service">api-service</option>
+                  <option value="web-app">web-app</option>
+                  <option value="developer-docs">developer-docs</option>
+                  <option value="cli-tools">cli-tools</option>
                 </select>
               </div>
-              <div class="field">
-                <label for="range-filter">Time range</label>
-                <select id="range-filter">
-                  <option>Last 7 days</option>
-                  <option>Today</option>
-                  <option>Last 30 days</option>
-                </select>
-              </div>
+              <div class="field"><label for="model-filter">Model</label><select id="model-filter"><option>All models</option><option>GPT-5.6 Codex</option><option>GPT-5.5 Codex</option></select></div>
+              <div class="field"><label for="reasoning-filter">Reasoning</label><select id="reasoning-filter"><option>All levels</option><option>High</option><option>Medium</option></select></div>
+              <div class="field"><label for="kind-filter">Session work</label><select id="kind-filter"><option value="combined">Root + spawned</option><option value="root">Root only</option><option value="spawned">Spawned only</option></select></div>
             </form>
 
-            <section aria-labelledby="metrics-title">
-              <h2 id="metrics-title" class="visually-hidden">Activity metrics</h2>
-              <div class="metrics">
-                <div class="metric"><span class="metric-label">Sessions</span><strong class="metric-value">42</strong><span class="metric-note">6 projects</span></div>
-                <div class="metric"><span class="metric-label">Turns</span><strong class="metric-value">386</strong><span class="metric-note">9.2 per session</span></div>
-                <div class="metric"><span class="metric-label">Tool calls</span><strong class="metric-value">251</strong><span class="metric-note">31 failed or retried</span></div>
-                <div class="metric"><span class="metric-label">Recorded tokens</span><strong class="metric-value">1.84M</strong><span class="metric-note">Exact where recorded</span></div>
-                <div class="metric"><span class="metric-label">Active time</span><strong class="metric-value">9h 12m</strong><span class="metric-note">Reconstructed</span></div>
-              </div>
-              <p class="meta">Model mix: GPT-5.6 Codex 71%, GPT-5.5 Codex 29% · Reasoning: High 62%, Medium 38%</p>
-            </section>
+            <div class="filter-summary" aria-live="polite">
+              <p><strong id="filter-summary-text">All projects · All models · All reasoning · Root + spawned</strong><br><span class="muted">Applies to dashboard widgets. Recorded limit utilization remains account-wide.</span></p>
+              <button class="text-button" type="button" id="clear-filters">Clear filters</button>
+            </div>
 
-            <div class="dashboard-grid">
-              <section class="panel" aria-labelledby="attention-title">
-                <div class="section-header">
-                  <div><h2 id="attention-title">Needs attention</h2><p class="muted">Deterministic signals with linked evidence.</p></div>
+            <div class="widget-grid">
+              <section class="widget" aria-labelledby="capacity-title">
+                <div class="widget-header"><div><span class="widget-kicker">Hero metric</span><h2 id="capacity-title">Current recorded limit utilization</h2><p class="muted">Primary · 7-day window</p></div><button class="text-button" type="button" data-widget-info="capacity">Definition</button></div>
+                <div class="widget-body">
+                  <div class="hero-row">
+                    <div><strong class="hero-value">68%</strong><p class="muted">32% recorded capacity remaining</p></div>
+                    <div><strong>Resets in 2d 7h</strong><p class="muted">Fri, Jul 17 at 4:00 PM</p></div>
+                  </div>
+                  <div class="progress-track" role="img" aria-label="68 percent of the recorded primary limit used"><span class="progress-fill"></span></div>
+                  <p class="coverage-note">Observed 2 min ago · Exact from the latest recorded rate-limit event</p>
                 </div>
-                <ul class="finding-list">
-                  <li>
-                    <button class="finding-button" data-open-session="sess_7f3a9b1c">
-                      <span class="finding-title">Unrelated project instructions in context</span>
-                      <span class="finding-meta"><span class="mono">payments-api</span> · 3 instruction sources · 8.4k tokens estimated</span>
-                    </button>
-                  </li>
-                  <li>
-                    <button class="finding-button" data-open-session="sess_7f3a9b1c">
-                      <span class="finding-title">Repeated switching between overlapping tools</span>
-                      <span class="finding-meta"><span class="mono">payments-api</span> · 6 alternating calls · exact sequence</span>
-                    </button>
-                  </li>
-                </ul>
               </section>
 
-              <section class="panel" aria-labelledby="sessions-title">
-                <div class="section-header">
-                  <div><h2 id="sessions-title">Recent sessions</h2><p id="session-count" class="muted">3 sessions shown</p></div>
+              <section class="widget" aria-labelledby="tokens-total-title">
+                <div class="widget-header"><div><span class="widget-kicker">Hero metric</span><h2 id="tokens-total-title">Total recorded tokens</h2><p class="muted">Last <span data-range-label>7 days</span></p></div><button class="text-button" type="button" data-widget-info="tokens">Definition</button></div>
+                <div class="widget-body">
+                  <strong class="hero-value" id="token-total">1.81M</strong>
+                  <div class="stacked-track" id="token-attribution-track" aria-label="69 percent root session tokens and 31 percent descendant agent tokens"><span id="token-root-fill" class="root-fill" style="width:69%"></span><span id="token-spawned-fill" class="spawned-fill" style="width:31%"></span></div>
+                  <div class="attribution">
+                    <div class="attribution-row"><span><span class="legend-key root"></span>Root sessions</span><span id="root-token-attribution">1.26M · 69%</span></div>
+                    <div class="attribution-row"><span><span class="legend-key spawned"></span>Descendant agents</span><span id="spawned-token-attribution">555k · 31%</span></div>
+                  </div>
+                  <p class="coverage-note">Exact where token events are recorded · 96% session coverage</p>
+                </div>
+              </section>
+
+              <section class="widget wide" aria-labelledby="usage-series-title">
+                <div class="widget-header"><div><span class="widget-kicker">Time series · stacked</span><h2 id="usage-series-title">Recorded token usage over time</h2><p class="muted">Root versus spawned work · daily interval · last <span data-range-label>7 days</span></p></div><button class="text-button" type="button" data-widget-info="series">Configure</button></div>
+                <div class="widget-body">
+                  <div class="bar-chart" role="img" aria-label="Daily recorded token usage, stacked by root and spawned agent work">
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:29%"></span><span class="spawned-fill" style="height:15%"></span></div><span>Wed 9</span></div>
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:42%"></span><span class="spawned-fill" style="height:26%"></span></div><span>Thu 10</span></div>
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:48%"></span><span class="spawned-fill" style="height:38%"></span></div><span>Fri 11</span></div>
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:19%"></span><span class="spawned-fill" style="height:8%"></span></div><span>Sat 12</span></div>
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:26%"></span><span class="spawned-fill" style="height:21%"></span></div><span>Sun 13</span></div>
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:56%"></span><span class="spawned-fill" style="height:34%"></span></div><span>Mon 14</span></div>
+                    <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:39%"></span><span class="spawned-fill" style="height:24%"></span></div><span>Tue 15</span></div>
+                  </div>
+                  <div class="legend"><span><span class="legend-key root"></span>Root sessions</span><span><span class="legend-key spawned"></span>Descendant agents</span></div>
+                </div>
+              </section>
+
+              <section class="widget" aria-labelledby="composition-title">
+                <div class="widget-header"><div><span class="widget-kicker">Ranked breakdown</span><h2 id="composition-title">Token composition</h2><p class="muted">Share of recorded total</p></div><button class="text-button" type="button" data-widget-info="composition">Configure</button></div>
+                <div class="widget-body">
+                  <ul class="breakdown-list">
+                    <li><div class="breakdown-label"><span>Cached input</span><strong>869k · 48%</strong></div><div class="breakdown-track"><span class="breakdown-fill" style="width:48%"></span></div></li>
+                    <li><div class="breakdown-label"><span>Input</span><strong>597k · 33%</strong></div><div class="breakdown-track"><span class="breakdown-fill" style="width:33%"></span></div></li>
+                    <li><div class="breakdown-label"><span>Output</span><strong>235k · 13%</strong></div><div class="breakdown-track"><span class="breakdown-fill" style="width:13%"></span></div></li>
+                    <li><div class="breakdown-label"><span>Reasoning</span><strong>109k · 6%</strong></div><div class="breakdown-track"><span class="breakdown-fill" style="width:6%"></span></div></li>
+                  </ul>
+                </div>
+              </section>
+
+              <section class="widget" aria-labelledby="drawdown-title">
+                <div class="widget-header"><div><span class="widget-kicker">Time series</span><h2 id="drawdown-title">Recorded capacity drawdown</h2><p class="muted">Limit-window utilization with reset boundaries</p></div><button class="text-button" type="button" data-widget-info="drawdown">Definition</button></div>
+                <div class="widget-body">
+                  <svg class="capacity-chart" viewBox="0 0 520 210" role="img" aria-label="Recorded utilization increases across two limit windows and drops at the reset boundary">
+                    <line class="axis" x1="38" y1="170" x2="500" y2="170"></line><line class="axis" x1="38" y1="20" x2="38" y2="170"></line>
+                    <line class="reset-line" x1="298" y1="20" x2="298" y2="170"></line>
+                    <polyline class="drawdown" points="38,148 78,132 118,113 158,88 198,62 238,42 278,30 298,164 338,148 378,126 418,105 458,86 500,68"></polyline>
+                    <text x="6" y="25">100%</text><text x="14" y="174">0%</text><text x="240" y="195">Reset</text><text x="450" y="195">Now · 68%</text>
+                  </svg>
+                  <div class="legend"><span><span class="legend-key root"></span>Recorded utilization</span><span><span class="legend-key reset"></span>Reset boundary</span></div>
+                </div>
+              </section>
+
+              <section class="widget wide" aria-labelledby="sessions-title">
+                <div class="widget-header">
+                  <div><span class="widget-kicker">Session table</span><h2 id="sessions-title">Most token-intensive root sessions</h2><p id="session-count" class="muted">4 user-initiated roots · descendants rolled up</p></div>
+                  <div class="field"><label for="session-search">Find a root session</label><input id="session-search" type="search" placeholder="Project, task, or ID" autocomplete="off" /></div>
                 </div>
                 <div class="table-wrap">
                   <table>
-                    <thead><tr><th>Project / task</th><th>Started</th><th>Duration</th><th>Turns</th><th>Tools</th><th>Tokens</th></tr></thead>
+                    <thead><tr><th>Project / root session</th><th>Active</th><th>Agent tree</th><th>Recorded tokens</th><th></th></tr></thead>
                     <tbody id="session-table-body"></tbody>
                   </table>
                 </div>
-                <p id="no-search-results" class="panel-intro hidden">No sessions match these filters.</p>
+                <p id="no-search-results" class="panel-intro hidden">No root sessions match these filters.</p>
+                <p class="coverage-note" style="padding:0 1rem 1rem">Rows are user-initiated roots. Nested agent work is included once and attributed separately.</p>
               </section>
             </div>
           </div>
@@ -533,48 +741,119 @@
           <div id="context-state" class="state-surface hidden" aria-live="polite"></div>
         </section>
       </main>
+
+      <dialog id="catalog-dialog" aria-labelledby="catalog-title">
+        <div class="dialog-header"><div><p class="widget-kicker">Supported analytics vocabulary</p><h2 id="catalog-title">Metrics Catalog</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close Metrics Catalog">×</button></div>
+        <div class="dialog-body">
+          <div class="field"><label for="catalog-search">Find a metric</label><input id="catalog-search" type="search" placeholder="Try tokens, sessions, agents, tools, context…" autocomplete="off" /></div>
+          <div id="catalog-list" class="catalog-list">
+            <article class="catalog-item" data-catalog-text="token recorded usage input output reasoning cached"><span class="widget-kicker">Token usage</span><h3>Total recorded tokens</h3><p>Sum of recorded input, cached input, output, and reasoning tokens across the selected population.</p><div class="catalog-meta">Sources: rollout token events · Dimensions: project, model, reasoning, root/spawned · Fidelity: exact where recorded</div></article>
+            <article class="catalog-item" data-catalog-text="capacity limits rate reset utilization remaining"><span class="widget-kicker">Token usage</span><h3>Recorded limit utilization</h3><p>The latest observed used percentage and reset timestamp for a recorded plan limit window.</p><div class="catalog-meta">Sources: rate-limit events · Dimensions: limit identity, plan, window · Fidelity: exact but point-in-time</div></article>
+            <article class="catalog-item" data-catalog-text="agents delegation spawned descendant root share fanout"><span class="widget-kicker">Agents &amp; delegation</span><h3>Descendant token share</h3><p>Tokens recorded by all descendants divided by combined root-tree tokens.</p><div class="catalog-meta">Sources: session lineage + token events · Dimensions: project, model, depth · Fidelity: exact where both are recorded</div></article>
+            <article class="catalog-item" data-catalog-text="session activity root count turns time"><span class="widget-kicker">Sessions &amp; activity</span><h3>User-initiated root sessions</h3><p>Deduplicated sessions started by the user; rollout files and spawned work are not counted as additional roots.</p><div class="catalog-meta">Sources: session metadata + lineage · Dimensions: project, source surface, model · Fidelity: reconstructed identity</div></article>
+          </div>
+          <p id="catalog-empty" class="muted hidden">No documented metrics match that search.</p>
+        </div>
+      </dialog>
+
+      <dialog id="wizard-dialog" aria-labelledby="wizard-title">
+        <div class="dialog-header"><div><p class="widget-kicker">Bounded dashboard customization</p><h2 id="wizard-title">Add widget</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close Add widget wizard">×</button></div>
+        <form id="widget-wizard">
+          <div class="dialog-body">
+            <div id="wizard-progress" class="wizard-progress">Step 1 of 6 · Widget type</div>
+            <section class="wizard-panel" data-wizard-step="1">
+              <h3>What kind of view do you need?</h3>
+              <div class="choice-grid">
+                <label class="choice-card"><input type="radio" name="widget-type" value="Hero metric" checked /><span><strong>Hero metric</strong><br><span class="muted">One aggregate and optional attribution.</span></span></label>
+                <label class="choice-card"><input type="radio" name="widget-type" value="Time series" /><span><strong>Time series</strong><br><span class="muted">Line, stacked, or 100%-stacked.</span></span></label>
+                <label class="choice-card"><input type="radio" name="widget-type" value="Ranked breakdown" /><span><strong>Ranked breakdown</strong><br><span class="muted">Compare categories or dimensions.</span></span></label>
+                <label class="choice-card"><input type="radio" name="widget-type" value="Pivot table" /><span><strong>Pivot table</strong><br><span class="muted">Exact values across dimensions.</span></span></label>
+                <label class="choice-card"><input type="radio" name="widget-type" value="Session table" /><span><strong>Session table</strong><br><span class="muted">Contributing root sessions and drill-down.</span></span></label>
+              </div>
+            </section>
+            <section class="wizard-panel hidden" data-wizard-step="2"><h3>Choose a metric</h3><div class="field"><label for="wizard-metric">Metric</label><select id="wizard-metric"><option>Total recorded tokens</option><option>Recorded limit utilization</option><option>Descendant token share</option><option>User-initiated root sessions</option><option>Tool failure rate</option></select></div><p class="coverage-note">Each metric exposes its formula, sources, valid dimensions, coverage, and fidelity in the Metrics Catalog.</p></section>
+            <section class="wizard-panel hidden" data-wizard-step="3"><h3>Choose population and time scope</h3><div class="choice-grid"><div class="field"><label for="wizard-population">Session population</label><select id="wizard-population"><option>Root + spawned</option><option>Root only</option><option>Spawned only</option></select></div><div class="field"><label for="wizard-time">Time scope</label><select id="wizard-time"><option>Inherit global range</option><option disabled>Per-widget override — undecided</option></select></div></div></section>
+            <section class="wizard-panel hidden" data-wizard-step="4"><h3>Configure the calculation</h3><div class="choice-grid"><div class="field"><label for="wizard-group">Group by</label><select id="wizard-group"><option>Root versus spawned</option><option>Project</option><option>Model</option><option>Reasoning level</option></select></div><div class="field"><label for="wizard-interval">Interval</label><select id="wizard-interval"><option>Adaptive</option><option>Daily</option><option>Weekly</option></select></div></div></section>
+            <section class="wizard-panel hidden" data-wizard-step="5"><h3>Add filters and comparison</h3><div class="choice-grid"><div class="field"><label for="wizard-project">Project filter</label><select id="wizard-project"><option>Use dashboard filters</option><option>api-service</option><option>web-app</option></select></div><label class="choice-card"><input type="checkbox" id="wizard-compare" /><span><strong>Compare to previous period</strong><br><span class="muted">Show change for the immediately preceding range.</span></span></label></div></section>
+            <section class="wizard-panel hidden" data-wizard-step="6"><h3>Review and save</h3><div class="field"><label for="widget-name">Widget name</label><input id="widget-name" value="Recorded tokens by session kind" /></div><div class="preview-box"><span class="widget-kicker">Preview</span><h3 id="wizard-preview-title">Hero metric · Total recorded tokens</h3><p>Population: Root + spawned · Time: Inherit global range · Grouped by root versus spawned</p><strong class="hero-value">1.81M</strong></div></section>
+          </div>
+          <div class="dialog-actions"><button id="wizard-back" class="button-secondary hidden" type="button">Back</button><button id="wizard-next" class="button-primary" type="button">Next</button><button id="wizard-save" class="button-primary hidden" type="submit">Save widget</button></div>
+          <p id="wizard-success" class="success-note hidden" role="status">Sample widget saved. Layout editing is intentionally deferred in this wireframe.</p>
+        </form>
+      </dialog>
     </div>
 
     <script>
       const sessions = [
         {
           id: "sess_7f3a9b1c",
-          project: "payments-api",
+          project: "api-service",
           task: "Webhook failures after deploy",
           started: "Jul 15, 8:49 AM",
-          duration: "18m",
+          duration: "2h 18m",
           turns: 24,
           tools: 17,
-          tokens: "84.2k",
+          rootTokens: 402000,
+          descendantTokens: 210000,
+          tokens: "612k",
+          agents: 4,
+          model: "GPT-5.6 Codex",
+          reasoning: "High",
           finding: "Context leakage",
         },
         {
           id: "sess_120f8d2a",
-          project: "design-system",
-          task: "Refine form field API",
+          project: "web-app",
+          task: "Refactor account settings flow",
           started: "Jul 15, 7:12 AM",
-          duration: "31m",
+          duration: "1h 41m",
           turns: 19,
           tools: 11,
-          tokens: "61.8k",
+          rootTokens: 278000,
+          descendantTokens: 184000,
+          tokens: "462k",
+          agents: 3,
+          model: "GPT-5.6 Codex",
+          reasoning: "Medium",
           finding: "No notable finding",
         },
         {
           id: "sess_94ce1730",
-          project: "docs-site",
-          task: "Update installation guide",
+          project: "developer-docs",
+          task: "Explore onboarding architecture",
           started: "Jul 14, 4:26 PM",
-          duration: "12m",
+          duration: "3h 12m · multi-day",
           turns: 8,
           tools: 4,
-          tokens: "22.1k",
+          rootTokens: 331000,
+          descendantTokens: 74000,
+          tokens: "405k",
+          agents: 2,
+          model: "GPT-5.5 Codex",
+          reasoning: "High",
+          finding: "No notable finding",
+        },
+        {
+          id: "sess_b1104f9e",
+          project: "cli-tools",
+          task: "Add release verification command",
+          started: "Jul 14, 11:03 AM",
+          duration: "54m",
+          turns: 15,
+          tools: 22,
+          rootTokens: 244000,
+          descendantTokens: 87000,
+          tokens: "331k",
+          agents: 2,
+          model: "GPT-5.5 Codex",
+          reasoning: "Medium",
           finding: "No notable finding",
         },
       ];
 
       const suspiciousComponents = [
         { id: "messages", title: "Messages", fidelity: "Exact", amount: "5.9k", note: "Prior user and assistant turns" },
-        { id: "project", title: "Project instructions", fidelity: "Reconstructed", amount: "8.4k", note: "Includes 3 sources outside payments-api" },
+        { id: "project", title: "Project instructions", fidelity: "Reconstructed", amount: "8.4k", note: "Includes 3 sources outside api-service" },
         { id: "global", title: "Global instructions", fidelity: "Exact", amount: "1.2k", note: "Loaded from Codex home" },
         { id: "tools", title: "Tool definitions", fidelity: "Estimated", amount: "3.1k", note: "Definitions available to this turn" },
         { id: "skills", title: "Skill instructions", fidelity: "Exact", amount: "0.6k", note: "One active skill" },
@@ -598,8 +877,8 @@
           excerpt: "User: Investigate webhook 500s after deploy.\nAssistant: I’ll inspect recent commits and deployment runs.",
         },
         project: {
-          summary: "Three instruction sources associated with design-system appeared while payments-api was active.",
-          source: "/design-system/AGENTS.md",
+          summary: "Three instruction sources associated with web-app appeared while api-service was active.",
+          source: "/web-app/AGENTS.md",
           locator: "turn 12 · context_added",
           fidelity: "Reconstructed",
           excerpt: "Use the component review checklist and verify spacing tokens before approving UI changes.\n\n[2 additional sources]",
@@ -643,19 +922,40 @@
       function renderDashboardSessions() {
         const query = byId("session-search").value.trim().toLowerCase();
         const project = byId("project-filter").value;
-        const filtered = sessions.filter((session) => {
-          const matchesQuery = [session.project, session.task, session.id].join(" ").toLowerCase().includes(query);
+        const kind = byId("kind-filter").value;
+        const model = byId("model-filter").value;
+        const reasoning = byId("reasoning-filter").value;
+        const analyticsFiltered = sessions.filter((session) => {
           const matchesProject = project === "all" || session.project === project;
-          return matchesQuery && matchesProject;
+          const matchesModel = model === "All models" || session.model === model;
+          const matchesReasoning = reasoning === "All levels" || session.reasoning === reasoning;
+          return matchesProject && matchesModel && matchesReasoning;
         });
+        const filtered = analyticsFiltered.filter((session) => [session.project, session.task, session.id].join(" ").toLowerCase().includes(query));
+
+        const rootTotal = analyticsFiltered.reduce((sum, session) => sum + session.rootTokens, 0);
+        const spawnedTotal = analyticsFiltered.reduce((sum, session) => sum + session.descendantTokens, 0);
+        const combinedTotal = rootTotal + spawnedTotal;
+        const displayedTotal = kind === "root" ? rootTotal : kind === "spawned" ? spawnedTotal : combinedTotal;
+        const rootPercent = combinedTotal ? Math.round(rootTotal / combinedTotal * 100) : 0;
+        const spawnedPercent = combinedTotal ? 100 - rootPercent : 0;
+        byId("token-total").textContent = formatTokens(displayedTotal);
+        byId("root-token-attribution").textContent = `${formatTokens(rootTotal)} · ${rootPercent}%`;
+        byId("spawned-token-attribution").textContent = `${formatTokens(spawnedTotal)} · ${spawnedPercent}%`;
+        byId("token-root-fill").style.width = `${rootPercent}%`;
+        byId("token-spawned-fill").style.width = `${spawnedPercent}%`;
+        byId("token-attribution-track").setAttribute("aria-label", `${rootPercent} percent root session tokens and ${spawnedPercent} percent descendant agent tokens`);
 
         byId("session-table-body").innerHTML = filtered.map((session) => `
           <tr data-session-row="${session.id}" tabindex="0" aria-label="Inspect ${session.task} in ${session.project}">
-            <td><strong>${session.project}</strong><br><span class="muted">${session.task}</span></td>
-            <td>${session.started}</td><td>${session.duration}</td><td>${session.turns}</td><td>${session.tools}</td><td>${session.tokens}</td>
+            <td><strong>${session.project}</strong><br><span class="muted">${session.task}</span><br><span class="mono child-note">${session.id}</span></td>
+            <td>${session.started}<br><span class="child-note">${session.duration}</span></td>
+            <td><strong>1 root + ${session.agents - 1} spawned</strong><br><span class="child-note">${session.agents} sessions in tree</span></td>
+            <td><div class="session-total"><strong>${kind === "root" ? formatTokens(session.rootTokens) : kind === "spawned" ? formatTokens(session.descendantTokens) : session.tokens}</strong><div class="stacked-track"><span class="root-fill" style="width:${Math.round(session.rootTokens / (session.rootTokens + session.descendantTokens) * 100)}%"></span><span class="spawned-fill" style="width:${Math.round(session.descendantTokens / (session.rootTokens + session.descendantTokens) * 100)}%"></span></div><span class="child-note">Root ${formatTokens(session.rootTokens)} · spawned ${formatTokens(session.descendantTokens)}</span></div></td>
+            <td><button class="text-button" type="button" data-inspect-session="${session.id}">Inspect context →</button></td>
           </tr>
         `).join("");
-        byId("session-count").textContent = `${filtered.length} session${filtered.length === 1 ? "" : "s"} shown`;
+        byId("session-count").textContent = `${filtered.length} user-initiated root${filtered.length === 1 ? "" : "s"} · descendants rolled up`;
         byId("no-search-results").classList.toggle("hidden", filtered.length !== 0);
 
         document.querySelectorAll("[data-session-row]").forEach((row) => {
@@ -667,6 +967,17 @@
             }
           });
         });
+        document.querySelectorAll("[data-inspect-session]").forEach((button) => {
+          button.addEventListener("click", (event) => {
+            event.stopPropagation();
+            openSession(button.dataset.inspectSession);
+          });
+        });
+      }
+
+      function formatTokens(value) {
+        if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+        return `${Math.round(value / 1000)}k`;
       }
 
       function renderSessionRail() {
@@ -785,16 +1096,85 @@
         }
       }
 
+      function updateDashboardFilters() {
+        const project = byId("project-filter");
+        const model = byId("model-filter");
+        const reasoning = byId("reasoning-filter");
+        const kind = byId("kind-filter");
+        byId("filter-summary-text").textContent = [
+          project.options[project.selectedIndex].text,
+          model.value,
+          reasoning.value,
+          kind.options[kind.selectedIndex].text,
+        ].join(" · ");
+        renderDashboardSessions();
+      }
+
+      function setDashboardRange(button) {
+        document.querySelectorAll("[data-range]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+        document.querySelectorAll("[data-range-label]").forEach((label) => { label.textContent = button.dataset.range; });
+      }
+
+      function openDialog(dialog) {
+        if (typeof dialog.showModal === "function") dialog.showModal();
+        else dialog.setAttribute("open", "");
+      }
+
+      let wizardStep = 1;
+      const wizardStepNames = ["Widget type", "Metric", "Population & time", "Calculation", "Filters & comparison", "Preview & save"];
+
+      function renderWizardStep() {
+        document.querySelectorAll("[data-wizard-step]").forEach((panel) => panel.classList.toggle("hidden", Number(panel.dataset.wizardStep) !== wizardStep));
+        byId("wizard-progress").textContent = `Step ${wizardStep} of 6 · ${wizardStepNames[wizardStep - 1]}`;
+        byId("wizard-back").classList.toggle("hidden", wizardStep === 1);
+        byId("wizard-next").classList.toggle("hidden", wizardStep === 6);
+        byId("wizard-save").classList.toggle("hidden", wizardStep !== 6);
+        byId("wizard-success").classList.add("hidden");
+        if (wizardStep === 6) {
+          const widgetType = document.querySelector('input[name="widget-type"]:checked').value;
+          byId("wizard-preview-title").textContent = `${widgetType} · ${byId("wizard-metric").value}`;
+        }
+      }
+
       document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => setRoute(button.dataset.route)));
-      document.querySelectorAll("[data-open-session]").forEach((button) => button.addEventListener("click", () => openSession(button.dataset.openSession)));
+      document.querySelectorAll("[data-range]").forEach((button) => button.addEventListener("click", () => setDashboardRange(button)));
+      document.querySelectorAll("[data-open-catalog], [data-widget-info]").forEach((button) => button.addEventListener("click", () => openDialog(byId("catalog-dialog"))));
+      document.querySelectorAll("[data-open-wizard]").forEach((button) => button.addEventListener("click", () => {
+        wizardStep = 1;
+        renderWizardStep();
+        openDialog(byId("wizard-dialog"));
+      }));
+      document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
+      byId("catalog-search").addEventListener("input", () => {
+        const query = byId("catalog-search").value.trim().toLowerCase();
+        let shown = 0;
+        document.querySelectorAll("[data-catalog-text]").forEach((item) => {
+          const matches = `${item.dataset.catalogText} ${item.textContent}`.toLowerCase().includes(query);
+          item.classList.toggle("hidden", !matches);
+          if (matches) shown += 1;
+        });
+        byId("catalog-empty").classList.toggle("hidden", shown !== 0);
+      });
+      byId("wizard-next").addEventListener("click", () => { wizardStep = Math.min(6, wizardStep + 1); renderWizardStep(); });
+      byId("wizard-back").addEventListener("click", () => { wizardStep = Math.max(1, wizardStep - 1); renderWizardStep(); });
+      byId("widget-wizard").addEventListener("submit", (event) => {
+        event.preventDefault();
+        byId("wizard-success").classList.remove("hidden");
+      });
+      byId("clear-filters").addEventListener("click", () => {
+        ["project-filter", "model-filter", "reasoning-filter", "kind-filter"].forEach((id) => { byId(id).selectedIndex = 0; });
+        updateDashboardFilters();
+      });
+
       byId("session-search").addEventListener("input", renderDashboardSessions);
-      byId("project-filter").addEventListener("change", renderDashboardSessions);
+      ["project-filter", "model-filter", "reasoning-filter", "kind-filter"].forEach((id) => byId(id).addEventListener("change", updateDashboardFilters));
       byId("inspector-session-search").addEventListener("input", renderSessionRail);
       byId("turn-select").addEventListener("change", renderContext);
       byId("state-select").addEventListener("change", renderState);
       window.addEventListener("hashchange", () => setRoute(location.hash.includes("context") ? "context" : "dashboard"));
 
-      renderDashboardSessions();
+      updateDashboardFilters();
+      renderWizardStep();
       renderContext();
       setRoute(currentRoute);
     </script>

@@ -2,8 +2,10 @@
 
 | Surface | State | What the user sees | Available action |
 | --- | --- | --- | --- |
-| Dashboard | Populated | Metrics, deterministic findings, recent sessions | Filter, search, inspect a session |
-| Dashboard | Loading | Local indexing progress and reserved content structure | Wait or keep the page open |
+| Dashboard | Populated | Token & Capacity template, global controls, capacity, token attribution, charts, and token-intensive root sessions | Change range/filter, inspect a root session, open catalog, add a widget |
+| Dashboard | Widget wizard | Bounded six-step metric and visualization configuration with preview | Move back/next, save a sample widget, or cancel |
+| Dashboard | Metrics Catalog | Searchable grouped metric definitions with sources, dimensions, coverage, and fidelity | Search, review a metric, or close |
+| Dashboard | Loading | Local indexing progress and reserved dashboard structure | Wait or keep the page open |
 | Dashboard | Empty | No indexed sessions and an explanation of local scanning | Scan local history |
 | Dashboard | Error | Unsupported record format with parser and CLI versions | View diagnostic details |
 | Context inspector | Populated with finding | Session finder, turn selector, context components, evidence detail | Switch session/turn/component |
@@ -12,4 +14,4 @@
 | Context inspector | Empty | No context records for the selected session | Switch session |
 | Context inspector | Error | Context adapter failure without implying source data loss | View diagnostics or switch session |
 
-The prototype exposes the global populated, loading, empty, and error states through a clearly labeled wireframe control. Session selection demonstrates the populated-with-finding and populated-without-finding variants.
+The prototype exposes the global populated, loading, empty, and error states through a clearly labeled wireframe control. Dashboard dialogs expose the customization entry points without implementing layout editing. Session selection demonstrates the populated-with-finding and populated-without-finding context variants.
