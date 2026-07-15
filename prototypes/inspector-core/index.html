@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Codex Inspector core wireframe</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f6f4;
+        --surface: #ffffff;
+        --surface-subtle: #eeeeeb;
+        --border: #b8b8b2;
+        --border-strong: #777772;
+        --text: #1e1e1c;
+        --muted: #63635f;
+        --focus: #315f7d;
+        --focus-soft: #e6eef3;
+        --danger: #8a3b35;
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.5rem;
+        --space-6: 2rem;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button, input, select { font: inherit; }
+      button, select, input { min-height: 2.5rem; }
+      button { cursor: pointer; }
+
+      :focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      .app-shell { min-height: 100vh; }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: var(--space-5);
+        min-height: 4rem;
+        padding: var(--space-3) var(--space-5);
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .brand {
+        font-size: 1.05rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .primary-nav {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .nav-button,
+      .text-button,
+      .session-button,
+      .component-button,
+      .finding-button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+      }
+
+      .nav-button {
+        padding: var(--space-2) var(--space-3);
+        border-radius: 3px;
+      }
+
+      .nav-button[aria-current="page"] {
+        background: var(--focus-soft);
+        color: #17384d;
+        font-weight: 650;
+      }
+
+      .privacy-note {
+        margin-left: auto;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .prototype-state {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding-left: var(--space-4);
+        border-left: 1px solid var(--border);
+      }
+
+      .prototype-state label {
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      select, input {
+        border: 1px solid var(--border-strong);
+        border-radius: 3px;
+        background: var(--surface);
+        color: var(--text);
+        padding: var(--space-2) var(--space-3);
+      }
+
+      main { padding: var(--space-6); }
+
+      .screen {
+        width: min(1280px, 100%);
+        margin: 0 auto;
+      }
+
+      .screen-header,
+      .section-header,
+      .inspector-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-5);
+      }
+
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: var(--space-2); font-size: clamp(1.7rem, 3vw, 2.4rem); }
+      h2 { margin-bottom: var(--space-4); font-size: 1.15rem; }
+      h3 { margin-bottom: var(--space-2); font-size: 1rem; }
+      .lede, .muted, .meta { color: var(--muted); }
+      .lede { max-width: 70ch; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        margin: var(--space-5) 0;
+        padding: var(--space-4);
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+
+      .field {
+        display: grid;
+        gap: var(--space-1);
+        min-width: 12rem;
+      }
+
+      .field.grow { flex: 1 1 20rem; }
+      .field label { color: var(--muted); font-size: 0.82rem; font-weight: 650; }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        margin: var(--space-5) 0 var(--space-6);
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+
+      .metric {
+        padding: var(--space-4);
+        border-right: 1px solid var(--border);
+      }
+      .metric:last-child { border-right: 0; }
+      .metric-label { color: var(--muted); font-size: 0.82rem; }
+      .metric-value { display: block; margin: var(--space-1) 0; font-size: 1.55rem; font-weight: 700; }
+      .metric-note { color: var(--muted); font-size: 0.8rem; }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: minmax(18rem, 0.8fr) minmax(34rem, 1.7fr);
+        gap: var(--space-6);
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+
+      .panel > .section-header,
+      .panel > h2,
+      .panel > .panel-intro { padding: var(--space-4) var(--space-4) 0; }
+
+      .finding-list,
+      .session-list,
+      .component-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .finding-list li + li,
+      .session-list li + li,
+      .component-list li + li { border-top: 1px solid var(--border); }
+
+      .finding-button,
+      .session-button,
+      .component-button {
+        width: 100%;
+        padding: var(--space-4);
+      }
+
+      .finding-button:hover,
+      .session-button:hover,
+      .component-button:hover { background: var(--surface-subtle); }
+
+      .finding-title,
+      .session-title,
+      .component-title { display: block; font-weight: 700; }
+      .finding-meta,
+      .session-meta,
+      .component-meta { display: block; margin-top: var(--space-1); color: var(--muted); font-size: 0.85rem; }
+
+      .tag {
+        display: inline-block;
+        margin-left: var(--space-2);
+        padding: 0.05rem 0.35rem;
+        border: 1px solid currentColor;
+        border-radius: 2px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); text-align: left; white-space: nowrap; }
+      th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+      tr[data-session-row] { cursor: pointer; }
+      tr[data-session-row]:hover { background: var(--surface-subtle); }
+
+      .button-primary,
+      .button-secondary {
+        padding: var(--space-2) var(--space-4);
+        border-radius: 3px;
+        font-weight: 700;
+      }
+
+      .button-primary { border: 1px solid #17384d; background: var(--focus); color: white; }
+      .button-secondary { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+      .text-button { min-height: auto; padding: 0; color: var(--focus); text-decoration: underline; }
+
+      .inspector-layout {
+        display: grid;
+        grid-template-columns: 17rem minmax(24rem, 1fr) minmax(20rem, 0.8fr);
+        min-height: calc(100vh - 8rem);
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+
+      .session-rail,
+      .context-column,
+      .evidence-column { min-width: 0; }
+      .session-rail,
+      .context-column { border-right: 1px solid var(--border); }
+      .session-rail-header,
+      .context-column-header,
+      .evidence-column-header { padding: var(--space-4); border-bottom: 1px solid var(--border); }
+
+      .session-rail .field { min-width: 0; margin-top: var(--space-3); }
+      .session-button[aria-current="true"],
+      .component-button[aria-current="true"] {
+        background: var(--focus-soft);
+        box-shadow: inset 3px 0 0 var(--focus);
+      }
+
+      .context-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .summary-item strong { display: block; }
+      .summary-item span { color: var(--muted); font-size: 0.82rem; }
+
+      .component-button { display: grid; grid-template-columns: 1fr auto; gap: var(--space-3); align-items: center; }
+      .contribution { text-align: right; }
+      .contribution strong { display: block; }
+
+      .evidence-body { padding: var(--space-4); }
+      .definition-list { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); margin: var(--space-4) 0; }
+      .definition-list dt { color: var(--muted); }
+      .definition-list dd { margin: 0; overflow-wrap: anywhere; }
+
+      .excerpt {
+        margin: var(--space-4) 0;
+        padding: var(--space-4);
+        background: var(--surface-subtle);
+        border-left: 3px solid var(--border-strong);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .state-surface {
+        display: grid;
+        place-items: center;
+        min-height: 26rem;
+        padding: var(--space-6);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        text-align: center;
+      }
+
+      .state-surface > div { max-width: 34rem; }
+      .state-surface .button-primary,
+      .state-surface .button-secondary { margin-top: var(--space-3); }
+      .error-text { color: var(--danger); }
+      .hidden { display: none !important; }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @media (max-width: 1000px) {
+        .topbar { flex-wrap: wrap; }
+        .privacy-note { margin-left: 0; }
+        .prototype-state { margin-left: auto; }
+        .metrics { grid-template-columns: repeat(3, 1fr); }
+        .metric { border-bottom: 1px solid var(--border); }
+        .dashboard-grid { grid-template-columns: 1fr; }
+        .inspector-layout { grid-template-columns: 15rem 1fr; }
+        .evidence-column { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+        .context-column { border-right: 0; }
+      }
+
+      @media (max-width: 700px) {
+        .topbar { align-items: flex-start; gap: var(--space-3); padding: var(--space-3); }
+        .brand { width: 100%; }
+        .primary-nav { order: 2; }
+        .privacy-note { display: none; }
+        .prototype-state { order: 3; width: 100%; margin-left: 0; padding: var(--space-3) 0 0; border-left: 0; border-top: 1px solid var(--border); }
+        main { padding: var(--space-4); }
+        .screen-header { display: block; }
+        .filters { margin-top: var(--space-4); }
+        .field { min-width: 100%; }
+        .metrics { grid-template-columns: repeat(2, 1fr); }
+        .metric:nth-child(even) { border-right: 0; }
+        .metric:last-child { grid-column: 1 / -1; }
+        .inspector-layout { display: block; }
+        .session-rail, .context-column { border-right: 0; border-bottom: 1px solid var(--border); }
+        .session-list { display: flex; overflow-x: auto; }
+        .session-list li { flex: 0 0 15rem; border-top: 0 !important; border-right: 1px solid var(--border); }
+        .context-summary { grid-template-columns: 1fr; }
+        .definition-list { grid-template-columns: 1fr; }
+        .definition-list dd { margin-bottom: var(--space-2); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">Codex Inspector <span class="tag">wireframe</span></div>
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <button class="nav-button" data-route="dashboard">Dashboard</button>
+          <button class="nav-button" data-route="context">Context inspector</button>
+        </nav>
+        <div class="privacy-note">Local data only · Last indexed 2 min ago</div>
+        <div class="prototype-state">
+          <label for="state-select">Prototype state</label>
+          <select id="state-select">
+            <option value="populated">Populated</option>
+            <option value="loading">Loading</option>
+            <option value="empty">Empty</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+      </header>
+
+      <main>
+        <section id="dashboard-screen" class="screen" aria-labelledby="dashboard-title">
+          <div class="screen-header">
+            <div>
+              <h1 id="dashboard-title">Dashboard</h1>
+              <p class="lede">Recent Codex activity across local projects. Metrics are descriptive; there is no combined health score.</p>
+            </div>
+          </div>
+
+          <div id="dashboard-populated">
+            <form class="filters" id="dashboard-filters">
+              <div class="field grow">
+                <label for="session-search">Find a session</label>
+                <input id="session-search" type="search" placeholder="Search project, session ID, or task" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="project-filter">Project</label>
+                <select id="project-filter">
+                  <option value="all">All projects</option>
+                  <option value="payments-api">payments-api</option>
+                  <option value="design-system">design-system</option>
+                  <option value="docs-site">docs-site</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="range-filter">Time range</label>
+                <select id="range-filter">
+                  <option>Last 7 days</option>
+                  <option>Today</option>
+                  <option>Last 30 days</option>
+                </select>
+              </div>
+            </form>
+
+            <section aria-labelledby="metrics-title">
+              <h2 id="metrics-title" class="visually-hidden">Activity metrics</h2>
+              <div class="metrics">
+                <div class="metric"><span class="metric-label">Sessions</span><strong class="metric-value">42</strong><span class="metric-note">6 projects</span></div>
+                <div class="metric"><span class="metric-label">Turns</span><strong class="metric-value">386</strong><span class="metric-note">9.2 per session</span></div>
+                <div class="metric"><span class="metric-label">Tool calls</span><strong class="metric-value">251</strong><span class="metric-note">31 failed or retried</span></div>
+                <div class="metric"><span class="metric-label">Recorded tokens</span><strong class="metric-value">1.84M</strong><span class="metric-note">Exact where recorded</span></div>
+                <div class="metric"><span class="metric-label">Active time</span><strong class="metric-value">9h 12m</strong><span class="metric-note">Reconstructed</span></div>
+              </div>
+              <p class="meta">Model mix: GPT-5.6 Codex 71%, GPT-5.5 Codex 29% · Reasoning: High 62%, Medium 38%</p>
+            </section>
+
+            <div class="dashboard-grid">
+              <section class="panel" aria-labelledby="attention-title">
+                <div class="section-header">
+                  <div><h2 id="attention-title">Needs attention</h2><p class="muted">Deterministic signals with linked evidence.</p></div>
+                </div>
+                <ul class="finding-list">
+                  <li>
+                    <button class="finding-button" data-open-session="sess_7f3a9b1c">
+                      <span class="finding-title">Unrelated project instructions in context</span>
+                      <span class="finding-meta"><span class="mono">payments-api</span> · 3 instruction sources · 8.4k tokens estimated</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="finding-button" data-open-session="sess_7f3a9b1c">
+                      <span class="finding-title">Repeated switching between overlapping tools</span>
+                      <span class="finding-meta"><span class="mono">payments-api</span> · 6 alternating calls · exact sequence</span>
+                    </button>
+                  </li>
+                </ul>
+              </section>
+
+              <section class="panel" aria-labelledby="sessions-title">
+                <div class="section-header">
+                  <div><h2 id="sessions-title">Recent sessions</h2><p id="session-count" class="muted">3 sessions shown</p></div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Project / task</th><th>Started</th><th>Duration</th><th>Turns</th><th>Tools</th><th>Tokens</th></tr></thead>
+                    <tbody id="session-table-body"></tbody>
+                  </table>
+                </div>
+                <p id="no-search-results" class="panel-intro hidden">No sessions match these filters.</p>
+              </section>
+            </div>
+          </div>
+
+          <div id="dashboard-state" class="state-surface hidden" aria-live="polite"></div>
+        </section>
+
+        <section id="context-screen" class="screen hidden" aria-labelledby="context-title">
+          <div class="inspector-header">
+            <div>
+              <button class="text-button" data-route="dashboard">← Back to dashboard</button>
+              <h1 id="context-title">Context inspector</h1>
+              <p class="lede">Review what was recorded at a specific turn. Fidelity labels distinguish facts from reconstruction and estimates.</p>
+            </div>
+          </div>
+
+          <div id="context-populated" class="inspector-layout">
+            <aside class="session-rail" aria-labelledby="session-rail-title">
+              <div class="session-rail-header">
+                <h2 id="session-rail-title">Sessions</h2>
+                <div class="field">
+                  <label for="inspector-session-search">Find another session</label>
+                  <input id="inspector-session-search" type="search" placeholder="Project or task" autocomplete="off" />
+                </div>
+              </div>
+              <ul id="inspector-session-list" class="session-list"></ul>
+            </aside>
+
+            <section class="context-column" aria-labelledby="selected-session-title">
+              <div class="context-column-header">
+                <p class="meta">Selected session</p>
+                <h2 id="selected-session-title">Webhook failures after deploy</h2>
+                <p id="selected-session-meta" class="mono muted"></p>
+                <div class="field">
+                  <label for="turn-select">Context snapshot</label>
+                  <select id="turn-select">
+                    <option value="12">Turn 12 · context added · 9:42:11 AM</option>
+                    <option value="18">Turn 18 · after tool switching · 9:45:01 AM</option>
+                    <option value="24">Turn 24 · final response · 9:59:04 AM</option>
+                  </select>
+                </div>
+              </div>
+              <div class="context-summary" aria-label="Context summary">
+                <div class="summary-item"><span>Recorded components</span><strong id="component-count">6</strong></div>
+                <div class="summary-item"><span>Estimated contribution</span><strong id="context-total">18.6k tokens</strong></div>
+                <div class="summary-item"><span>Notable evidence</span><strong id="evidence-count">3 sources</strong></div>
+              </div>
+              <ul id="component-list" class="component-list"></ul>
+            </section>
+
+            <aside class="evidence-column" aria-labelledby="evidence-title">
+              <div class="evidence-column-header">
+                <p class="meta">Selected component</p>
+                <h2 id="evidence-title">Project instructions</h2>
+              </div>
+              <div id="evidence-body" class="evidence-body"></div>
+            </aside>
+          </div>
+
+          <div id="context-state" class="state-surface hidden" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const sessions = [
+        {
+          id: "sess_7f3a9b1c",
+          project: "payments-api",
+          task: "Webhook failures after deploy",
+          started: "Jul 15, 8:49 AM",
+          duration: "18m",
+          turns: 24,
+          tools: 17,
+          tokens: "84.2k",
+          finding: "Context leakage",
+        },
+        {
+          id: "sess_120f8d2a",
+          project: "design-system",
+          task: "Refine form field API",
+          started: "Jul 15, 7:12 AM",
+          duration: "31m",
+          turns: 19,
+          tools: 11,
+          tokens: "61.8k",
+          finding: "No notable finding",
+        },
+        {
+          id: "sess_94ce1730",
+          project: "docs-site",
+          task: "Update installation guide",
+          started: "Jul 14, 4:26 PM",
+          duration: "12m",
+          turns: 8,
+          tools: 4,
+          tokens: "22.1k",
+          finding: "No notable finding",
+        },
+      ];
+
+      const suspiciousComponents = [
+        { id: "messages", title: "Messages", fidelity: "Exact", amount: "5.9k", note: "Prior user and assistant turns" },
+        { id: "project", title: "Project instructions", fidelity: "Reconstructed", amount: "8.4k", note: "Includes 3 sources outside payments-api" },
+        { id: "global", title: "Global instructions", fidelity: "Exact", amount: "1.2k", note: "Loaded from Codex home" },
+        { id: "tools", title: "Tool definitions", fidelity: "Estimated", amount: "3.1k", note: "Definitions available to this turn" },
+        { id: "skills", title: "Skill instructions", fidelity: "Exact", amount: "0.6k", note: "One active skill" },
+        { id: "server", title: "Server-side context", fidelity: "Unavailable", amount: "—", note: "Not present in local records" },
+      ];
+
+      const normalComponents = [
+        { id: "messages", title: "Messages", fidelity: "Exact", amount: "4.8k", note: "Prior user and assistant turns" },
+        { id: "project", title: "Project instructions", fidelity: "Exact", amount: "2.7k", note: "Matches the active repository" },
+        { id: "global", title: "Global instructions", fidelity: "Exact", amount: "1.2k", note: "Loaded from Codex home" },
+        { id: "tools", title: "Tool definitions", fidelity: "Estimated", amount: "2.4k", note: "Definitions available to this turn" },
+        { id: "server", title: "Server-side context", fidelity: "Unavailable", amount: "—", note: "Not present in local records" },
+      ];
+
+      const evidenceByComponent = {
+        messages: {
+          summary: "Recorded message history available before the selected turn.",
+          source: "Local session record",
+          locator: "turns 1–11",
+          fidelity: "Exact",
+          excerpt: "User: Investigate webhook 500s after deploy.\nAssistant: I’ll inspect recent commits and deployment runs.",
+        },
+        project: {
+          summary: "Three instruction sources associated with design-system appeared while payments-api was active.",
+          source: "/design-system/AGENTS.md",
+          locator: "turn 12 · context_added",
+          fidelity: "Reconstructed",
+          excerpt: "Use the component review checklist and verify spacing tokens before approving UI changes.\n\n[2 additional sources]",
+        },
+        global: {
+          summary: "Global guidance recorded from the configured Codex home.",
+          source: "~/.codex/AGENTS.md",
+          locator: "session initialization",
+          fidelity: "Exact",
+          excerpt: "Keep changes scoped to the current repository and preserve unrelated edits.",
+        },
+        tools: {
+          summary: "Tool definitions available to the selected turn. Contribution is estimated from recorded schemas.",
+          source: "Session tool registry",
+          locator: "turn 12 · available_tools",
+          fidelity: "Estimated",
+          excerpt: "github CLI, GitHub MCP, filesystem, shell\n\nTwo overlapping GitHub interfaces were available.",
+        },
+        skills: {
+          summary: "One skill was recorded as active for this turn.",
+          source: "skill://debug-ci",
+          locator: "turn 12 · skill instructions",
+          fidelity: "Exact",
+          excerpt: "Inspect failing workflow runs and connect failures to the smallest relevant code change.",
+        },
+        server: {
+          summary: "The local record cannot prove whether additional server-side context existed.",
+          source: "Not available",
+          locator: "No local locator",
+          fidelity: "Unavailable",
+          excerpt: "No content is shown because Inspector does not have this data.",
+        },
+      };
+
+      let selectedSessionId = "sess_7f3a9b1c";
+      let selectedComponentId = "project";
+      let currentRoute = location.hash.includes("context") ? "context" : "dashboard";
+
+      const byId = (id) => document.getElementById(id);
+
+      function renderDashboardSessions() {
+        const query = byId("session-search").value.trim().toLowerCase();
+        const project = byId("project-filter").value;
+        const filtered = sessions.filter((session) => {
+          const matchesQuery = [session.project, session.task, session.id].join(" ").toLowerCase().includes(query);
+          const matchesProject = project === "all" || session.project === project;
+          return matchesQuery && matchesProject;
+        });
+
+        byId("session-table-body").innerHTML = filtered.map((session) => `
+          <tr data-session-row="${session.id}" tabindex="0" aria-label="Inspect ${session.task} in ${session.project}">
+            <td><strong>${session.project}</strong><br><span class="muted">${session.task}</span></td>
+            <td>${session.started}</td><td>${session.duration}</td><td>${session.turns}</td><td>${session.tools}</td><td>${session.tokens}</td>
+          </tr>
+        `).join("");
+        byId("session-count").textContent = `${filtered.length} session${filtered.length === 1 ? "" : "s"} shown`;
+        byId("no-search-results").classList.toggle("hidden", filtered.length !== 0);
+
+        document.querySelectorAll("[data-session-row]").forEach((row) => {
+          row.addEventListener("click", () => openSession(row.dataset.sessionRow));
+          row.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openSession(row.dataset.sessionRow);
+            }
+          });
+        });
+      }
+
+      function renderSessionRail() {
+        const query = byId("inspector-session-search").value.trim().toLowerCase();
+        const filtered = sessions.filter((session) => [session.project, session.task, session.id].join(" ").toLowerCase().includes(query));
+        byId("inspector-session-list").innerHTML = filtered.map((session) => `
+          <li><button class="session-button" data-select-session="${session.id}" aria-current="${session.id === selectedSessionId}">
+            <span class="session-title">${session.project}</span>
+            <span>${session.task}</span>
+            <span class="session-meta">${session.started} · ${session.finding}</span>
+          </button></li>
+        `).join("");
+        document.querySelectorAll("[data-select-session]").forEach((button) => {
+          button.addEventListener("click", () => selectSession(button.dataset.selectSession));
+        });
+      }
+
+      function renderContext() {
+        const session = sessions.find((item) => item.id === selectedSessionId) || sessions[0];
+        const suspicious = session.id === "sess_7f3a9b1c";
+        const turn = byId("turn-select").value;
+        const turnTotals = { "12": "18.6k tokens", "18": "22.8k tokens", "24": "28.3k tokens" };
+        const components = (suspicious ? suspiciousComponents : normalComponents).map((component) => {
+          if (component.id === "messages" && turn === "18") return { ...component, amount: suspicious ? "8.1k" : "6.9k", note: "Messages recorded before turn 18" };
+          if (component.id === "messages" && turn === "24") return { ...component, amount: suspicious ? "12.7k" : "9.4k", note: "Messages recorded before turn 24" };
+          return component;
+        });
+        if (!components.some((item) => item.id === selectedComponentId)) selectedComponentId = components[0].id;
+
+        byId("selected-session-title").textContent = session.task;
+        byId("selected-session-meta").textContent = `${session.project} · ${session.id} · ${session.duration} · ${session.turns} turns`;
+        byId("component-count").textContent = components.length;
+        byId("context-total").textContent = suspicious ? turnTotals[turn] : (turn === "12" ? "11.1k tokens" : turn === "18" ? "14.2k tokens" : "18.9k tokens");
+        byId("evidence-count").textContent = suspicious ? "3 sources" : "None notable";
+
+        byId("component-list").innerHTML = components.map((component) => `
+          <li><button class="component-button" data-component="${component.id}" aria-current="${component.id === selectedComponentId}">
+            <span><span class="component-title">${component.title}<span class="tag">${component.fidelity}</span></span><span class="component-meta">${component.note}</span></span>
+            <span class="contribution"><strong>${component.amount}</strong><span class="component-meta">tokens</span></span>
+          </button></li>
+        `).join("");
+        document.querySelectorAll("[data-component]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedComponentId = button.dataset.component;
+            renderContext();
+          });
+        });
+
+        const selected = components.find((item) => item.id === selectedComponentId);
+        const baseEvidence = evidenceByComponent[selectedComponentId];
+        const evidence = !suspicious && selectedComponentId === "project"
+          ? { summary: "Project instructions match the active repository.", source: `/${session.project}/AGENTS.md`, locator: "session initialization", fidelity: "Exact", excerpt: "Repository-specific instructions were loaded from the active project." }
+          : baseEvidence;
+        byId("evidence-title").textContent = selected.title;
+        byId("evidence-body").innerHTML = `
+          <p>${evidence.summary}</p>
+          <dl class="definition-list">
+            <dt>Source</dt><dd class="mono">${evidence.source}</dd>
+            <dt>Local locator</dt><dd>${evidence.locator}</dd>
+            <dt>Fidelity</dt><dd><span class="tag">${evidence.fidelity}</span></dd>
+            <dt>Parser</dt><dd class="mono">codex-log-v3 · analyzer 0.1.0</dd>
+          </dl>
+          <h3>Redacted excerpt</h3>
+          <pre class="excerpt">${evidence.excerpt}</pre>
+          <p class="muted">This pane reports recorded evidence only. It does not infer a recommendation or change configuration.</p>
+        `;
+        renderSessionRail();
+      }
+
+      function selectSession(id) {
+        selectedSessionId = id;
+        selectedComponentId = id === "sess_7f3a9b1c" ? "project" : "messages";
+        renderContext();
+      }
+
+      function openSession(id) {
+        selectSession(id);
+        setRoute("context");
+      }
+
+      function setRoute(route) {
+        currentRoute = route;
+        location.hash = route;
+        byId("dashboard-screen").classList.toggle("hidden", route !== "dashboard");
+        byId("context-screen").classList.toggle("hidden", route !== "context");
+        document.querySelectorAll(".nav-button").forEach((button) => {
+          if (button.dataset.route === route) button.setAttribute("aria-current", "page");
+          else button.removeAttribute("aria-current");
+        });
+        renderState();
+        if (route === "context") renderContext();
+      }
+
+      function stateMarkup(state, route) {
+        if (state === "loading") return `<div><p class="tag">Loading</p><h2>${route === "dashboard" ? "Indexing local Codex history" : "Loading recorded context"}</h2><p class="muted">Source records stay on this machine. This view will update when the local index is ready.</p></div>`;
+        if (state === "empty") return `<div><p class="tag">Empty</p><h2>${route === "dashboard" ? "No sessions indexed yet" : "No context records for this session"}</h2><p class="muted">${route === "dashboard" ? "Scan local history to populate metrics and recent sessions." : "Choose another session or return to the dashboard."}</p><button class="button-primary" data-empty-action>${route === "dashboard" ? "Scan local history" : "Back to dashboard"}</button></div>`;
+        return `<div><p class="tag error-text">Error</p><h2>Inspector could not read this record format</h2><p class="muted">Codex CLI 0.42.0 · parser codex-log-v3. Source session data was not changed.</p><button class="button-secondary">View diagnostic details</button></div>`;
+      }
+
+      function renderState() {
+        const state = byId("state-select").value;
+        const isPopulated = state === "populated";
+        byId("dashboard-populated").classList.toggle("hidden", !isPopulated);
+        byId("context-populated").classList.toggle("hidden", !isPopulated);
+        byId("dashboard-state").classList.toggle("hidden", isPopulated || currentRoute !== "dashboard");
+        byId("context-state").classList.toggle("hidden", isPopulated || currentRoute !== "context");
+        if (!isPopulated) {
+          const target = currentRoute === "dashboard" ? byId("dashboard-state") : byId("context-state");
+          target.innerHTML = stateMarkup(state, currentRoute);
+          const action = target.querySelector("[data-empty-action]");
+          if (action) action.addEventListener("click", () => {
+            if (currentRoute === "dashboard") byId("state-select").value = "loading";
+            else setRoute("dashboard");
+            renderState();
+          });
+        }
+      }
+
+      document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => setRoute(button.dataset.route)));
+      document.querySelectorAll("[data-open-session]").forEach((button) => button.addEventListener("click", () => openSession(button.dataset.openSession)));
+      byId("session-search").addEventListener("input", renderDashboardSessions);
+      byId("project-filter").addEventListener("change", renderDashboardSessions);
+      byId("inspector-session-search").addEventListener("input", renderSessionRail);
+      byId("turn-select").addEventListener("change", renderContext);
+      byId("state-select").addEventListener("change", renderState);
+      window.addEventListener("hashchange", () => setRoute(location.hash.includes("context") ? "context" : "dashboard"));
+
+      renderDashboardSessions();
+      renderContext();
+      setRoute(currentRoute);
+    </script>
+  </body>
+</html>
