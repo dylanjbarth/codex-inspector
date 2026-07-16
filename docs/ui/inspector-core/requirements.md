@@ -18,18 +18,28 @@ Their primary job is to understand when and how recorded Codex capacity was spen
 6. Inspect its source, contribution, fidelity, and related evidence.
 7. Return to the dashboard or switch directly to another session.
 
+The customization flow is separate but uses the same dashboard surface:
+
+1. Create a saved view from an opinionated template or a blank canvas.
+2. Enter **Edit view** mode.
+3. Add, configure, remove, and rearrange widgets on that view's canvas.
+4. Leave edit mode and use the view for analysis.
+
 ## Screens
 
 ### Dashboard
 
-- A global relative-time selector with 24-hour, 7-day, 14-day, 30-day, longer, and custom ranges.
-- Global project, model, reasoning-level, and root/spawned filters inherited by widgets.
+- A single view header containing the saved-view picker, New view action, global time range, collapsed filters, and Edit view action.
+- New views start from Token & Capacity, another supported template, or a blank custom canvas.
+- Global project, model, reasoning-level, and root/spawned filters live in a dropdown and are inherited by widgets.
 - Current recorded limit utilization and reset timing, presented descriptively.
 - Recorded token total with combined, root-session, and descendant-agent attribution.
 - Token volume over time, token composition, and capacity drawdown with reset boundaries.
 - The most token-intensive user-initiated root sessions, with all descendants rolled up and separately attributed.
 - Direct entry from a contributing root session into its context.
-- Visible but shallow customization through templates, a Metrics Catalog, and an Add widget wizard.
+- Add widget belongs to edit mode for the current view; a template is only a starting point for creating a view.
+- Widgets can be rearranged by drag-and-drop or keyboard, and each uses the same configuration icon and realistic configuration modal.
+- The Metrics Catalog remains available inside metric-selection flows rather than competing with the saved-view model.
 
 ### Context inspector
 
@@ -48,6 +58,8 @@ Their primary job is to understand when and how recorded Codex capacity was spen
 - Capacity is descriptive and does not imply healthy, unhealthy, wasteful, or optimal behavior.
 - The global time range and filters are identifiable as dashboard-wide controls.
 - A reviewer can discover the supported metric vocabulary and begin the bounded widget wizard.
+- A reviewer can create a view from a template or blank canvas without confusing that action with adding a widget.
+- A reviewer can enter edit mode, move a widget, configure it, and return to analysis mode.
 - Context fidelity is visible before reading detailed evidence.
 - The current session and turn remain clear while inspecting components.
 - Populated, loading, empty, and error states are directly reviewable.
@@ -60,7 +72,7 @@ Their primary job is to understand when and how recorded Codex capacity was spen
 - Recorded token usage is exact where present; component-level token contribution may be estimated.
 - The first context inspector focuses on recorded composition and provenance, not recreating the complete server-side prompt.
 - The prototype uses synthetic data shaped like locally indexable records; it does not display the inspected user's real session content.
-- Full drag-and-drop layout editing and advanced widget configuration remain out of scope for this structural pass.
+- Layout changes are in-memory wireframe state; persistence, resizing, and collision rules remain implementation concerns.
 
 ## Open questions
 

@@ -209,6 +209,36 @@
       }
 
       .dashboard-toolbar .field { min-width: 0; }
+
+      .view-header {
+        position: relative;
+        margin-bottom: var(--space-5);
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+      .view-header-main {
+        display: flex;
+        align-items: end;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border);
+      }
+      .view-picker { flex: 1 1 20rem; min-width: 14rem; }
+      .view-picker select { width: 100%; font-size: 1.1rem; font-weight: 700; }
+      .compact-field { display: grid; gap: var(--space-1); min-width: 10rem; }
+      .compact-field label { color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+      .view-header-summary { display: flex; justify-content: space-between; gap: var(--space-4); align-items: center; padding: var(--space-3) var(--space-4); }
+      .view-header-summary p { margin: 0; }
+      .header-icon-button { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); background: var(--surface); font-weight: 700; }
+      .header-icon-button svg, .widget-icon-button svg, .drag-handle svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.8; }
+      .filter-menu { position: absolute; z-index: 4; top: 4.75rem; right: 6.5rem; width: min(25rem, calc(100% - 2rem)); padding: var(--space-4); background: var(--surface); border: 2px solid var(--border-strong); }
+      .filter-menu h2 { margin-bottom: var(--space-3); }
+      .filter-menu .field { margin-bottom: var(--space-3); min-width: 0; }
+      .filter-menu-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-4); }
+      .edit-banner { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--focus-soft); border: 1px dashed var(--focus); }
+      .edit-banner p { margin: 0; }
+      .empty-canvas { padding: 5rem var(--space-5); background: var(--surface); border: 2px dashed var(--border-strong); text-align: center; }
+      .empty-canvas p { max-width: 38rem; margin-inline: auto; }
       .range-field { display: grid; gap: var(--space-1); }
       .range-field > span { color: var(--muted); font-size: 0.82rem; font-weight: 650; }
       .range-button {
@@ -243,11 +273,18 @@
         background: var(--surface);
         border: 1px solid var(--border);
       }
+      .widget[draggable="true"] { cursor: grab; border-style: dashed; }
+      .widget.dragging { opacity: 0.45; }
+      .widget.drop-before { box-shadow: -5px 0 0 var(--focus); }
       .widget.wide { grid-column: 1 / -1; }
       .widget.third { grid-column: span 4; }
       .widget-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
       .widget-header h2 { margin-bottom: var(--space-1); }
       .widget-header p { margin: 0; }
+      .widget-actions { flex-wrap: nowrap; }
+      .widget-icon-button, .drag-handle { display: inline-grid; place-items: center; width: 2.5rem; min-height: 2.5rem; padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); }
+      .drag-handle { display: none; }
+      .editing .drag-handle { display: inline-grid; }
       .widget-body { padding: var(--space-4); }
       .widget-kicker { color: var(--muted); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
       .hero-value { display: block; margin: var(--space-1) 0; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.1; }
@@ -322,6 +359,9 @@
       .catalog-item p { margin-bottom: var(--space-1); }
       .catalog-meta { color: var(--muted); font-size: 0.8rem; }
       .success-note { margin: 0 var(--space-4) var(--space-4); padding: var(--space-3); background: var(--focus-soft); border-left: 3px solid var(--focus); }
+      .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+      .config-grid .field { min-width: 0; }
+      .danger-zone { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border); }
 
       .panel {
         background: var(--surface);
@@ -497,6 +537,12 @@
         .screen-header { display: block; }
         .filters { margin-top: var(--space-4); }
         .dashboard-actions { margin-top: var(--space-4); }
+        .view-header-main, .view-header-summary { align-items: stretch; flex-direction: column; }
+        .view-picker, .compact-field { width: 100%; min-width: 0; }
+        .view-picker { flex: 0 0 auto; }
+        .filter-menu { top: 9.5rem; right: var(--space-4); }
+        .edit-banner { align-items: stretch; flex-direction: column; }
+        .config-grid { grid-template-columns: 1fr; }
         .dashboard-toolbar { grid-template-columns: 1fr; }
         .range-options { display: grid; grid-template-columns: repeat(3, 1fr); }
         .range-button { padding-inline: var(--space-2); }
@@ -542,66 +588,35 @@
 
       <main>
         <section id="dashboard-screen" class="screen" aria-labelledby="dashboard-title">
-          <div class="screen-header">
-            <div>
-              <p class="widget-kicker">Dashboard template</p>
-              <h1 id="dashboard-title">Token &amp; Capacity</h1>
-              <p class="lede">See when and how recorded Codex capacity was spent, then trace the usage back to user-initiated sessions and their agent trees.</p>
-            </div>
-            <div class="dashboard-actions">
-              <button class="button-secondary" type="button" data-open-catalog>Metrics Catalog</button>
-              <button class="button-primary" type="button" data-open-wizard>Add widget</button>
-            </div>
-          </div>
-
           <div id="dashboard-populated">
-            <section class="dashboard-toolbar" aria-label="Dashboard controls">
-              <div class="field">
-                <label for="template-select">Template</label>
-                <select id="template-select">
-                  <option>Token &amp; Capacity</option>
-                  <option disabled>Workflow Profile — next</option>
-                  <option disabled>Efficiency &amp; Friction — next</option>
-                  <option disabled>Outcomes &amp; Reviews — next</option>
-                </select>
+            <header class="view-header" aria-label="Current dashboard view">
+              <div class="view-header-main">
+                <div class="compact-field view-picker"><label for="view-select">View</label><select id="view-select"><option value="token-capacity">Token &amp; Capacity</option></select></div>
+                <button class="button-secondary" type="button" id="new-view-button">New view</button>
+                <div class="compact-field"><label for="range-select">Global time</label><select id="range-select"><option value="24 hours">Last 24 hours</option><option value="7 days" selected>Last 7 days</option><option value="14 days">Last 14 days</option><option value="30 days">Last 30 days</option><option value="90 days">Last 90 days</option><option value="Custom range">Custom…</option></select></div>
+                <button class="header-icon-button" type="button" id="filter-button" aria-expanded="false" aria-controls="filter-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"></path></svg><span id="filter-button-label">Filters</span></button>
+                <button class="button-primary" type="button" id="edit-layout-button">Edit view</button>
               </div>
-              <div class="range-field">
-                <span id="global-range-label">Global relative time</span>
-                <div class="range-options" role="group" aria-labelledby="global-range-label">
-                  <button class="range-button" type="button" data-range="24 hours" aria-pressed="false">24h</button>
-                  <button class="range-button" type="button" data-range="7 days" aria-pressed="true">7d</button>
-                  <button class="range-button" type="button" data-range="14 days" aria-pressed="false">14d</button>
-                  <button class="range-button" type="button" data-range="30 days" aria-pressed="false">30d</button>
-                  <button class="range-button" type="button" data-range="90 days" aria-pressed="false">90d</button>
-                  <button class="range-button" type="button" data-range="Custom range" aria-pressed="false">Custom</button>
-                </div>
+              <div class="view-header-summary">
+                <div><p class="widget-kicker">Saved dashboard view</p><h1 id="dashboard-title">Token &amp; Capacity</h1><p class="muted" id="view-description">Where recorded capacity went and which root-session trees explain it.</p></div>
+                <p class="muted"><span id="filter-summary-text">All projects · All models · All levels · Root + spawned</span><br>Limit utilization remains account-wide.</p>
               </div>
-            </section>
+              <form id="filter-menu" class="filter-menu hidden">
+                <h2>View filters</h2>
+                <div class="field"><label for="project-filter">Project</label><select id="project-filter"><option value="all">All projects</option><option value="api-service">api-service</option><option value="web-app">web-app</option><option value="developer-docs">developer-docs</option><option value="cli-tools">cli-tools</option></select></div>
+                <div class="field"><label for="model-filter">Model</label><select id="model-filter"><option>All models</option><option>GPT-5.6 Codex</option><option>GPT-5.5 Codex</option></select></div>
+                <div class="field"><label for="reasoning-filter">Reasoning</label><select id="reasoning-filter"><option>All levels</option><option>High</option><option>Medium</option></select></div>
+                <div class="field"><label for="kind-filter">Session work</label><select id="kind-filter"><option value="combined">Root + spawned</option><option value="root">Root only</option><option value="spawned">Spawned only</option></select></div>
+                <div class="filter-menu-actions"><button class="text-button" type="button" id="clear-filters">Reset</button><button class="button-primary" type="submit">Apply filters</button></div>
+              </form>
+            </header>
 
-            <form class="filters" id="dashboard-filters">
-              <div class="field">
-                <label for="project-filter">Project</label>
-                <select id="project-filter">
-                  <option value="all">All projects</option>
-                  <option value="api-service">api-service</option>
-                  <option value="web-app">web-app</option>
-                  <option value="developer-docs">developer-docs</option>
-                  <option value="cli-tools">cli-tools</option>
-                </select>
-              </div>
-              <div class="field"><label for="model-filter">Model</label><select id="model-filter"><option>All models</option><option>GPT-5.6 Codex</option><option>GPT-5.5 Codex</option></select></div>
-              <div class="field"><label for="reasoning-filter">Reasoning</label><select id="reasoning-filter"><option>All levels</option><option>High</option><option>Medium</option></select></div>
-              <div class="field"><label for="kind-filter">Session work</label><select id="kind-filter"><option value="combined">Root + spawned</option><option value="root">Root only</option><option value="spawned">Spawned only</option></select></div>
-            </form>
+            <div id="edit-banner" class="edit-banner hidden"><p><strong>Editing “Token &amp; Capacity”</strong><br><span class="muted">Drag widgets by their handles to rearrange the canvas. Changes are saved locally.</span></p><div class="dashboard-actions"><button class="button-secondary" type="button" data-open-wizard>Add widget</button><button class="button-primary" type="button" id="done-layout-button">Done</button></div></div>
+            <div id="empty-canvas" class="empty-canvas hidden"><h2>This view has no widgets yet</h2><p class="muted">Start from a blank canvas, then add tested widgets from the Metrics Catalog.</p><button class="button-primary" type="button" data-open-wizard>Add first widget</button></div>
 
-            <div class="filter-summary" aria-live="polite">
-              <p><strong id="filter-summary-text">All projects · All models · All reasoning · Root + spawned</strong><br><span class="muted">Applies to dashboard widgets. Recorded limit utilization remains account-wide.</span></p>
-              <button class="text-button" type="button" id="clear-filters">Clear filters</button>
-            </div>
-
-            <div class="widget-grid">
-              <section class="widget" aria-labelledby="capacity-title">
-                <div class="widget-header"><div><span class="widget-kicker">Hero metric</span><h2 id="capacity-title">Current recorded limit utilization</h2><p class="muted">Primary · 7-day window</p></div><button class="text-button" type="button" data-widget-info="capacity">Definition</button></div>
+            <div class="widget-grid" id="widget-grid">
+              <section class="widget" data-widget-id="capacity" data-widget-type="Hero metric" data-widget-metric="Recorded limit utilization" aria-labelledby="capacity-title">
+                <div class="widget-header"><div><span class="widget-kicker">Hero metric</span><h2 id="capacity-title">Current recorded limit utilization</h2><p class="muted">Primary · 7-day window</p></div><div class="widget-actions"><button class="drag-handle" type="button" aria-label="Drag Current recorded limit utilization"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="6" r="1"></circle><circle cx="16" cy="6" r="1"></circle><circle cx="8" cy="12" r="1"></circle><circle cx="16" cy="12" r="1"></circle><circle cx="8" cy="18" r="1"></circle><circle cx="16" cy="18" r="1"></circle></svg></button><button class="widget-icon-button" type="button" data-configure-widget="capacity" aria-label="Configure Current recorded limit utilization"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"></path></svg></button></div></div>
                 <div class="widget-body">
                   <div class="hero-row">
                     <div><strong class="hero-value">68%</strong><p class="muted">32% recorded capacity remaining</p></div>
@@ -612,8 +627,8 @@
                 </div>
               </section>
 
-              <section class="widget" aria-labelledby="tokens-total-title">
-                <div class="widget-header"><div><span class="widget-kicker">Hero metric</span><h2 id="tokens-total-title">Total recorded tokens</h2><p class="muted">Last <span data-range-label>7 days</span></p></div><button class="text-button" type="button" data-widget-info="tokens">Definition</button></div>
+              <section class="widget" data-widget-id="tokens" data-widget-type="Hero metric" data-widget-metric="Total recorded tokens" aria-labelledby="tokens-total-title">
+                <div class="widget-header"><div><span class="widget-kicker">Hero metric</span><h2 id="tokens-total-title">Total recorded tokens</h2><p class="muted">Last <span data-range-label>7 days</span></p></div><div class="widget-actions"><button class="drag-handle" type="button" aria-label="Drag Total recorded tokens"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="6" r="1"></circle><circle cx="16" cy="6" r="1"></circle><circle cx="8" cy="12" r="1"></circle><circle cx="16" cy="12" r="1"></circle><circle cx="8" cy="18" r="1"></circle><circle cx="16" cy="18" r="1"></circle></svg></button><button class="widget-icon-button" type="button" data-configure-widget="tokens" aria-label="Configure Total recorded tokens"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"></path></svg></button></div></div>
                 <div class="widget-body">
                   <strong class="hero-value" id="token-total">1.81M</strong>
                   <div class="stacked-track" id="token-attribution-track" aria-label="69 percent root session tokens and 31 percent descendant agent tokens"><span id="token-root-fill" class="root-fill" style="width:69%"></span><span id="token-spawned-fill" class="spawned-fill" style="width:31%"></span></div>
@@ -625,8 +640,8 @@
                 </div>
               </section>
 
-              <section class="widget wide" aria-labelledby="usage-series-title">
-                <div class="widget-header"><div><span class="widget-kicker">Time series · stacked</span><h2 id="usage-series-title">Recorded token usage over time</h2><p class="muted">Root versus spawned work · daily interval · last <span data-range-label>7 days</span></p></div><button class="text-button" type="button" data-widget-info="series">Configure</button></div>
+              <section class="widget wide" data-widget-id="series" data-widget-type="Time series" data-widget-metric="Total recorded tokens" aria-labelledby="usage-series-title">
+                <div class="widget-header"><div><span class="widget-kicker">Time series · stacked</span><h2 id="usage-series-title">Recorded token usage over time</h2><p class="muted">Root versus spawned work · daily interval · last <span data-range-label>7 days</span></p></div><div class="widget-actions"><button class="drag-handle" type="button" aria-label="Drag Recorded token usage over time">⠿</button><button class="widget-icon-button" type="button" data-configure-widget="series" aria-label="Configure Recorded token usage over time">⚙</button></div></div>
                 <div class="widget-body">
                   <div class="bar-chart" role="img" aria-label="Daily recorded token usage, stacked by root and spawned agent work">
                     <div class="bar-column"><div class="bar-stack"><span class="root-fill" style="height:29%"></span><span class="spawned-fill" style="height:15%"></span></div><span>Wed 9</span></div>
@@ -641,8 +656,8 @@
                 </div>
               </section>
 
-              <section class="widget" aria-labelledby="composition-title">
-                <div class="widget-header"><div><span class="widget-kicker">Ranked breakdown</span><h2 id="composition-title">Token composition</h2><p class="muted">Share of recorded total</p></div><button class="text-button" type="button" data-widget-info="composition">Configure</button></div>
+              <section class="widget" data-widget-id="composition" data-widget-type="Ranked breakdown" data-widget-metric="Tokens by composition" aria-labelledby="composition-title">
+                <div class="widget-header"><div><span class="widget-kicker">Ranked breakdown</span><h2 id="composition-title">Token composition</h2><p class="muted">Share of recorded total</p></div><div class="widget-actions"><button class="drag-handle" type="button" aria-label="Drag Token composition">⠿</button><button class="widget-icon-button" type="button" data-configure-widget="composition" aria-label="Configure Token composition">⚙</button></div></div>
                 <div class="widget-body">
                   <ul class="breakdown-list">
                     <li><div class="breakdown-label"><span>Cached input</span><strong>869k · 48%</strong></div><div class="breakdown-track"><span class="breakdown-fill" style="width:48%"></span></div></li>
@@ -653,8 +668,8 @@
                 </div>
               </section>
 
-              <section class="widget" aria-labelledby="drawdown-title">
-                <div class="widget-header"><div><span class="widget-kicker">Time series</span><h2 id="drawdown-title">Recorded capacity drawdown</h2><p class="muted">Limit-window utilization with reset boundaries</p></div><button class="text-button" type="button" data-widget-info="drawdown">Definition</button></div>
+              <section class="widget" data-widget-id="drawdown" data-widget-type="Time series" data-widget-metric="Recorded limit utilization" aria-labelledby="drawdown-title">
+                <div class="widget-header"><div><span class="widget-kicker">Time series</span><h2 id="drawdown-title">Recorded capacity drawdown</h2><p class="muted">Limit-window utilization with reset boundaries</p></div><div class="widget-actions"><button class="drag-handle" type="button" aria-label="Drag Recorded capacity drawdown">⠿</button><button class="widget-icon-button" type="button" data-configure-widget="drawdown" aria-label="Configure Recorded capacity drawdown">⚙</button></div></div>
                 <div class="widget-body">
                   <svg class="capacity-chart" viewBox="0 0 520 210" role="img" aria-label="Recorded utilization increases across two limit windows and drops at the reset boundary">
                     <line class="axis" x1="38" y1="170" x2="500" y2="170"></line><line class="axis" x1="38" y1="20" x2="38" y2="170"></line>
@@ -666,10 +681,10 @@
                 </div>
               </section>
 
-              <section class="widget wide" aria-labelledby="sessions-title">
+              <section class="widget wide" data-widget-id="sessions" data-widget-type="Session table" data-widget-metric="Recorded tokens by root session" aria-labelledby="sessions-title">
                 <div class="widget-header">
                   <div><span class="widget-kicker">Session table</span><h2 id="sessions-title">Most token-intensive root sessions</h2><p id="session-count" class="muted">4 user-initiated roots · descendants rolled up</p></div>
-                  <div class="field"><label for="session-search">Find a root session</label><input id="session-search" type="search" placeholder="Project, task, or ID" autocomplete="off" /></div>
+                  <div class="widget-actions"><div class="field"><label for="session-search">Find a root session</label><input id="session-search" type="search" placeholder="Project, task, or ID" autocomplete="off" /></div><button class="drag-handle" type="button" aria-label="Drag Most token-intensive root sessions">⠿</button><button class="widget-icon-button" type="button" data-configure-widget="sessions" aria-label="Configure Most token-intensive root sessions">⚙</button></div>
                 </div>
                 <div class="table-wrap">
                   <table>
@@ -742,6 +757,43 @@
         </section>
       </main>
 
+      <dialog id="new-view-dialog" aria-labelledby="new-view-title">
+        <div class="dialog-header"><div><p class="widget-kicker">New saved dashboard</p><h2 id="new-view-title">Create a view</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close Create a view">×</button></div>
+        <form id="new-view-form">
+          <div class="dialog-body">
+            <h3>Choose a starting point</h3>
+            <div class="choice-grid">
+              <label class="choice-card"><input type="radio" name="view-starter" value="Token & Capacity" checked><span><strong>Token &amp; Capacity</strong><br><span class="muted">Limit usage, token allocation, and intensive sessions.</span></span></label>
+              <label class="choice-card"><input type="radio" name="view-starter" value="Workflow Profile"><span><strong>Workflow Profile</strong><br><span class="muted">Models, reasoning, projects, and delegation patterns.</span></span></label>
+              <label class="choice-card"><input type="radio" name="view-starter" value="Efficiency & Friction"><span><strong>Efficiency &amp; Friction</strong><br><span class="muted">Latency, retries, failures, and compactions.</span></span></label>
+              <label class="choice-card"><input type="radio" name="view-starter" value="Blank"><span><strong>Blank canvas</strong><br><span class="muted">Start empty and add only the widgets you need.</span></span></label>
+            </div>
+            <div class="field" style="margin-top:1rem"><label for="new-view-name">View name</label><input id="new-view-name" value="My Codex view" required></div>
+          </div>
+          <div class="dialog-actions"><button class="button-secondary" type="button" data-close-dialog>Cancel</button><button class="button-primary" type="submit">Create view</button></div>
+        </form>
+      </dialog>
+
+      <dialog id="widget-config-dialog" aria-labelledby="widget-config-title">
+        <div class="dialog-header"><div><p class="widget-kicker">Widget configuration</p><h2 id="widget-config-title">Configure widget</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close widget configuration">×</button></div>
+        <form id="widget-config-form">
+          <div class="dialog-body">
+            <div class="config-grid">
+              <div class="field"><label for="config-title">Widget title</label><input id="config-title" required></div>
+              <div class="field"><label for="config-type">Visualization</label><select id="config-type"><option>Hero metric</option><option>Time series</option><option>Ranked breakdown</option><option>Pivot table</option><option>Session table</option></select></div>
+              <div class="field"><label for="config-metric">Metric</label><select id="config-metric"><option>Total recorded tokens</option><option>Recorded limit utilization</option><option>Tokens by composition</option><option>Recorded tokens by root session</option><option>Descendant token share</option></select></div>
+              <div class="field"><label for="config-group">Group by</label><select id="config-group"><option>None</option><option>Root versus spawned</option><option>Token composition</option><option>Project</option><option>Model</option></select></div>
+              <div class="field"><label for="config-time">Time scope</label><select id="config-time"><option>Inherit view range</option><option>Last 24 hours</option><option>Last 7 days</option><option>Last 30 days</option></select></div>
+              <div class="field"><label for="config-display">Display</label><select id="config-display"><option>Automatic</option><option>Stacked</option><option>100% stacked</option><option>Table</option></select></div>
+            </div>
+            <label class="choice-card" style="margin-top:1rem"><input type="checkbox" id="config-compare"><span><strong>Compare with previous period</strong><br><span class="muted">Show the immediately preceding period when the visualization supports it.</span></span></label>
+            <div class="preview-box" style="margin-top:1rem"><span class="widget-kicker">Query preview</span><p id="config-preview">Total recorded tokens · inherit view range · current view filters</p></div>
+            <div class="danger-zone"><button class="text-button error-text" type="button" id="remove-widget-button">Remove widget from this view</button></div>
+          </div>
+          <div class="dialog-actions"><button class="button-secondary" type="button" data-close-dialog>Cancel</button><button class="button-primary" type="submit">Save widget</button></div>
+        </form>
+      </dialog>
+
       <dialog id="catalog-dialog" aria-labelledby="catalog-title">
         <div class="dialog-header"><div><p class="widget-kicker">Supported analytics vocabulary</p><h2 id="catalog-title">Metrics Catalog</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close Metrics Catalog">×</button></div>
         <div class="dialog-body">
@@ -762,7 +814,7 @@
           <div class="dialog-body">
             <div id="wizard-progress" class="wizard-progress">Step 1 of 6 · Widget type</div>
             <section class="wizard-panel" data-wizard-step="1">
-              <h3>What kind of view do you need?</h3>
+              <h3>What kind of widget do you need?</h3>
               <div class="choice-grid">
                 <label class="choice-card"><input type="radio" name="widget-type" value="Hero metric" checked /><span><strong>Hero metric</strong><br><span class="muted">One aggregate and optional attribution.</span></span></label>
                 <label class="choice-card"><input type="radio" name="widget-type" value="Time series" /><span><strong>Time series</strong><br><span class="muted">Line, stacked, or 100%-stacked.</span></span></label>
@@ -771,14 +823,14 @@
                 <label class="choice-card"><input type="radio" name="widget-type" value="Session table" /><span><strong>Session table</strong><br><span class="muted">Contributing root sessions and drill-down.</span></span></label>
               </div>
             </section>
-            <section class="wizard-panel hidden" data-wizard-step="2"><h3>Choose a metric</h3><div class="field"><label for="wizard-metric">Metric</label><select id="wizard-metric"><option>Total recorded tokens</option><option>Recorded limit utilization</option><option>Descendant token share</option><option>User-initiated root sessions</option><option>Tool failure rate</option></select></div><p class="coverage-note">Each metric exposes its formula, sources, valid dimensions, coverage, and fidelity in the Metrics Catalog.</p></section>
+            <section class="wizard-panel hidden" data-wizard-step="2"><h3>Choose a metric</h3><div class="field"><label for="wizard-metric">Metric</label><select id="wizard-metric"><option>Total recorded tokens</option><option>Recorded limit utilization</option><option>Descendant token share</option><option>User-initiated root sessions</option><option>Tool failure rate</option></select></div><p class="coverage-note">Each metric exposes its formula, sources, valid dimensions, coverage, and fidelity. <button class="text-button" type="button" data-open-catalog>Browse Metrics Catalog</button></p></section>
             <section class="wizard-panel hidden" data-wizard-step="3"><h3>Choose population and time scope</h3><div class="choice-grid"><div class="field"><label for="wizard-population">Session population</label><select id="wizard-population"><option>Root + spawned</option><option>Root only</option><option>Spawned only</option></select></div><div class="field"><label for="wizard-time">Time scope</label><select id="wizard-time"><option>Inherit global range</option><option disabled>Per-widget override — undecided</option></select></div></div></section>
             <section class="wizard-panel hidden" data-wizard-step="4"><h3>Configure the calculation</h3><div class="choice-grid"><div class="field"><label for="wizard-group">Group by</label><select id="wizard-group"><option>Root versus spawned</option><option>Project</option><option>Model</option><option>Reasoning level</option></select></div><div class="field"><label for="wizard-interval">Interval</label><select id="wizard-interval"><option>Adaptive</option><option>Daily</option><option>Weekly</option></select></div></div></section>
             <section class="wizard-panel hidden" data-wizard-step="5"><h3>Add filters and comparison</h3><div class="choice-grid"><div class="field"><label for="wizard-project">Project filter</label><select id="wizard-project"><option>Use dashboard filters</option><option>api-service</option><option>web-app</option></select></div><label class="choice-card"><input type="checkbox" id="wizard-compare" /><span><strong>Compare to previous period</strong><br><span class="muted">Show change for the immediately preceding range.</span></span></label></div></section>
             <section class="wizard-panel hidden" data-wizard-step="6"><h3>Review and save</h3><div class="field"><label for="widget-name">Widget name</label><input id="widget-name" value="Recorded tokens by session kind" /></div><div class="preview-box"><span class="widget-kicker">Preview</span><h3 id="wizard-preview-title">Hero metric · Total recorded tokens</h3><p>Population: Root + spawned · Time: Inherit global range · Grouped by root versus spawned</p><strong class="hero-value">1.81M</strong></div></section>
           </div>
           <div class="dialog-actions"><button id="wizard-back" class="button-secondary hidden" type="button">Back</button><button id="wizard-next" class="button-primary" type="button">Next</button><button id="wizard-save" class="button-primary hidden" type="submit">Save widget</button></div>
-          <p id="wizard-success" class="success-note hidden" role="status">Sample widget saved. Layout editing is intentionally deferred in this wireframe.</p>
+          <p id="wizard-success" class="success-note hidden" role="status">Widget added to this view. Drag it into position before leaving edit mode.</p>
         </form>
       </dialog>
     </div>
@@ -1107,12 +1159,13 @@
           reasoning.value,
           kind.options[kind.selectedIndex].text,
         ].join(" · ");
+        const activeCount = [project, model, reasoning, kind].filter((control) => control.selectedIndex > 0).length;
+        byId("filter-button-label").textContent = activeCount ? `Filters (${activeCount})` : "Filters";
         renderDashboardSessions();
       }
 
-      function setDashboardRange(button) {
-        document.querySelectorAll("[data-range]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
-        document.querySelectorAll("[data-range-label]").forEach((label) => { label.textContent = button.dataset.range; });
+      function setDashboardRange(value) {
+        document.querySelectorAll("[data-range-label]").forEach((label) => { label.textContent = value; });
       }
 
       function openDialog(dialog) {
@@ -1121,7 +1174,82 @@
       }
 
       let wizardStep = 1;
+      let editingLayout = false;
+      let selectedConfigWidget = null;
+      let draggedWidget = null;
+      const views = {
+        "token-capacity": { name: "Token & Capacity", starter: "Token & Capacity", blank: false, description: "Where recorded capacity went and which root-session trees explain it." },
+      };
       const wizardStepNames = ["Widget type", "Metric", "Population & time", "Calculation", "Filters & comparison", "Preview & save"];
+
+      function setEditMode(editing) {
+        editingLayout = editing;
+        byId("widget-grid").classList.toggle("editing", editing);
+        byId("edit-banner").classList.toggle("hidden", !editing);
+        byId("edit-layout-button").classList.toggle("hidden", editing);
+        document.querySelectorAll(".widget").forEach((widget) => widget.setAttribute("draggable", String(editing)));
+      }
+
+      function renderSelectedView() {
+        const viewId = byId("view-select").value;
+        const view = views[viewId] || views["token-capacity"];
+        byId("dashboard-title").textContent = view.name;
+        byId("view-description").textContent = view.description;
+        byId("edit-banner").querySelector("strong").textContent = `Editing “${view.name}”`;
+        let visibleWidgets = 0;
+        document.querySelectorAll(".widget").forEach((widget) => {
+          const belongsToView = view.starter === "Blank" ? widget.dataset.viewId === viewId : !widget.dataset.viewId || widget.dataset.viewId === viewId;
+          widget.classList.toggle("hidden", !belongsToView);
+          if (belongsToView) visibleWidgets += 1;
+        });
+        byId("widget-grid").classList.toggle("hidden", visibleWidgets === 0);
+        byId("empty-canvas").classList.toggle("hidden", visibleWidgets !== 0);
+        if (visibleWidgets === 0) setEditMode(true);
+      }
+
+      function openWidgetConfig(widget) {
+        selectedConfigWidget = widget;
+        const title = widget.querySelector("h2").textContent;
+        byId("widget-config-title").textContent = `Configure “${title}”`;
+        byId("config-title").value = title;
+        byId("config-type").value = widget.dataset.widgetType;
+        byId("config-metric").value = widget.dataset.widgetMetric;
+        byId("config-group").value = widget.dataset.widgetId === "series" || widget.dataset.widgetId === "tokens" ? "Root versus spawned" : widget.dataset.widgetId === "composition" ? "Token composition" : "None";
+        byId("config-preview").textContent = `${widget.dataset.widgetMetric} · inherit view range · current view filters`;
+        openDialog(byId("widget-config-dialog"));
+      }
+
+      function bindWidget(widget) {
+        widget.setAttribute("draggable", String(editingLayout));
+        widget.addEventListener("dragstart", (event) => {
+          if (!editingLayout) { event.preventDefault(); return; }
+          draggedWidget = widget;
+          widget.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+        });
+        widget.addEventListener("dragend", () => {
+          widget.classList.remove("dragging");
+          document.querySelectorAll(".widget").forEach((item) => item.classList.remove("drop-before"));
+          draggedWidget = null;
+        });
+      }
+
+      function addSampleWidget() {
+        const id = `custom-${Date.now()}`;
+        const title = byId("widget-name").value || byId("wizard-metric").value;
+        const type = document.querySelector('input[name="widget-type"]:checked').value;
+        const metric = byId("wizard-metric").value;
+        const widget = document.createElement("section");
+        widget.className = "widget";
+        widget.dataset.widgetId = id;
+        widget.dataset.widgetType = type;
+        widget.dataset.widgetMetric = metric;
+        widget.dataset.viewId = byId("view-select").value;
+        widget.innerHTML = `<div class="widget-header"><div><span class="widget-kicker">${type}</span><h2>${title}</h2><p class="muted">Inherits view time and filters</p></div><div class="widget-actions"><button class="drag-handle" type="button" aria-label="Drag ${title}">⠿</button><button class="widget-icon-button" type="button" data-configure-widget="${id}" aria-label="Configure ${title}">⚙</button></div></div><div class="widget-body"><div class="preview-box"><strong>${metric}</strong><p class="muted">New widget placeholder using the configured deterministic query.</p></div></div>`;
+        byId("widget-grid").appendChild(widget);
+        bindWidget(widget);
+        renderSelectedView();
+      }
 
       function renderWizardStep() {
         document.querySelectorAll("[data-wizard-step]").forEach((panel) => panel.classList.toggle("hidden", Number(panel.dataset.wizardStep) !== wizardStep));
@@ -1137,13 +1265,59 @@
       }
 
       document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => setRoute(button.dataset.route)));
-      document.querySelectorAll("[data-range]").forEach((button) => button.addEventListener("click", () => setDashboardRange(button)));
-      document.querySelectorAll("[data-open-catalog], [data-widget-info]").forEach((button) => button.addEventListener("click", () => openDialog(byId("catalog-dialog"))));
+      byId("range-select").addEventListener("change", () => setDashboardRange(byId("range-select").value));
+      byId("filter-button").addEventListener("click", () => {
+        const open = byId("filter-menu").classList.toggle("hidden") === false;
+        byId("filter-button").setAttribute("aria-expanded", String(open));
+      });
+      byId("filter-menu").addEventListener("submit", (event) => {
+        event.preventDefault();
+        updateDashboardFilters();
+        byId("filter-menu").classList.add("hidden");
+        byId("filter-button").setAttribute("aria-expanded", "false");
+      });
+      byId("new-view-button").addEventListener("click", () => openDialog(byId("new-view-dialog")));
+      byId("edit-layout-button").addEventListener("click", () => setEditMode(true));
+      byId("done-layout-button").addEventListener("click", () => setEditMode(false));
+      byId("view-select").addEventListener("change", renderSelectedView);
+      byId("new-view-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const starter = document.querySelector('input[name="view-starter"]:checked').value;
+        const name = byId("new-view-name").value.trim();
+        const id = `view-${Date.now()}`;
+        views[id] = { name, starter, blank: starter === "Blank", description: starter === "Blank" ? "A custom view built widget by widget." : `Started from the ${starter} template; every widget remains editable.` };
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = name;
+        byId("view-select").appendChild(option);
+        byId("view-select").value = id;
+        byId("new-view-dialog").close();
+        renderSelectedView();
+      });
+      document.querySelectorAll("[data-open-catalog]").forEach((button) => button.addEventListener("click", () => {
+        const parentDialog = button.closest("dialog");
+        if (parentDialog?.open) parentDialog.close();
+        openDialog(byId("catalog-dialog"));
+      }));
       document.querySelectorAll("[data-open-wizard]").forEach((button) => button.addEventListener("click", () => {
         wizardStep = 1;
         renderWizardStep();
         openDialog(byId("wizard-dialog"));
       }));
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-configure-widget]");
+        if (!button) return;
+        openWidgetConfig(button.closest(".widget"));
+      });
+      document.addEventListener("keydown", (event) => {
+        const handle = event.target.closest(".drag-handle");
+        if (!handle || !editingLayout || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        const widget = handle.closest(".widget");
+        if (["ArrowUp", "ArrowLeft"].includes(event.key) && widget.previousElementSibling) byId("widget-grid").insertBefore(widget, widget.previousElementSibling);
+        if (["ArrowDown", "ArrowRight"].includes(event.key) && widget.nextElementSibling) byId("widget-grid").insertBefore(widget.nextElementSibling, widget);
+        handle.focus();
+      });
       document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
       byId("catalog-search").addEventListener("input", () => {
         const query = byId("catalog-search").value.trim().toLowerCase();
@@ -1159,11 +1333,35 @@
       byId("wizard-back").addEventListener("click", () => { wizardStep = Math.max(1, wizardStep - 1); renderWizardStep(); });
       byId("widget-wizard").addEventListener("submit", (event) => {
         event.preventDefault();
+        addSampleWidget();
         byId("wizard-success").classList.remove("hidden");
+      });
+      byId("widget-config-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        selectedConfigWidget.querySelector("h2").textContent = byId("config-title").value;
+        selectedConfigWidget.dataset.widgetType = byId("config-type").value;
+        selectedConfigWidget.dataset.widgetMetric = byId("config-metric").value;
+        byId("widget-config-dialog").close();
+      });
+      ["config-metric", "config-group", "config-time", "config-display"].forEach((id) => byId(id).addEventListener("change", () => {
+        byId("config-preview").textContent = `${byId("config-metric").value} · ${byId("config-group").value} · ${byId("config-time").value} · ${byId("config-display").value}`;
+      }));
+      byId("remove-widget-button").addEventListener("click", () => {
+        selectedConfigWidget?.remove();
+        byId("widget-config-dialog").close();
+        renderSelectedView();
       });
       byId("clear-filters").addEventListener("click", () => {
         ["project-filter", "model-filter", "reasoning-filter", "kind-filter"].forEach((id) => { byId(id).selectedIndex = 0; });
         updateDashboardFilters();
+      });
+      byId("widget-grid").addEventListener("dragover", (event) => {
+        if (!draggedWidget) return;
+        event.preventDefault();
+        const target = event.target.closest(".widget");
+        if (!target || target === draggedWidget) return;
+        const before = event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2;
+        byId("widget-grid").insertBefore(draggedWidget, before ? target : target.nextSibling);
       });
 
       byId("session-search").addEventListener("input", renderDashboardSessions);
@@ -1174,6 +1372,8 @@
       window.addEventListener("hashchange", () => setRoute(location.hash.includes("context") ? "context" : "dashboard"));
 
       updateDashboardFilters();
+      document.querySelectorAll(".widget").forEach(bindWidget);
+      renderSelectedView();
       renderWizardStep();
       renderContext();
       setRoute(currentRoute);
