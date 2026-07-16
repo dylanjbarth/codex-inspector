@@ -16,8 +16,19 @@
 - Put Add widget, drag-and-drop rearrangement, and Done inside an explicit edit mode for the current view.
 - Give every widget one standard configuration control that opens a widget-specific modal; the Metrics Catalog is supporting reference material, not the configuration destination.
 - Keep customization bounded to tested widget types, documented metrics, deterministic configuration controls, and a guided six-step Add widget flow.
-- Use one selected context component and evidence pane rather than rendering the full raw prompt by default.
-- Keep exact, reconstructed, estimated, and unavailable states visible at the component level.
+- Make a causal token map the Context Inspector's opening hierarchy. Full agent turns preserve recorded order and descendant sessions attach to the turn that spawned them.
+- Use a persistent-map workspace on desktop: map first, chronological event ledger second, event evidence and context snapshots third.
+- Use recorded model-token usage for map geometry, with direct usage inside an inclusive downstream boundary. Keep tool payload introduced and cumulative context burden separate to prevent double-counting.
+- Open a dedicated session-discovery view when no deep link is supplied. Use one local ranked index, canonical root-session results, de-emphasized descendant matches, and explainable match labels.
+- Keep session naming read-only: recorded title, first substantive user instruction, then project/date/ID fallback.
+- Use a stable absolute token scale, minimap, fit/zoom controls, and manual branch collapsing so active updates do not reflow completed work.
+- Stream newly indexed active-session events into the open workspace without a full page refresh; preserve selection and viewport, and follow automatically only when Follow live is enabled.
+- Make the chronological event ledger the primary turn detail. Do not invoke Codex to generate default summaries or judgments.
+- Align a stacked categorized context-accumulation rail with ledger events. Reserve Context seen by Codex for model-call boundaries and label intermediate state reconstructed.
+- Make compactions first-class map and ledger events with exact recorded before/after comparison when source coverage permits.
+- Show exact recorded event content without Inspector-added redaction, using bounded previews and explicit full/raw-content actions for large payloads.
+- Keep exact, derived, estimated, and unavailable states visible at the relevant value or boundary.
+- Avoid automatic turn selection and evaluative labels. Entry points may restore an explicitly identified branch, turn, event, or active session.
 - Defer the optional Codex review flow and the final Findings/Insights naming decision.
 
 ## Deferred alternatives
@@ -27,4 +38,7 @@
 - Arbitrary SQL or fully unbounded chart configuration.
 - Asking for session usefulness feedback after every session.
 - A trace-first session explorer as the first drill-down.
+- A component-inventory-first Context Inspector.
+- Constant percentage-based map resizing during active sessions.
+- Independent top-level search results for every descendant agent session.
 - A conversational review setup as the primary plugin surface.

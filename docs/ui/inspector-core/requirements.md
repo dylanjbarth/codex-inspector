@@ -14,9 +14,10 @@ Their primary job is to understand when and how recorded Codex capacity was spen
 2. Change the global time range or filter by project, model, reasoning level, or root/spawned work.
 3. Understand token volume, composition, and root-versus-descendant attribution.
 4. Identify a token-intensive user-initiated root session and open it in the context inspector.
-5. Select a turn and context component.
-6. Inspect its source, contribution, fidelity, and related evidence.
-7. Return to the dashboard or switch directly to another session.
+5. Read the root session's causal token map and select a full agent turn.
+6. Follow that turn's chronological events and select an event boundary.
+7. Inspect exact evidence, token accounting, and the context before or after that boundary.
+8. Return to the dashboard or switch directly to another session.
 
 The customization flow is separate but uses the same dashboard surface:
 
@@ -43,12 +44,19 @@ The customization flow is separate but uses the same dashboard surface:
 
 ### Context inspector
 
-- Persistent selected-session identity and metadata.
-- A nearby session finder for switching without returning to the dashboard.
-- Turn selection for viewing context at a specific point in the session.
-- Context composition grouped by messages, instructions, tool definitions, and unavailable runtime context.
-- Visible fidelity labels: exact, reconstructed, estimated, and unavailable.
-- Evidence detail with provenance and a redacted excerpt.
+- A dedicated discovery state when Context Inspector is opened without a session deep link.
+- Unified local search over recorded session titles, projects, working directories, IDs, user messages, tool results, and descendant content, with explainable match labels.
+- User-initiated root sessions as canonical search results; descendant-only matches remain nested and de-emphasized.
+- Persistent selected-session identity, active/index freshness, exact ID, project, working directory, and aggregate root/descendant metadata.
+- A causal token map whose primary nodes are full agent turns and descendant sessions, with direct and inclusive downstream token accounting.
+- A stable absolute token scale, minimap, fit/zoom controls, and manual branch collapsing.
+- A persistent-map workspace: selecting a turn opens its chronological event ledger without discarding the session overview.
+- A stacked context-accumulation rail aligned to recorded events.
+- Event evidence with exact payloads, provenance, token attribution, bounded large-content previews, and raw-record access.
+- Explicit before/after context snapshots. Context seen by Codex is reserved for recorded model-call boundaries; intermediate state is labeled reconstructed.
+- First-class compaction markers and before/after comparisons.
+- Dynamic active-session updates that preserve viewport and selection without a hard page refresh.
+- Visible fidelity labels: exact, derived, estimated, and unavailable.
 
 ## Structural acceptance criteria
 
@@ -60,8 +68,14 @@ The customization flow is separate but uses the same dashboard surface:
 - A reviewer can discover the supported metric vocabulary and begin the bounded widget wizard.
 - A reviewer can create a view from a template or blank canvas without confusing that action with adding a widget.
 - A reviewer can enter edit mode, move a widget, configure it, and return to analysis mode.
-- Context fidelity is visible before reading detailed evidence.
-- The current session and turn remain clear while inspecting components.
+- A direct Context Inspector entry opens discovery rather than silently choosing a recent session.
+- A search result explains why it matched and retains root-session identity when a descendant matched.
+- Direct and downstream tokens remain distinguishable without double-counting tool payloads.
+- Selecting a full agent turn reveals its chronological events while the map remains available.
+- Canonical model-call snapshots and intermediate reconstructed state are visibly distinct.
+- Context additions, removals, compactions, and unavailable gaps are visible in the accumulation rail.
+- The current session, turn, event, and before/after boundary remain clear while inspecting evidence.
+- A live fixture can append an indexed event without replacing the page or losing selection.
 - Populated, loading, empty, and error states are directly reviewable.
 - The primary flow works with keyboard navigation and at desktop and narrow widths.
 
@@ -70,7 +84,7 @@ The customization flow is separate but uses the same dashboard surface:
 - The dashboard is the default surface opened by `codex-inspector open`.
 - Deterministic analysis runs locally and is already indexed when the populated state loads.
 - Recorded token usage is exact where present; component-level token contribution may be estimated.
-- The first context inspector focuses on recorded composition and provenance, not recreating the complete server-side prompt.
+- The first Context Inspector focuses on recorded execution, causal token topology, and locally reconstructible context, not recreating a complete server-side prompt.
 - The prototype uses synthetic data shaped like locally indexable records; it does not display the inspected user's real session content.
 - Layout changes are in-memory wireframe state; persistence, resizing, and collision rules remain implementation concerns.
 
@@ -78,6 +92,6 @@ The customization flow is separate but uses the same dashboard surface:
 
 - Do deterministic Findings/Insights belong on the customizable Home canvas or a dedicated surface?
 - Does the eventual review experience belong inside the context inspector or in a separate Insights/Reviews area?
-- Is selecting a turn essential in the first MVP, or is a session-level context snapshot sufficient?
+- At which desktop width should the persistent map collapse into a dedicated full-page drill-down?
 - May an individual widget override the global relative-time range?
 - Which coverage gaps appear on each widget versus in a data-health drawer?

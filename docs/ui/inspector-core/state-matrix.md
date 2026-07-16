@@ -13,10 +13,16 @@
 | Dashboard | Loading | Local indexing progress and reserved dashboard structure | Wait or keep the page open |
 | Dashboard | Empty | No indexed sessions and an explanation of local scanning | Scan local history |
 | Dashboard | Error | Unsupported record format with parser and CLI versions | View diagnostic details |
-| Context inspector | Populated with finding | Session finder, turn selector, context components, evidence detail | Switch session/turn/component |
-| Context inspector | Populated without finding | Recorded context with no notable deterministic finding | Inspect components or switch session |
-| Context inspector | Loading | Selected session identity plus context-loading status | Return to dashboard |
-| Context inspector | Empty | No context records for the selected session | Switch session |
-| Context inspector | Error | Context adapter failure without implying source data loss | View diagnostics or switch session |
+| Context inspector | Discovery | Unified search, project/working-directory and date filters, recent canonical root sessions, and explainable match labels | Search, filter, or open a root-session map |
+| Context inspector | Root-session overview | Session metadata, causal token map, minimap, stable scale, direct/downstream totals, compaction markers, and no arbitrary turn selection | Pan, zoom, collapse a branch, select a turn, or change session |
+| Context inspector | Turn selected | Persistent map plus the full agent turn's chronological event ledger and stacked context-accumulation rail | Select an event or return to the session overview |
+| Context inspector | Event selected | Exact event evidence, token attribution, provenance, and before/after context controls | Change boundary, inspect full/raw content, or choose another event |
+| Context inspector | Model-call snapshot | Canonical Context seen by Codex label and categorized context composition | Inspect a component or compare the adjacent boundary |
+| Context inspector | Intermediate snapshot | Reconstructed context state label and visible fidelity/coverage gaps | Compare before/after or jump to the next model call |
+| Context inspector | Compaction selected | Before/after totals, category deltas, preserved/replaced/removed content, and recorded compacted text | Inspect either boundary or return to the ledger |
+| Context inspector | Active session | Active/incomplete turn, Follow live, freshness, and gently appended indexed events | Follow live, pause following, or inspect without losing selection |
+| Context inspector | Loading | Requested session identity plus local index-loading status | Return to discovery or dashboard |
+| Context inspector | Empty | No readable records or no discovery results for the current query | Change search/filter or return to dashboard |
+| Context inspector | Error | Index or adapter failure without implying source-data loss | View diagnostics, change session, or return to discovery |
 
-The prototype exposes the global populated, loading, empty, and error states through a clearly labeled wireframe control. Dashboard dialogs and edit mode expose view creation, widget configuration, and reversible in-memory layout editing. Session selection demonstrates the populated-with-finding and populated-without-finding context variants.
+The prototype exposes the global populated, loading, empty, and error states through a clearly labeled wireframe control. Dashboard dialogs and edit mode expose view creation, widget configuration, and reversible in-memory layout editing. Context discovery, overview, turn, event, compaction, and simulated live-update states are reachable through the primary flow.
