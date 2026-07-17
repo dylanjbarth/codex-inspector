@@ -15,11 +15,11 @@
 | Dashboard | Error | Unsupported record format with parser and CLI versions | View diagnostic details |
 | Context inspector | Discovery | Unified search, project/working-directory and date filters, recent canonical root sessions, and explainable match labels | Search, filter, or open a root-session map |
 | Context inspector | Root-session overview | Session metadata, causal token map, minimap, stable scale, direct/downstream totals, compaction markers, and no arbitrary turn selection | Pan, zoom, collapse a branch, select a turn, or change session |
-| Context inspector | Turn selected | Persistent map plus the full agent turn's chronological event ledger and stacked context-accumulation rail | Select an event or return to the session overview |
-| Context inspector | Event selected | Exact event evidence, token attribution, provenance, and before/after context controls | Change boundary, inspect full/raw content, or choose another event |
+| Context inspector | Turn focus | Sticky collapsed topology rail, Sessions / root / turn breadcrumb, chronological ledger, event-type key, and selected-turn accounting | Change turns in the rail, select an event, expand the map, or return to discovery |
+| Context inspector | Event evidence | Always-expanded exact event payload, surrounding model cycle, relevant ordered context, token accounting, categorized boundary comparison, and coverage gaps | Scroll the complete evidence, search the payload, or select another event |
 | Context inspector | Model-call snapshot | Canonical Context seen by Codex label and categorized context composition | Inspect a component or compare the adjacent boundary |
 | Context inspector | Intermediate snapshot | Reconstructed context state label and visible fidelity/coverage gaps | Compare before/after or jump to the next model call |
-| Context inspector | Compaction selected | Before/after totals, category deltas, preserved/replaced/removed content, and recorded compacted text | Inspect either boundary or return to the ledger |
+| Context inspector | Compaction selected | Before/after totals, category deltas, preserved/replaced/removed content, and recorded compacted text | Inspect either ordered boundary or return to event content |
 | Context inspector | Active session | Active/incomplete turn, Follow live, freshness, and gently appended indexed events | Follow live, pause following, or inspect without losing selection |
 | Context inspector | Loading | Requested session identity plus local index-loading status | Return to discovery or dashboard |
 | Context inspector | Empty | No readable records or no discovery results for the current query | Change search/filter or return to dashboard |

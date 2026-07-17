@@ -29,6 +29,12 @@
 - Show exact recorded event content without Inspector-added redaction, using bounded previews and explicit full/raw-content actions for large payloads.
 - Keep exact, derived, estimated, and unavailable states visible at the relevant value or boundary.
 - Avoid automatic turn selection and evaluative labels. Entry points may restore an explicitly identified branch, turn, event, or active session.
+- Remove the redundant Back to dashboard breadcrumb. Use top-level navigation for Dashboard and an inspector-local Sessions / root session / turn breadcrumb for backward movement.
+- Enter turn focus mode automatically when a map node is selected. Collapse the full map into a sticky horizontal topology rail rather than using a drawer or a separate third page.
+- Replace the tabbed Event content / Context before / Context after interaction with one always-expanded evidence surface for every event type.
+- Render the exact event payload, surrounding model cycle, relevant ordered context blocks, token accounting, and compact boundary comparison together. Large blocks may scroll inline, but content is not gated behind another action.
+- Pair every event type with a functional icon and an explicit accessible label; distinguish recorded reasoning summaries from unavailable encrypted reasoning content.
+- Ground representative event fixtures in normalized real rollout records while keeping source paths, IDs, repository/account details, and incidental sensitive data out of the repository.
 - Defer the optional Codex review flow and the final Findings/Insights naming decision.
 
 ## Deferred alternatives

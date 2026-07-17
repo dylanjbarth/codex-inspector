@@ -586,6 +586,23 @@
       }
 
       .discovery-header { max-width: 68rem; }
+      .breadcrumbs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .breadcrumb-link {
+        min-height: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--focus);
+        text-decoration: underline;
+      }
       .discovery-controls {
         display: grid;
         grid-template-columns: minmax(20rem, 1fr) 15rem 12rem;
@@ -653,6 +670,40 @@
       .workspace-summary .summary-item:last-child { border-right: 0; }
 
       .map-panel { border-bottom: 1px solid var(--border); }
+      .focus-map-rail {
+        display: grid;
+        grid-template-columns: auto minmax(20rem, 1fr) auto;
+        align-items: center;
+        gap: var(--space-4);
+        padding: var(--space-3) var(--space-4);
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .turn-focused .map-panel {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        box-shadow: 0 2px 0 var(--border);
+      }
+      .turn-focused .map-panel-header,
+      .turn-focused .map-legend,
+      .turn-focused .map-viewport { display: none; }
+      .turn-focused .workspace-summary { display: none; }
+      .turn-focused .workspace-session-header { padding-bottom: var(--space-3); }
+      .focus-map-strip { display: flex; gap: 2px; height: 1.4rem; margin-top: var(--space-1); }
+      .focus-segment {
+        min-width: 1.5rem;
+        min-height: 1.4rem;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--border-strong);
+        background: #e3e3df;
+        color: transparent;
+      }
+      .focus-segment[aria-pressed="true"] { border: 3px solid var(--focus); background: var(--focus-soft); }
+      .focus-segment.agent { background: #c7c7c1; border-style: dashed; }
+      .focus-segment.agent[aria-pressed="true"] { background: var(--focus-soft); border-style: solid; }
+      .focus-selection { display: grid; text-align: right; white-space: nowrap; }
       .map-panel-header {
         display: flex;
         align-items: flex-start;
@@ -770,7 +821,7 @@
       }
       .turn-workspace-header h2 { margin-bottom: var(--space-1); }
       .turn-token-summary { text-align: right; white-space: nowrap; }
-      .workspace-detail-grid { display: grid; grid-template-columns: minmax(28rem, 1.15fr) minmax(24rem, 0.85fr); min-height: 35rem; }
+      .workspace-detail-grid { display: grid; grid-template-columns: minmax(25rem, 0.82fr) minmax(34rem, 1.18fr); min-height: 35rem; }
       .event-ledger { min-width: 0; border-right: 1px solid var(--border); }
       .ledger-header h3,
       .detail-header h3 { margin-bottom: var(--space-1); }
@@ -790,6 +841,26 @@
       .event-button:hover { background: var(--surface-subtle); }
       .event-button[aria-current="true"] { background: var(--focus-soft); box-shadow: inset 3px 0 0 var(--focus); }
       .event-time { color: var(--muted); font-size: 0.8rem; }
+      .event-ident { display: flex; align-items: flex-start; gap: var(--space-2); }
+      .event-icon {
+        display: inline-grid;
+        flex: 0 0 1.7rem;
+        place-items: center;
+        width: 1.7rem;
+        height: 1.7rem;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+      .event-icon.tool { border-radius: 50%; }
+      .event-icon.reasoning { border-style: dashed; }
+      .event-icon.compaction { border-color: var(--danger); color: var(--danger); }
+      .event-type-key { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin-top: var(--space-3); }
+      .event-type-key span { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--muted); font-size: 0.75rem; }
+      .event-type-key .not-present { opacity: 0.55; }
+      .event-type-key .event-icon { width: 1.35rem; height: 1.35rem; flex-basis: 1.35rem; font-size: 0.62rem; }
       .event-title { display: block; font-weight: 700; }
       .event-meta { display: block; margin-top: var(--space-1); color: var(--muted); font-size: 0.78rem; }
       .canonical-label { display: inline-block; margin-top: var(--space-1); color: #17384d; font-size: 0.72rem; font-weight: 700; }
@@ -806,6 +877,41 @@
 
       .event-detail { min-width: 0; }
       .detail-body { padding: var(--space-4); }
+      .evidence-section + .evidence-section { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 2px solid var(--border-strong); }
+      .evidence-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+      .evidence-section-heading h3 { margin-bottom: var(--space-1); }
+      .evidence-section-heading .tag { flex: 0 0 auto; }
+      .fixture-note { padding: var(--space-2) var(--space-3); border-left: 3px solid var(--border-strong); background: var(--surface-subtle); color: var(--muted); font-size: 0.8rem; }
+      .structured-payload { margin: var(--space-3) 0; }
+      .payload-row { display: grid; grid-template-columns: 7rem 1fr; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+      .payload-row span:first-child { color: var(--muted); }
+      .event-payload {
+        max-height: 28rem;
+        margin: 0;
+        padding: var(--space-3);
+        overflow: auto;
+        border: 1px solid var(--border-strong);
+        background: #f7f7f4;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .cycle-sequence { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); }
+      .cycle-sequence li + li { border-top: 1px solid var(--border); }
+      .cycle-event { padding: var(--space-3); background: var(--surface); }
+      .cycle-event.selected { background: var(--focus-soft); box-shadow: inset 3px 0 0 var(--focus); }
+      .cycle-event-heading { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: var(--space-2); }
+      .cycle-event-heading .event-time { text-align: right; }
+      .cycle-event-payload { max-height: 14rem; margin: var(--space-2) 0 0 2.2rem; padding: var(--space-2); overflow: auto; border-left: 2px solid var(--border); background: var(--surface-subtle); white-space: pre-wrap; overflow-wrap: anywhere; }
+      .boundary-overview { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+      .boundary-card { padding: var(--space-3); border: 1px solid var(--border); }
+      .boundary-card strong { display: block; margin-top: var(--space-1); }
+      .context-sequence { margin: var(--space-4) 0 0; padding: 0; list-style: none; }
+      .context-sequence li + li { margin-top: var(--space-3); }
+      .context-block { border: 1px solid var(--border); background: var(--surface); }
+      .context-block-header { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); background: var(--surface-subtle); border-bottom: 1px solid var(--border); }
+      .context-block-body { max-height: 28rem; margin: 0; padding: var(--space-3); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; }
+      .context-gap { border-style: dashed; }
+      .context-gap .context-block-body { color: var(--muted); font-style: italic; }
       .detail-metrics { display: grid; grid-template-columns: repeat(2, 1fr); margin: var(--space-4) 0; border: 1px solid var(--border); }
       .detail-metric { padding: var(--space-3); border-right: 1px solid var(--border); }
       .detail-metric:last-child { border-right: 0; }
@@ -820,10 +926,7 @@
       .snapshot-categories li + li { border-top: 1px solid var(--border); }
       .compaction-compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin: var(--space-4) 0; }
       .compare-card { padding: var(--space-3); border: 1px solid var(--border); }
-      .record-preview { max-height: 12rem; overflow: hidden; }
-      .record-preview.expanded { max-height: none; }
-      .inline-search { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); margin-top: var(--space-3); }
-      .inline-search input { min-width: 0; }
+      .token-ledger { grid-template-columns: repeat(3, 1fr); }
 
       @media (max-width: 1050px) {
         .workspace-detail-grid { grid-template-columns: 1fr; }
@@ -833,6 +936,7 @@
       }
 
       @media (max-width: 700px) {
+        #event-detail-title { scroll-margin-top: 13rem; }
         .discovery-controls { grid-template-columns: 1fr; }
         .discovery-result { grid-template-columns: 1fr; }
         .result-tokens { text-align: left; }
@@ -841,6 +945,8 @@
         .turn-workspace-header { display: block; }
         .workspace-session-header .button-secondary,
         .map-toolbar { margin-top: var(--space-3); }
+        .focus-map-rail { grid-template-columns: 1fr; }
+        .focus-selection { text-align: left; }
         .workspace-summary { grid-template-columns: 1fr 1fr; }
         .workspace-summary .summary-item { border-right: 1px solid var(--border); }
         .map-viewport { min-height: 16rem; }
@@ -851,6 +957,12 @@
         .detail-metrics { grid-template-columns: 1fr; }
         .detail-metric { border-right: 0; border-bottom: 1px solid var(--border); }
         .detail-metric:last-child { border-bottom: 0; }
+        .boundary-overview { grid-template-columns: 1fr; }
+        .cycle-event-heading { grid-template-columns: auto 1fr; }
+        .cycle-event-heading .event-time { grid-column: 2; text-align: left; }
+        .cycle-event-payload { margin-left: 0; }
+        .token-ledger { grid-template-columns: 1fr; }
+        .payload-row { grid-template-columns: 1fr; gap: var(--space-1); }
       }
     </style>
   </head>
@@ -992,7 +1104,6 @@
         <section id="context-screen" class="screen hidden" aria-labelledby="context-title">
           <div class="inspector-header">
             <div>
-              <button class="text-button" data-route="dashboard">← Back to dashboard</button>
               <h1 id="context-title">Context inspector</h1>
               <p class="lede">Map a complete root-session tree, follow one full agent turn, and inspect recorded context at an explicit event boundary.</p>
             </div>
@@ -1001,6 +1112,7 @@
           <div id="context-populated">
             <section id="session-discovery" class="discovery-shell" aria-labelledby="session-discovery-title">
               <div class="discovery-header">
+                <nav class="breadcrumbs" aria-label="Context Inspector breadcrumb"><span aria-current="page">Sessions</span></nav>
                 <p class="meta">Session discovery</p>
                 <h2 id="session-discovery-title">Find a user-initiated root session</h2>
                 <p class="muted">Search one local index. Matches inside spawned-agent work stay attached to their root session and explain where the match occurred.</p>
@@ -1018,11 +1130,11 @@
             <section id="context-workspace" class="workspace-shell hidden" aria-labelledby="selected-session-title">
               <header class="workspace-session-header">
                 <div class="session-heading">
+                  <nav class="breadcrumbs" aria-label="Context Inspector breadcrumb"><button id="breadcrumb-sessions" class="breadcrumb-link" type="button">Sessions</button><span aria-hidden="true">/</span><button id="breadcrumb-session" class="breadcrumb-link" type="button">Investigate failed dev deployment</button><span id="breadcrumb-turn-wrap" class="hidden"><span aria-hidden="true">/</span> <span id="breadcrumb-turn" aria-current="page">Turn 1</span></span></nav>
                   <div class="session-status-row"><span id="session-status" class="tag status-active">Active</span><span id="session-freshness" class="muted">Indexed 2 seconds ago</span></div>
-                  <h2 id="selected-session-title">Webhook failures after deploy</h2>
+                  <h2 id="selected-session-title">Investigate failed dev deployment</h2>
                   <p id="selected-session-meta" class="mono muted"></p>
                 </div>
-                <button id="change-session-button" class="button-secondary" type="button">Find another session</button>
               </header>
 
               <div class="workspace-summary" aria-label="Selected root-session summary">
@@ -1034,6 +1146,11 @@
               </div>
 
               <section class="map-panel" aria-labelledby="session-map-title">
+                <div id="focus-map-rail" class="focus-map-rail hidden">
+                  <button id="expand-session-map" class="button-secondary" type="button">Expand session map</button>
+                  <div><span class="meta">Session topology</span><div id="focus-map-strip" class="focus-map-strip" aria-label="Collapsed session topology"></div></div>
+                  <div class="focus-selection"><strong id="focus-turn-label">Turn 2</strong><span id="focus-turn-tokens" class="muted">84k direct · 260k downstream</span></div>
+                </div>
                 <header class="map-panel-header">
                   <div><p class="meta">Bird's-eye view</p><h2 id="session-map-title">Causal token map</h2><p class="muted">Solid area is direct model usage. The containing boundary includes downstream agent work.</p></div>
                   <div class="map-toolbar" aria-label="Map viewport controls">
@@ -1061,7 +1178,7 @@
                 </header>
                 <div class="workspace-detail-grid">
                   <section class="event-ledger" aria-labelledby="event-ledger-title">
-                    <header class="ledger-header"><h3 id="event-ledger-title">Chronological turn events</h3><p class="muted">The stacked rail shows reconstructed context by category after each boundary.</p></header>
+                    <header class="ledger-header"><h3 id="event-ledger-title">Chronological turn events</h3><p class="muted">Icons identify recorded event types. The stacked rail shows reconstructed context by category after each boundary.</p><div id="event-type-key" class="event-type-key" aria-label="Event types in this turn"></div></header>
                     <ol id="event-list" class="event-list"></ol>
                   </section>
                   <aside class="event-detail" aria-labelledby="event-detail-title">
@@ -1160,14 +1277,14 @@
         {
           id: "sess_7f3a9b1c",
           project: "api-service",
-          task: "Webhook failures after deploy",
-          started: "Jul 15, 8:49 AM",
-          duration: "2h 18m",
-          turns: 4,
-          tools: 17,
-          rootTokens: 402000,
-          descendantTokens: 176000,
-          tokens: "578k",
+          task: "Investigate failed dev deployment",
+          started: "Jul 15, 4:02 PM",
+          duration: "49m",
+          turns: 9,
+          tools: 212,
+          rootTokens: 19011603,
+          descendantTokens: 4304103,
+          tokens: "23.32M",
           agents: 2,
           model: "GPT-5.6 Codex",
           reasoning: "High",
@@ -1225,13 +1342,13 @@
 
       const sessionDetails = {
         sess_7f3a9b1c: {
-          workingDir: "/Users/dylan/Code/api-service",
+          workingDir: "/Code/api-service",
           active: true,
-          compactions: 2,
-          firstPrompt: "Investigate webhook 500s after the latest deploy and verify the retry path.",
-          descendantMatch: "Inspect recent deployment PRs",
-          descendantText: "webhook retry behavior changed in PR #184",
-          recordedText: "deployment logs returned repeated 500 responses before the retry behavior changed",
+          compactions: 1,
+          firstPrompt: "It looks like our most recent deployment to dev failed. Can you investigate?",
+          descendantMatch: "Inspect ECS service events",
+          descendantText: "ECS service failed to stabilize after the deployment",
+          recordedText: "failed dev deployment GitHub Actions ECS service stabilization hotfix PR",
         },
         sess_120f8d2a: {
           workingDir: "/Users/dylan/Code/web-app",
@@ -1263,38 +1380,47 @@
       };
 
       const mapTurns = [
-        { id: "turn-1", label: "Turn 1", title: "Establish goal", direct: 48000, downstream: 48000, tools: 2, errors: 0, compactions: 0, width: 150 },
-        { id: "turn-2", label: "Turn 2", title: "Inspect deployment", direct: 84000, downstream: 260000, tools: 6, errors: 1, compactions: 1, width: 330 },
-        { id: "turn-3", label: "Turn 3", title: "Compare findings", direct: 57000, downstream: 57000, tools: 3, errors: 0, compactions: 0, width: 165 },
-        { id: "turn-4", label: "Turn 4", title: "Implement and verify", direct: 213000, downstream: 213000, tools: 6, errors: 0, compactions: 1, width: 310, active: true },
+        { id: "turn-1", label: "Turn 1", title: "Investigate failed deployment", direct: 1224843, downstream: 1224843, tools: 18, errors: 0, compactions: 0, width: 165 },
+        { id: "turn-2", label: "Turn 2", title: "Continue with dev access", direct: 4304103, downstream: 8608206, tools: 61, errors: 1, compactions: 0, width: 310 },
+        { id: "turn-3", label: "Turn 3", title: "Fix and open hotfix PR", direct: 8846012, downstream: 8846012, tools: 83, errors: 1, compactions: 1, width: 520 },
+        { id: "turn-4", label: "Turn 4", title: "Trace regression to PR", direct: 496998, downstream: 496998, tools: 7, errors: 0, compactions: 0, width: 110 },
+        { id: "turn-5", label: "Turn 5", title: "Address review comments", direct: 1354405, downstream: 1354405, tools: 14, errors: 0, compactions: 0, width: 175 },
+        { id: "turn-6", label: "Turn 6", title: "Explain package omission", direct: 708242, downstream: 708242, tools: 9, errors: 0, compactions: 0, width: 130 },
+        { id: "turn-7", label: "Turn 7", title: "Scan for omissions", direct: 366740, downstream: 366740, tools: 8, errors: 0, compactions: 0, width: 95 },
+        { id: "turn-8", label: "Turn 8", title: "Check merge readiness", direct: 371609, downstream: 371609, tools: 5, errors: 0, compactions: 0, width: 96 },
+        { id: "turn-9", label: "Turn 9", title: "Merge hotfix", direct: 1338651, downstream: 1338651, tools: 7, errors: 0, compactions: 0, width: 173, active: true },
       ];
 
       const agentTurns = [
-        { id: "agent-turn-1", label: "Agent turn 1", title: "Inspect commits", direct: 44000, downstream: 44000, tools: 3, errors: 0, compactions: 0, width: 145 },
-        { id: "agent-turn-2", label: "Agent turn 2", title: "Run targeted tests", direct: 96000, downstream: 96000, tools: 5, errors: 1, compactions: 1, width: 245 },
-        { id: "agent-turn-3", label: "Agent turn 3", title: "Return evidence", direct: 36000, downstream: 36000, tools: 1, errors: 0, compactions: 0, width: 125 },
+        { id: "agent-turn-1", label: "Agent turn 1", title: "Inspect ECS service events", direct: 1100000, downstream: 1100000, tools: 12, errors: 0, compactions: 0, width: 180 },
+        { id: "agent-turn-2", label: "Agent turn 2", title: "Trace failing image", direct: 2400000, downstream: 2400000, tools: 24, errors: 1, compactions: 1, width: 300 },
+        { id: "agent-turn-3", label: "Agent turn 3", title: "Return deployment evidence", direct: 804103, downstream: 804103, tools: 6, errors: 0, compactions: 0, width: 150 },
       ];
 
       const contextCategories = (messages, instructions, definitions, results, skills, unknown = 0) => ({ messages, instructions, definitions, results, skills, unknown });
       const eventsByTurn = {
-        "turn-2": [
-          { id: "ev-user", type: "User message", title: "Inspect deployment and retry behavior", time: "9:12:04 AM", delta: "+0.8k", total: 18.6, fidelity: "Exact", source: "session JSONL · line 184", excerpt: "Inspect the deployment logs and compare the webhook retry path with the last known-good release.", before: contextCategories(5.1, 6.4, 4.8, 0.9, 0.6, 0.0), after: contextCategories(5.9, 6.4, 4.8, 0.9, 0.6, 0.0) },
-          { id: "ev-model-1", type: "Model invocation", title: "Codex plans the investigation", time: "9:12:06 AM", delta: "0", total: 18.6, fidelity: "Exact", canonical: true, source: "usage event · turn 2 / call 1", excerpt: "Recorded model boundary before the assistant selected deployment and log inspection tools.", before: contextCategories(5.9, 6.4, 4.8, 0.9, 0.6, 0.0), after: contextCategories(5.9, 6.4, 4.8, 0.9, 0.6, 0.0) },
-          { id: "ev-tool-call", type: "Tool invocation", title: "Search deployment logs", time: "9:12:19 AM", delta: "+0.4k", total: 19.0, fidelity: "Exact", source: "tool call · exec_command", excerpt: "rg -n \"webhook|retry|500\" logs/deploy-2026-07-15.log", introduced: "0.4k arguments", burden: "0.4k across 1 model call", before: contextCategories(5.9, 6.4, 4.8, 0.9, 0.6, 0.0), after: contextCategories(5.9, 6.4, 4.8, 1.3, 0.6, 0.0) },
-          { id: "ev-tool-result", type: "Tool result", title: "Deployment log payload returned", time: "9:12:21 AM", delta: "+18.0k", total: 37.0, fidelity: "Estimated", source: "tool result · call_7e82", excerpt: "2026-07-15T14:02:11Z webhook delivery failed status=500 attempt=1\n2026-07-15T14:02:13Z webhook delivery failed status=500 attempt=2\n2026-07-15T14:02:17Z retry policy exhausted delivery_id=wh_1842\n\n[1,824 additional recorded lines]", introduced: "~18k payload", burden: "~51k across 3 later model calls", before: contextCategories(5.9, 6.4, 4.8, 1.3, 0.6, 0.0), after: contextCategories(5.9, 6.4, 4.8, 19.3, 0.6, 0.0) },
-          { id: "ev-spawn", type: "Spawn agent", title: "Inspect recent deployment PRs", time: "9:13:02 AM", delta: "+1.1k", total: 38.1, fidelity: "Exact", source: "agent spawn · agent_4b21", excerpt: "Trace changes to webhook retry handling in the three pull requests deployed this morning. Return file and commit evidence.", introduced: "1.1k delegation prompt", burden: "176k downstream model usage", before: contextCategories(5.9, 6.4, 4.8, 19.3, 0.6, 0.0), after: contextCategories(7.0, 6.4, 4.8, 19.3, 0.6, 0.0) },
-          { id: "ev-compaction", type: "Compaction", title: "Conversation context compressed", time: "9:22:48 AM", delta: "−41.2k", total: 29.4, fidelity: "Derived", source: "context lifecycle · compaction_2", excerpt: "Recorded compacted context preserves the deployment goal, retry-policy evidence, modified files, and outstanding verification steps.", before: contextCategories(19.8, 6.4, 4.8, 38.2, 1.1, 0.3), after: contextCategories(9.1, 6.4, 4.8, 8.1, 0.7, 0.3), compaction: true },
-          { id: "ev-model-2", type: "Model invocation", title: "Codex consumes compacted context", time: "9:22:50 AM", delta: "0", total: 29.4, fidelity: "Exact", canonical: true, source: "usage event · turn 2 / call 4", excerpt: "Canonical model-call boundary after compaction. Recorded input tokens: 29.4k; cached input: 7.8k.", before: contextCategories(9.1, 6.4, 4.8, 8.1, 0.7, 0.3), after: contextCategories(9.1, 6.4, 4.8, 8.1, 0.7, 0.3) },
-          { id: "ev-response", type: "Assistant response", title: "Returns deployment evidence", time: "9:24:11 AM", delta: "+2.3k", total: 31.7, fidelity: "Exact", source: "session JSONL · line 231", excerpt: "The retry regression entered in PR #184. The deployed handler now exhausts retries before the fallback queue is reached. I found the change in src/webhooks/retry.ts and verified it against the recorded failures.", before: contextCategories(9.1, 6.4, 4.8, 8.1, 0.7, 0.3), after: contextCategories(11.4, 6.4, 4.8, 8.1, 0.7, 0.3) },
+        "turn-1": [
+          { id: "real-user", type: "User message", title: "Investigate failed dev deployment", time: "4:02:57 PM", delta: "+0.7k", total: 18.7, fidelity: "Exact", source: "event_msg.user_message", excerpt: "It looks like our most recent deployment to dev failed. Can you investigate?", before: contextCategories(3.8, 8.6, 5.1, 0.5, 0.0, 0.0), after: contextCategories(4.5, 8.6, 5.1, 0.5, 0.0, 0.0) },
+          { id: "real-model", type: "Model invocation", title: "Begin deployment investigation", time: "4:02:57 PM", delta: "0", total: 18.7, fidelity: "Derived", canonical: true, source: "response cycle + token_count", excerpt: "Model-call boundary derived from the recorded response cycle. Locally reconstructible inputs are shown in model order; unavailable server material remains explicit.", before: contextCategories(4.5, 8.6, 5.1, 0.5, 0.0, 0.0), after: contextCategories(4.5, 8.6, 5.1, 0.5, 0.0, 0.0) },
+          { id: "real-reasoning", type: "Reasoning summary", title: "Planning investigation of GitHub Actions failure", time: "4:03:08 PM", delta: "0", total: 18.7, fidelity: "Exact", source: "response_item.reasoning.summary", excerpt: "Planning investigation of GitHub Actions failure", reasoningUnavailable: true, before: contextCategories(4.5, 8.6, 5.1, 0.5, 0.0, 0.0), after: contextCategories(4.5, 8.6, 5.1, 0.5, 0.0, 0.0) },
+          { id: "real-assistant", type: "Assistant message", title: "States the investigation plan", time: "4:03:10 PM", delta: "+0.6k", total: 19.3, fidelity: "Exact", source: "event_msg.agent_message", excerpt: "I’m pulling the live GitHub Actions evidence first so I can identify the actual failure point before suggesting any fix. After that I’ll trace whether it’s a deployment issue, a test/setup issue, or a transient infrastructure failure.", before: contextCategories(4.5, 8.6, 5.1, 0.5, 0.0, 0.0), after: contextCategories(5.1, 8.6, 5.1, 0.5, 0.0, 0.0) },
+          { id: "real-tool-call", type: "Tool invocation", title: "Fetch workflow job log", time: "4:03:18 PM", delta: "+0.3k", total: 19.6, fidelity: "Exact", source: "response_item.function_call", excerpt: "{\n  \"name\": \"exec_command\",\n  \"arguments\": {\n    \"cmd\": \"gh run view <run-id> --job <job-id> --repo example/api-service --log\",\n    \"workdir\": \"/Code/api-service\",\n    \"max_output_tokens\": 20000,\n    \"yield_time_ms\": 1000\n  }\n}", introduced: "~0.3k arguments", burden: "Included in the next model call", before: contextCategories(5.1, 8.6, 5.1, 0.5, 0.0, 0.0), after: contextCategories(5.1, 8.6, 5.1, 0.8, 0.0, 0.0) },
+          { id: "real-tool-pending", type: "Tool result", title: "Workflow log process started", time: "4:03:19 PM", delta: "+0.1k", total: 19.7, fidelity: "Exact", source: "response_item.function_call_output", excerpt: "Process running with session ID <process-id>\nOriginal token count: 0\nOutput:", introduced: "~0.1k result envelope", burden: "Included in 1 later model call", before: contextCategories(5.1, 8.6, 5.1, 0.8, 0.0, 0.0), after: contextCategories(5.1, 8.6, 5.1, 0.9, 0.0, 0.0) },
+          { id: "real-usage-1", type: "Token usage", title: "Cumulative usage recorded", time: "4:03:19 PM", delta: "0", total: 19.7, fidelity: "Exact", source: "event_msg.token_count", excerpt: "{\n  \"input_tokens\": 25197,\n  \"cached_input_tokens\": 4480,\n  \"output_tokens\": 427,\n  \"reasoning_output_tokens\": 218,\n  \"total_tokens\": 25624,\n  \"model_context_window\": 258400\n}", usage: { input: "25,197", cached: "4,480", output: "427", reasoning: "218", total: "25,624", window: "258,400" }, before: contextCategories(5.1, 8.6, 5.1, 0.9, 0.0, 0.0), after: contextCategories(5.1, 8.6, 5.1, 0.9, 0.0, 0.0) },
+          { id: "real-tool-poll", type: "Tool invocation", title: "Poll workflow log process", time: "4:03:22 PM", delta: "+0.2k", total: 20.4, fidelity: "Exact", source: "response_item.function_call", excerpt: "{\n  \"name\": \"write_stdin\",\n  \"arguments\": {\n    \"session_id\": \"<process-id>\",\n    \"yield_time_ms\": 1000,\n    \"max_output_tokens\": 20000\n  }\n}", introduced: "~0.2k arguments", burden: "Included in the next model call", before: contextCategories(5.6, 8.6, 5.1, 0.9, 0.0, 0.0), after: contextCategories(5.6, 8.6, 5.1, 1.1, 0.0, 0.0) },
+          { id: "real-tool-large", type: "Tool result", title: "Large workflow log returned", time: "4:03:22 PM", delta: "+30.9k", total: 51.3, fidelity: "Exact", source: "response_item.function_call_output", excerpt: "Warning: truncated output (original token count: 30,910)\nTotal output lines: 921\n\nverify-dev · Set up job · runner image initialized\nverify-dev · Download deployment manifest · completed\nverify-dev · Wait for ECS services to stabilize · FAILED\nError: waiter ServicesStable failed: max attempts exceeded\n\n[remaining recorded output omitted from wireframe preview]", introduced: "30.9k recorded output", burden: "Carried into later model calls until compaction", before: contextCategories(5.6, 8.6, 5.1, 1.1, 0.0, 0.0), after: contextCategories(5.6, 8.6, 5.1, 32.0, 0.0, 0.0) },
+          { id: "real-usage-2", type: "Token usage", title: "Cumulative usage after log inspection", time: "4:03:22 PM", delta: "0", total: 51.3, fidelity: "Exact", source: "event_msg.token_count", excerpt: "{\n  \"input_tokens\": 51905,\n  \"cached_input_tokens\": 29952,\n  \"output_tokens\": 710,\n  \"reasoning_output_tokens\": 321,\n  \"total_tokens\": 52615,\n  \"model_context_window\": 258400\n}", usage: { input: "51,905", cached: "29,952", output: "710", reasoning: "321", total: "52,615", window: "258,400" }, before: contextCategories(5.6, 8.6, 5.1, 32.0, 0.0, 0.0), after: contextCategories(5.6, 8.6, 5.1, 32.0, 0.0, 0.0) },
+          { id: "real-reasoning-2", type: "Reasoning summary", title: "Inspecting deployment workflow and ECS service events", time: "4:03:30 PM", delta: "0", total: 51.3, fidelity: "Exact", source: "event_msg.agent_reasoning", excerpt: "Inspecting deployment workflow and ECS service events", reasoningUnavailable: true, before: contextCategories(5.6, 8.6, 5.1, 32.0, 0.0, 0.0), after: contextCategories(5.6, 8.6, 5.1, 32.0, 0.0, 0.0) },
+          { id: "real-assistant-2", type: "Assistant message", title: "Reports the first hard failure", time: "4:03:34 PM", delta: "+0.5k", total: 51.8, fidelity: "Exact", source: "event_msg.agent_message", excerpt: "The failure is at the ECS stabilization gate, not in checkout or artifact download. I’m now pulling the run metadata and deployment manifest so I can tell whether this is a bad deploy candidate, a crashing service, or a transient platform issue.", before: contextCategories(5.6, 8.6, 5.1, 32.0, 0.0, 0.0), after: contextCategories(6.1, 8.6, 5.1, 32.0, 0.0, 0.0) },
+          { id: "real-compaction", type: "Compaction", title: "Context compacted later in the session", time: "Recorded later", delta: "−27.5k", total: 23.8, fidelity: "Derived", source: "event_msg.context_compacted", excerpt: "The rollout records a context_compacted event. The wireframe uses normalized summary text to demonstrate the before/after interaction without copying the private compacted payload.", before: contextCategories(12.2, 8.6, 5.1, 32.0, 0.8, 0.0), after: contextCategories(8.8, 8.6, 5.1, 0.7, 0.6, 0.0), compaction: true },
         ],
       };
 
       let selectedSessionId = null;
       let selectedTurnId = null;
       let selectedEventId = null;
-      let selectedBoundary = "before";
+      let turnFocused = false;
       let mapZoom = 1;
-      let fullContentShown = false;
       let liveEventCounter = 0;
       let agentBranchCollapsed = false;
       let currentRoute = location.hash.includes("context") ? "context" : "dashboard";
@@ -1407,12 +1533,13 @@
       function renderSessionMap() {
         const session = sessions.find((item) => item.id === selectedSessionId);
         if (!session) return;
+        const detail = sessionDetails[session.id];
         byId("session-map").style.transform = `scale(${mapZoom})`;
         byId("session-map").innerHTML = `
           <div class="map-root-label"><span>Root session · ${session.task}</span><span>${session.tokens} inclusive</span></div>
           <div class="map-lane">${mapTurns.map((turn) => renderMapNode(turn)).join("")}</div>
           <section class="agent-branch ${agentBranchCollapsed ? "collapsed" : ""}" id="deployment-agent-branch" aria-label="Spawned agent branch">
-            <div class="agent-branch-label"><span>↳ Spawned by Turn 2 · Inspect recent deployment PRs · 176k downstream</span><button class="collapse-agent" type="button" aria-expanded="${!agentBranchCollapsed}">${agentBranchCollapsed ? "Expand branch" : "Collapse branch"}</button></div>
+            <div class="agent-branch-label"><span>↳ Spawned by Turn 2 · ${detail.descendantMatch} · ${formatTokens(session.descendantTokens)} downstream · synthetic topology example</span><button class="collapse-agent" type="button" aria-expanded="${!agentBranchCollapsed}">${agentBranchCollapsed ? "Expand branch" : "Collapse branch"}</button></div>
             <div class="agent-branch-body"><div class="map-lane">${agentTurns.map((turn) => renderMapNode(turn, true)).join("")}</div></div>
           </section>`;
         document.querySelectorAll("[data-select-turn]").forEach((button) => button.addEventListener("click", () => selectTurn(button.dataset.selectTurn)));
@@ -1431,8 +1558,8 @@
           { id: `${turn.id}-user`, type: "User message", title: turn.title, time: "Recorded start", delta: "+0.7k", total: 14.2, fidelity: "Exact", source: "local session record", excerpt: `Recorded instruction for ${turn.title.toLowerCase()}.`, before: contextCategories(4.1, 5.8, 3.4, 0.2, 0.7), after: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7) },
           { id: `${turn.id}-model`, type: "Model invocation", title: "Codex begins the turn", time: "Recorded boundary", delta: "0", total: 14.9, fidelity: "Exact", canonical: true, source: "recorded usage event", excerpt: "Canonical model-call boundary reconstructed from the local session record.", before: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7), after: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7) },
         ];
-        if (turn.active) events.push({ id: `${turn.id}-tool`, type: "Tool invocation", title: "Run targeted verification", time: "In progress", delta: "+0.3k", total: 15.2, fidelity: "Exact", source: "live local session record", excerpt: "Run the webhook retry fixtures and verify the fallback queue path.", before: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7), after: contextCategories(4.8, 5.8, 3.4, 0.5, 0.7) });
-        else events.push({ id: `${turn.id}-response`, type: "Assistant response", title: "Codex returns control", time: "Recorded end", delta: "+1.8k", total: 16.7, fidelity: "Exact", source: "local session record", excerpt: "Recorded assistant response for this full agent turn.", before: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7), after: contextCategories(6.6, 5.8, 3.4, 0.2, 0.7) });
+        if (turn.active) events.push({ id: `${turn.id}-tool`, type: "Tool invocation", title: "Verify hotfix merge state", time: "In progress", delta: "+0.3k", total: 15.2, fidelity: "Exact", source: "live local session record", excerpt: "Check the hotfix pull request and verify the deployment workflow after merge.", before: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7), after: contextCategories(4.8, 5.8, 3.4, 0.5, 0.7) });
+        else events.push({ id: `${turn.id}-response`, type: "Assistant message", title: "Codex returns control", time: "Recorded end", delta: "+1.8k", total: 16.7, fidelity: "Exact", source: "local session record", excerpt: "Recorded assistant response for this full agent turn.", before: contextCategories(4.8, 5.8, 3.4, 0.2, 0.7), after: contextCategories(6.6, 5.8, 3.4, 0.2, 0.7) });
         return events;
       }
 
@@ -1445,6 +1572,40 @@
         return `<div class="context-stack" aria-hidden="true"><span class="cat-messages" style="flex:${categories.messages}"></span><span class="cat-instructions" style="flex:${categories.instructions}"></span><span class="cat-definitions" style="flex:${categories.definitions}"></span><span class="cat-results" style="flex:${categories.results}"></span><span class="cat-skills" style="flex:${categories.skills}"></span>${categories.unknown ? `<span class="cat-unknown" style="flex:${categories.unknown}"></span>` : ""}</div>`;
       }
 
+      const eventTypeMeta = {
+        "User message": { icon: "U", className: "" },
+        "Assistant message": { icon: "A", className: "" },
+        "Reasoning summary": { icon: "R", className: "reasoning" },
+        "Model invocation": { icon: "M", className: "" },
+        "Tool invocation": { icon: "↗", className: "tool" },
+        "Tool result": { icon: "↙", className: "tool" },
+        "Token usage": { icon: "#", className: "" },
+        "Agent spawn": { icon: "S", className: "" },
+        "Agent return": { icon: "↵", className: "" },
+        "Patch": { icon: "±", className: "tool" },
+        "Web search": { icon: "⌕", className: "tool" },
+        "Compaction": { icon: "C", className: "compaction" },
+        "Lifecycle": { icon: "•", className: "" },
+      };
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" })[character]);
+      }
+
+      function eventIconMarkup(type) {
+        const meta = eventTypeMeta[type] || { icon: "•", className: "" };
+        return `<span class="event-icon ${meta.className}" aria-hidden="true">${meta.icon}</span>`;
+      }
+
+      function renderFocusRail() {
+        const selectedTurn = findTurn(selectedTurnId);
+        const allTurns = [...mapTurns.map((turn) => ({ ...turn, agent: false })), ...agentTurns.map((turn) => ({ ...turn, agent: true }))];
+        byId("focus-map-strip").innerHTML = allTurns.map((turn) => `<button class="focus-segment ${turn.agent ? "agent" : ""}" type="button" data-focus-turn="${turn.id}" aria-label="${turn.label}: ${turn.title}, ${formatTokens(turn.downstream)} downstream" aria-pressed="${turn.id === selectedTurnId}" style="flex:${Math.max(1, Math.round(turn.width / 70))}">${turn.label}</button>`).join("");
+        document.querySelectorAll("[data-focus-turn]").forEach((button) => button.addEventListener("click", () => selectTurn(button.dataset.focusTurn)));
+        byId("focus-turn-label").textContent = selectedTurn ? `${selectedTurn.label} · ${selectedTurn.title}` : "No turn selected";
+        byId("focus-turn-tokens").textContent = selectedTurn ? `${formatTokens(selectedTurn.direct)} direct · ${formatTokens(selectedTurn.downstream)} downstream` : "";
+      }
+
       function renderTurnWorkspace() {
         const turn = findTurn(selectedTurnId);
         byId("turn-empty").classList.toggle("hidden", Boolean(turn));
@@ -1455,9 +1616,11 @@
         byId("turn-direct-tokens").textContent = `${formatTokens(turn.direct)} direct`;
         byId("turn-downstream-tokens").textContent = `${formatTokens(turn.downstream)} including downstream work`;
         const events = eventsForSelectedTurn();
+        const visibleTypes = [...new Set(events.map((event) => event.type))];
+        byId("event-type-key").innerHTML = Object.keys(eventTypeMeta).map((type) => `<span class="${visibleTypes.includes(type) ? "" : "not-present"}" title="${visibleTypes.includes(type) ? "Present in this turn" : "Supported event type; not present in this turn"}">${eventIconMarkup(type)}${type}</span>`).join("");
         byId("event-list").innerHTML = events.map((event) => `
           <li><button class="event-button" type="button" data-select-event="${event.id}" aria-current="${event.id === selectedEventId}">
-            <span class="event-time">${event.time}<span class="tag">${event.fidelity}</span></span>
+            <span class="event-ident">${eventIconMarkup(event.type)}<span class="event-time">${event.time}<span class="tag">${event.fidelity}</span></span></span>
             <span><span class="event-title">${event.type} · ${event.title}</span><span class="event-meta">${event.delta} context at boundary${event.compaction ? " · context reduced" : ""}</span>${event.canonical ? `<span class="canonical-label">◆ Context seen by Codex</span>` : ""}</span>
             <span class="context-rail"><span class="context-total-row"><span>${event.total.toFixed(1)}k</span><span>after</span></span>${stackMarkup(event.after)}</span>
           </button></li>`).join("");
@@ -1468,6 +1631,154 @@
       const categoryLabels = { messages: "Messages", instructions: "Instructions", definitions: "Tool definitions", results: "Tool results", skills: "Skills", unknown: "Unknown / unavailable" };
       function categoryTotal(categories) { return Object.values(categories).reduce((sum, value) => sum + value, 0); }
 
+      const systemPromptFixture = `You are Codex, an agent that collaborates with the user inside a shared workspace.
+
+Current date: 2026-07-15
+Knowledge cutoff: 2024-06
+
+Use commentary for progress updates and return a self-contained final response. Preserve user-owned changes, prefer reversible actions, and do not perform unrelated external writes.`;
+
+      const developerPromptFixture = `Workspace: /Code/api-service
+Shell: zsh
+Sandbox: workspace-write
+
+Inspect relevant files and recorded state before drawing conclusions. Use rg for repository search and apply_patch for local edits. Do not use destructive git commands. When a command is blocked by sandboxing, request explicit escalation with a scoped justification.
+
+For diagnosis requests, determine the cause and explain it. Do not implement a fix unless the user asks. Keep the user informed during tool-driven work and preserve unrelated working-tree changes.
+
+Available interaction modes and skill metadata are included below this block in the recorded developer instructions.`;
+
+      const toolDefinitionsFixture = `exec_command({
+  cmd: string,
+  workdir?: string,
+  yield_time_ms?: number,
+  max_output_tokens?: number,
+  sandbox_permissions?: "use_default" | "require_escalated"
+})
+
+write_stdin({ session_id: number, chars?: string, yield_time_ms?: number })
+
+apply_patch(input: string)
+
+web.run({ search_query?, open?, click?, find? })
+
+view_image({ path: string, detail?: "high" | "original" })
+
+[Additional recorded schemas continue inline in the production viewer. This normalized fixture preserves their position and shape without copying private session identifiers.]`;
+
+      function contextItemsFor(event, view) {
+        const events = eventsForSelectedTurn();
+        const eventIndex = events.findIndex((item) => item.id === event.id);
+        const cutoff = eventIndex + (view === "after" ? 1 : 0);
+        const items = [
+          { role: "System prompt", source: "turn_context.system", tokens: "2.4k", fidelity: "Recorded · normalized fixture", content: systemPromptFixture },
+          { role: "Developer instructions", source: "turn_context.developer", tokens: "6.2k", fidelity: "Recorded · normalized fixture", content: developerPromptFixture },
+          { role: "Tool definitions", source: "turn_context.tools", tokens: "5.1k", fidelity: "Recorded · normalized fixture", content: toolDefinitionsFixture },
+          { role: "Session environment", source: "session_meta + turn_context", tokens: "0.5k", fidelity: "Exact · normalized", content: "cwd: /Code/api-service\nshell: zsh\nmodel: GPT-5.6 Codex\nreasoning effort: high\npermission profile: workspace-write" },
+        ];
+        if (event.compaction && view === "after") {
+          items.push({ role: "Compacted conversation summary", source: "event_msg.context_compacted", tokens: "8.8k", fidelity: "Recorded shape · normalized fixture", content: "Goal: investigate and remediate the failed dev deployment.\n\nEvidence retained: the workflow reaches the ECS stabilization gate; checkout and artifact download succeed; ServicesStable exceeds its maximum attempts.\n\nWork completed: inspected workflow logs and deployment metadata, traced the failing service, prepared a hotfix, and recorded remaining verification.\n\nCurrent state: continue from the retained deployment evidence without replaying the 30.9k-token workflow output." });
+          items.push({ role: "Removed pre-compaction records", source: "replaced by compacted context", tokens: "34.9k removed", fidelity: "Unavailable as active context", content: "Earlier messages and the large tool result remain inspectable as historical events, but they are no longer part of the active post-compaction model context.", gap: true });
+          items.push({ role: "Unavailable server-side context", source: "not present in local rollout", tokens: "unknown", fidelity: "Unavailable", content: "Any server-managed prompt material not written to the local session cannot be displayed or reconstructed by Inspector.", gap: true });
+          return items;
+        }
+        events.slice(0, Math.max(0, cutoff)).forEach((item) => {
+          if (!["User message", "Assistant message", "Tool invocation", "Tool result"].includes(item.type)) return;
+          items.push({
+            role: item.type,
+            source: item.source,
+            tokens: item.delta === "0" ? "recorded" : item.delta.replace("+", ""),
+            fidelity: item.fidelity,
+            content: item.excerpt,
+          });
+        });
+        items.push({ role: "Unavailable server-side context", source: "not present in local rollout", tokens: "unknown", fidelity: "Unavailable", content: "Any server-managed prompt material not written to the local session cannot be displayed or reconstructed by Inspector.", gap: true });
+        return items;
+      }
+
+      function cycleForEvent(event) {
+        const events = eventsForSelectedTurn();
+        const index = events.findIndex((item) => item.id === event.id);
+        if (index < 0 || event.compaction) return [event];
+        const previousSeparator = events.map((item, itemIndex) => ({ item, itemIndex }))
+          .filter(({ item, itemIndex }) => itemIndex < index && (item.type === "Token usage" || item.compaction))
+          .at(-1)?.itemIndex ?? -1;
+        let end = events.findIndex((item, itemIndex) => itemIndex >= index && item.type === "Token usage");
+        if (end < 0) {
+          const nextCompaction = events.findIndex((item, itemIndex) => itemIndex > index && item.compaction);
+          end = nextCompaction < 0 ? events.length - 1 : nextCompaction - 1;
+        }
+        return events.slice(previousSeparator + 1, end + 1);
+      }
+
+      function primaryContextFor(event) {
+        const events = eventsForSelectedTurn();
+        const index = events.findIndex((item) => item.id === event.id);
+        const producingTypes = ["Assistant message", "Reasoning summary", "Tool invocation", "Patch", "Web search", "Agent spawn"];
+        if (event.type === "Model invocation") return { anchor: event, view: "before", title: "Context seen by Codex", fidelity: "Recorded model boundary", description: "The ordered locally recorded input context for this model invocation." };
+        if (["User message", "Tool result", "Agent return"].includes(event.type)) return { anchor: event, view: "after", title: "Context for the next model invocation", fidelity: "Reconstructed input boundary", description: `This event is already layered into the context below. It remains visible in model order alongside instructions, definitions, and prior records.` };
+        if (producingTypes.includes(event.type)) {
+          const modelIndex = events.map((item, itemIndex) => ({ item, itemIndex }))
+            .filter(({ item, itemIndex }) => itemIndex < index && item.type === "Model invocation")
+            .at(-1)?.itemIndex ?? -1;
+          const interveningUsage = modelIndex >= 0 && events.slice(modelIndex + 1, index).some((item) => item.type === "Token usage");
+          if (modelIndex >= 0 && !interveningUsage) return { anchor: events[modelIndex], view: "before", title: "Context that produced this event", fidelity: "Recorded model boundary", description: "The selected event is model output from the invocation represented by this ordered input context." };
+          return { anchor: event, view: "before", title: "Nearest reconstructed producing context", fidelity: "Reconstructed boundary", description: "The local rollout does not contain a distinct model-boundary record immediately before this event, so Inspector shows the nearest deterministic state." };
+        }
+        if (event.compaction) return { anchor: event, view: "after", title: "Context after compaction", fidelity: "Reconstructed post-compaction boundary", description: "The compacted record replaces earlier context at this boundary; removed material remains visible in the comparison below." };
+        return { anchor: event, view: "before", title: "Context at this recorded boundary", fidelity: "Reconstructed boundary", description: "The nearest deterministic local context associated with this event." };
+      }
+
+      function selectedEventMarkup(event) {
+        const toolMetrics = event.introduced ? `<div class="detail-metrics"><div class="detail-metric"><span>Payload introduced</span><strong>${event.introduced}</strong></div><div class="detail-metric"><span>Cumulative context burden</span><strong>${event.burden}</strong></div></div>` : "";
+        const reasoningNote = event.reasoningUnavailable ? `<p class="fixture-note"><strong>Recorded summary, not hidden reasoning.</strong> The rollout contains this readable summary plus encrypted reasoning content. Inspector shows the summary exactly and cannot decrypt or expose the hidden content.</p>` : "";
+        return `
+          <section class="evidence-section" aria-labelledby="selected-payload-title">
+          <div class="evidence-section-heading"><div><p class="meta">1 · Selected event</p><h3 id="selected-payload-title">Exact recorded payload</h3><p class="muted">Shown immediately for every event type. No preview or disclosure step.</p></div>${eventIconMarkup(event.type)}</div>
+          <dl class="definition-list"><dt>Source</dt><dd class="mono">${escapeHtml(event.source)}</dd><dt>Fidelity</dt><dd><span class="tag">${escapeHtml(event.fidelity)}</span></dd><dt>Parser</dt><dd class="mono">codex-log-v3 · analyzer 0.1.0</dd></dl>
+          ${toolMetrics}${reasoningNote}
+          <pre class="event-payload">${escapeHtml(event.excerpt)}</pre>
+          <p class="fixture-note">Structure-preserving fixture derived from a real local rollout. Production renders the complete local record here; this repository fixture normalizes paths, repository names, process IDs, and workflow identifiers.</p>
+          </section>`;
+      }
+
+      function cycleMarkup(event) {
+        const cycle = cycleForEvent(event);
+        return `<section class="evidence-section" aria-labelledby="cycle-title">
+          <div class="evidence-section-heading"><div><p class="meta">2 · Surrounding execution</p><h3 id="cycle-title">Recorded model cycle</h3><p class="muted">Every locally recorded event in this cycle is expanded in chronological order. The selected event is highlighted.</p></div><span class="tag">${cycle.length} event${cycle.length === 1 ? "" : "s"}</span></div>
+          <ol class="cycle-sequence">${cycle.map((item) => `<li class="cycle-event ${item.id === event.id ? "selected" : ""}"><div class="cycle-event-heading">${eventIconMarkup(item.type)}<span><strong>${escapeHtml(item.type)} · ${escapeHtml(item.title)}</strong><br><span class="mono muted">${escapeHtml(item.source)} · ${escapeHtml(item.fidelity)}</span></span><span class="event-time">${escapeHtml(item.time)}<br>${escapeHtml(item.delta)}</span></div><pre class="cycle-event-payload">${escapeHtml(item.excerpt)}</pre>${item.reasoningUnavailable ? `<p class="fixture-note">Readable reasoning summary shown exactly. Encrypted reasoning text is unavailable locally.</p>` : ""}</li>`).join("")}</ol>
+        </section>`;
+      }
+
+      function tokenAccountingMarkup(event) {
+        const usageEvent = cycleForEvent(event).find((item) => item.usage);
+        if (!usageEvent) return `<section class="evidence-section" aria-labelledby="tokens-title"><div class="evidence-section-heading"><div><p class="meta">4 · Token accounting</p><h3 id="tokens-title">No linked token-count record</h3></div><span class="tag">Unavailable</span></div><p class="fixture-note">The local rollout does not contain a token_count record that can be deterministically attached to this cycle. Inspector does not estimate a missing total.</p></section>`;
+        return `<section class="evidence-section" aria-labelledby="tokens-title"><div class="evidence-section-heading"><div><p class="meta">4 · Token accounting</p><h3 id="tokens-title">Recorded usage for this cycle</h3><p class="muted">Cumulative values from ${escapeHtml(usageEvent.source)} at ${escapeHtml(usageEvent.time)}.</p></div><span class="tag">Exact</span></div><div class="detail-metrics token-ledger">${Object.entries(usageEvent.usage).map(([key, value]) => `<div class="detail-metric"><span>${key.replace(/_/g, " ")}</span><strong>${value}</strong></div>`).join("")}</div></section>`;
+      }
+
+      function contextMarkup(event) {
+        const boundary = primaryContextFor(event);
+        const categories = boundary.view === "before" ? boundary.anchor.before : boundary.anchor.after;
+        const items = contextItemsFor(boundary.anchor, boundary.view);
+        return `<section class="evidence-section" aria-labelledby="context-evidence-title">
+          <div class="evidence-section-heading"><div><p class="meta">3 · Raw model input</p><h3 id="context-evidence-title">${boundary.title}</h3><p class="muted">${boundary.description}</p></div><span class="tag">${boundary.fidelity}</span></div>
+          ${stackMarkup(categories)}
+          <ul class="snapshot-categories">${Object.entries(categories).map(([key, value]) => `<li><span>${categoryLabels[key]}</span><strong>${value.toFixed(1)}k</strong></li>`).join("")}</ul>
+          <ol class="context-sequence">${items.map((item) => `<li class="context-block ${item.gap ? "context-gap" : ""}"><div class="context-block-header"><span><strong>${escapeHtml(item.role)}</strong><br><span class="mono muted">${escapeHtml(item.source)}</span></span><span><strong>${escapeHtml(item.tokens)}</strong><br><span class="tag">${escapeHtml(item.fidelity)}</span></span></div><pre class="context-block-body">${escapeHtml(item.content)}</pre></li>`).join("")}</ol>
+        </section>`;
+      }
+
+      function boundaryMarkup(event) {
+        const beforeTotal = categoryTotal(event.before);
+        const afterTotal = categoryTotal(event.after);
+        const delta = afterTotal - beforeTotal;
+        return `<section class="evidence-section" aria-labelledby="boundary-title">
+          <div class="evidence-section-heading"><div><p class="meta">5 · Boundary comparison</p><h3 id="boundary-title">Context before and after this event</h3><p class="muted">Category totals remain secondary to the literal payload and ordered raw blocks above.</p></div><span class="tag">${delta > 0 ? "+" : ""}${delta.toFixed(1)}k</span></div>
+          <div class="boundary-overview"><div class="boundary-card"><span class="muted">Before event</span><strong>${beforeTotal.toFixed(1)}k context</strong>${stackMarkup(event.before)}</div><div class="boundary-card"><span class="muted">After event</span><strong>${afterTotal.toFixed(1)}k context</strong>${stackMarkup(event.after)}</div></div>
+          ${event.compaction ? `<p class="fixture-note"><strong>${Math.abs(delta).toFixed(1)}k removed by compaction.</strong> The post-compaction ordered context is shown above; unavailable removed plaintext is never synthesized.</p>` : ""}
+        </section>`;
+      }
+
       function renderEventDetail() {
         const event = eventsForSelectedTurn().find((item) => item.id === selectedEventId);
         if (!event) {
@@ -1476,47 +1787,23 @@
           byId("event-detail-body").innerHTML = `<p class="muted">Select a message, tool event, model call, spawn, compaction, or response from the ledger.</p>`;
           return;
         }
-        const categories = selectedBoundary === "before" ? event.before : event.after;
-        const canonical = event.canonical && selectedBoundary === "before";
         byId("event-detail-title").textContent = `${event.type} · ${event.title}`;
         byId("event-detail-subtitle").textContent = `${event.time} · ${event.fidelity} · ${event.source}`;
-        const toolMetrics = event.introduced ? `<div class="detail-metrics"><div class="detail-metric"><span>Payload introduced</span><strong>${event.introduced}</strong></div><div class="detail-metric"><span>Cumulative context burden</span><strong>${event.burden}</strong></div></div>` : "";
-        const compaction = event.compaction ? `<div class="compaction-compare"><div class="compare-card"><span class="muted">Before compaction</span><strong>${categoryTotal(event.before).toFixed(1)}k context</strong>${stackMarkup(event.before)}</div><div class="compare-card"><span class="muted">After compaction</span><strong>${categoryTotal(event.after).toFixed(1)}k context</strong>${stackMarkup(event.after)}</div></div><p><strong>41.2k removed · 42% retained.</strong> Recorded compacted text preserves the deployment goal, retry evidence, modified files, and outstanding verification.</p>` : "";
-        byId("event-detail-body").innerHTML = `
-          ${toolMetrics}${compaction}
-          <h3>Recorded event evidence</h3>
-          <dl class="definition-list"><dt>Source</dt><dd class="mono">${event.source}</dd><dt>Fidelity</dt><dd><span class="tag">${event.fidelity}</span></dd><dt>Parser</dt><dd class="mono">codex-log-v3 · analyzer 0.1.0</dd></dl>
-          <pre id="record-preview" class="excerpt record-preview ${fullContentShown ? "expanded" : ""}">${event.excerpt}</pre>
-          <div class="detail-actions"><button class="text-button" type="button" id="toggle-full-content">${fullContentShown ? "Collapse content" : "Show full content"}</button><button class="text-button" type="button" id="toggle-raw-record">View raw record</button></div>
-          <div class="inline-search"><input id="record-search" type="search" placeholder="Search within recorded content" aria-label="Search within recorded content" /><button id="record-search-button" class="button-secondary" type="button">Find</button></div><p id="record-search-status" class="muted" role="status"></p>
-          <div class="snapshot-heading"><p class="meta">Context boundary</p><h3>${canonical ? "Context seen by Codex" : "Reconstructed context state"}</h3><p class="muted">${canonical ? "Canonical recorded model-call boundary." : `Inspector's deterministic reconstruction ${selectedBoundary} this event.`}</p></div>
-          <div class="boundary-switch" aria-label="Context boundary"><button class="boundary-button" type="button" data-boundary="before" aria-pressed="${selectedBoundary === "before"}">Before event</button><button class="boundary-button" type="button" data-boundary="after" aria-pressed="${selectedBoundary === "after"}">After event</button></div>
-          ${stackMarkup(categories)}
-          <ul class="snapshot-categories">${Object.entries(categories).map(([key, value]) => `<li><span>${categoryLabels[key]}</span><strong>${value.toFixed(1)}k</strong></li>`).join("")}</ul>
-          <p class="coverage-note">${categories.unknown ? `${categories.unknown.toFixed(1)}k remains unavailable from local records.` : "All displayed categories are locally recorded or deterministically reconstructed."}</p>`;
-        document.querySelectorAll("[data-boundary]").forEach((button) => button.addEventListener("click", () => { selectedBoundary = button.dataset.boundary; renderEventDetail(); }));
-        byId("toggle-full-content").addEventListener("click", () => { fullContentShown = !fullContentShown; renderEventDetail(); });
-        byId("toggle-raw-record").addEventListener("click", () => { const preview = byId("record-preview"); preview.textContent = JSON.stringify(event, null, 2); preview.classList.add("expanded"); });
-        byId("record-search-button").addEventListener("click", () => {
-          const query = byId("record-search").value.trim().toLowerCase();
-          byId("record-search-status").textContent = !query ? "Enter text to search this record." : event.excerpt.toLowerCase().includes(query) ? `Found “${query}” in recorded content.` : `No match for “${query}” in this event preview.`;
-        });
+        byId("event-detail-body").innerHTML = `${selectedEventMarkup(event)}${cycleMarkup(event)}${contextMarkup(event)}${tokenAccountingMarkup(event)}${boundaryMarkup(event)}`;
       }
 
       function selectTurn(id) {
         selectedTurnId = id;
         selectedEventId = null;
-        selectedBoundary = "before";
-        fullContentShown = false;
-        renderSessionMap();
-        renderTurnWorkspace();
+        turnFocused = true;
+        renderContext();
+        requestAnimationFrame(() => byId("focus-map-rail").scrollIntoView({ block: "start", behavior: "smooth" }));
       }
 
       function selectEvent(id) {
         selectedEventId = id;
-        selectedBoundary = "before";
-        fullContentShown = false;
         renderTurnWorkspace();
+        if (window.matchMedia("(max-width: 1050px)").matches) requestAnimationFrame(() => byId("event-detail-title").scrollIntoView({ block: "start", behavior: "smooth" }));
       }
 
       function renderContext() {
@@ -1525,6 +1812,12 @@
         byId("context-workspace").classList.toggle("hidden", !session);
         if (!session) { renderDiscovery(); return; }
         const detail = sessionDetails[session.id];
+        const selectedTurn = findTurn(selectedTurnId);
+        byId("context-workspace").classList.toggle("turn-focused", turnFocused && Boolean(selectedTurn));
+        byId("focus-map-rail").classList.toggle("hidden", !turnFocused || !selectedTurn);
+        byId("breadcrumb-session").textContent = session.task;
+        byId("breadcrumb-turn-wrap").classList.toggle("hidden", !turnFocused || !selectedTurn);
+        byId("breadcrumb-turn").textContent = selectedTurn ? selectedTurn.label : "";
         byId("selected-session-title").textContent = session.task;
         byId("selected-session-meta").textContent = `${session.project} · ${detail.workingDir} · ${session.id} · ${session.duration}`;
         byId("session-status").textContent = detail.active ? "Active" : "Complete";
@@ -1537,6 +1830,7 @@
         byId("workspace-compactions").textContent = detail.compactions;
         byId("simulate-event").classList.toggle("hidden", !detail.active);
         renderSessionMap();
+        renderFocusRail();
         renderTurnWorkspace();
       }
 
@@ -1544,7 +1838,7 @@
         selectedSessionId = id;
         selectedTurnId = turnId;
         selectedEventId = null;
-        selectedBoundary = "before";
+        turnFocused = Boolean(turnId);
         renderContext();
       }
 
@@ -1552,6 +1846,7 @@
         selectedSessionId = null;
         selectedTurnId = null;
         selectedEventId = null;
+        turnFocused = false;
         renderContext();
       }
 
@@ -1821,7 +2116,14 @@
       ["project-filter", "model-filter", "reasoning-filter", "kind-filter"].forEach((id) => byId(id).addEventListener("change", updateDashboardFilters));
       byId("discovery-search").addEventListener("input", renderDiscovery);
       ["discovery-project", "discovery-date"].forEach((id) => byId(id).addEventListener("change", renderDiscovery));
-      byId("change-session-button").addEventListener("click", showDiscovery);
+      byId("breadcrumb-sessions").addEventListener("click", showDiscovery);
+      const expandSessionMap = () => {
+        turnFocused = false;
+        renderContext();
+        requestAnimationFrame(() => byId("session-map-title").scrollIntoView({ block: "start", behavior: "smooth" }));
+      };
+      byId("breadcrumb-session").addEventListener("click", expandSessionMap);
+      byId("expand-session-map").addEventListener("click", expandSessionMap);
       document.querySelectorAll("[data-map-zoom]").forEach((button) => button.addEventListener("click", () => {
         mapZoom = Number(button.dataset.mapZoom);
         renderSessionMap();
@@ -1829,7 +2131,7 @@
       }));
       byId("simulate-event").addEventListener("click", () => {
         const session = sessions.find((item) => item.id === selectedSessionId);
-        const turn = findTurn("turn-4");
+        const turn = findTurn("turn-9");
         if (!session || !turn || !sessionDetails[session.id].active) return;
         liveEventCounter += 1;
         turn.direct += 8000;
@@ -1837,13 +2139,13 @@
         turn.width += 12;
         session.rootTokens += 8000;
         session.tokens = formatTokens(session.rootTokens + session.descendantTokens);
-        if (!eventsByTurn["turn-4"]) eventsByTurn["turn-4"] = genericEvents(turn);
-        const previous = eventsByTurn["turn-4"][eventsByTurn["turn-4"].length - 1].after;
-        eventsByTurn["turn-4"].push({ id: `live-event-${liveEventCounter}`, type: "Tool result", title: "New verification output indexed", time: "Just now", delta: "+8.0k", total: categoryTotal(previous) + 8, fidelity: "Estimated", source: `live local index · event ${liveEventCounter}`, excerpt: "Targeted webhook verification completed. 18 retry fixtures passed; no fallback-queue regressions recorded.", introduced: "~8k payload", burden: "Pending next model call", before: previous, after: { ...previous, results: previous.results + 8 } });
+        if (!eventsByTurn["turn-9"]) eventsByTurn["turn-9"] = genericEvents(turn);
+        const previous = eventsByTurn["turn-9"][eventsByTurn["turn-9"].length - 1].after;
+        eventsByTurn["turn-9"].push({ id: `live-event-${liveEventCounter}`, type: "Tool result", title: "New merge verification output indexed", time: "Just now", delta: "+8.0k", total: categoryTotal(previous) + 8, fidelity: "Synthetic", source: `live local index simulation · event ${liveEventCounter}`, excerpt: "Hotfix pull request is merged. The dev deployment workflow has started and the ECS stabilization check is pending.", introduced: "~8k payload", burden: "Pending next model call", before: previous, after: { ...previous, results: previous.results + 8 } });
         renderContext();
         byId("live-update-note").classList.remove("hidden");
         byId("session-freshness").textContent = "Indexed just now";
-        if (byId("follow-live").checked && selectedTurnId === "turn-4") byId("event-list").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (byId("follow-live").checked && selectedTurnId === "turn-9") byId("event-list").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
       byId("state-select").addEventListener("change", renderState);
       window.addEventListener("hashchange", () => setRoute(location.hash.includes("context") ? "context" : "dashboard"));

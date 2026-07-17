@@ -138,7 +138,7 @@ Selecting a full agent turn opens its exact chronological event ledger. The ledg
 
 Selecting an event opens its recorded payload, source locator, parser/fidelity metadata, and token attribution. Inspector does not generate an automatic narrative summary. A future explicit Review with Codex action may be considered separately, with scope and cost made clear before invocation.
 
-Large recorded messages and tool payloads use a bounded formatted preview for performance. The detail offers Show full content, Search within, and View raw record. Inspector does not add its own redaction; content already truncated or redacted upstream is labeled as such.
+Large recorded messages and tool payloads may use a bounded inline scroll region for performance, but their content is loaded and visible without a disclosure action. Inspector does not add its own redaction; content already truncated or redacted upstream is labeled as such.
 
 ## Context accumulation and snapshots
 
@@ -155,7 +155,7 @@ Each boundary may show the content added or removed, reconstructed total after t
 
 The phrase **Context seen by Codex** is reserved for a model-invocation boundary supported by recorded evidence. Selecting other before/after event boundaries shows **Reconstructed context state**. For a tool result, Inspector should show when it entered accumulated context and identify the next model call that consumed it.
 
-Before/after controls are explicit:
+The before/after comparison is explicit and visible on the same evidence surface:
 
 - Context before this event explains what was available when Codex acted.
 - Context after this event shows what an event added or removed.
@@ -209,7 +209,93 @@ The next wireframe is structurally successful when a reviewer can:
 
 ## Deferred questions
 
-- Whether the persistent map should collapse into a dedicated full-page drill-down at particular desktop widths.
 - Whether a future explicit Review with Codex action belongs in the event detail, a separate Reviews area, or both.
 - Which exact tokenizer and source-version rules are required for comparable estimated component contributions.
 - Whether cross-session comparison belongs in Context Inspector or remains a dashboard workflow.
+
+## Feedback round: focused turn inspection
+
+The first session-map wireframe review preserved the discovery interaction and causal map, then refined the transition into event-level inspection.
+
+### Navigation hierarchy
+
+The Dashboard remains a top-level destination in primary navigation, so Context Inspector does not repeat a Back to dashboard breadcrumb. The local breadcrumb represents only the inspector hierarchy:
+
+```text
+Sessions / <root session> / <full agent turn>
+```
+
+- **Sessions** returns to the instant-search discovery result list with its query and filters preserved.
+- The root-session crumb returns to the expanded causal map with the previous turn still highlighted.
+- The final turn crumb is current-location text.
+- The former Find another session button is removed in favor of this hierarchy.
+
+### Automatic turn focus mode
+
+Selecting a full agent turn immediately enters a focused inspection mode. This is a state transition within the same session route, not a drawer and not a third navigable page.
+
+- The full causal map collapses into a thin sticky horizontal topology rail.
+- The chronological ledger and context viewer become the primary viewport without requiring the user to discover content below the fold.
+- The rail retains the complete session topology, token sizing, selected turn, and active status.
+- Selecting another segment in the rail changes turns without leaving focus mode.
+- **Expand session map** restores the full map while preserving the selected turn and viewport context.
+
+This gives the spatial focus of a deeper detail view without sacrificing width to a drawer or forcing repeated page navigation.
+
+### Event vocabulary and icons
+
+The event ledger uses a consistent functional icon and explicit type label. The initial vocabulary includes:
+
+- user message;
+- assistant message;
+- recorded reasoning summary;
+- model invocation;
+- tool invocation;
+- tool result;
+- token usage;
+- agent spawn and return;
+- patch application;
+- web search;
+- compaction;
+- task and lifecycle state.
+
+Icons aid scanning but never replace the accessible text label. Recorded reasoning summaries are shown exactly when present. Inspector does not decrypt, synthesize, or imply access to hidden chain-of-thought content.
+
+### Always-expanded evidence viewer
+
+Selecting any event opens one continuous evidence surface. Event content and model context are not separated behind tabs or disclosure buttons.
+
+The surface renders, in order:
+
+1. **Exact selected event** — the complete locally recorded user message, assistant message, reasoning summary, structured tool input, tool output, token record, compaction record, or lifecycle payload.
+2. **Surrounding model cycle** — every recorded event between the relevant user/tool input and the model output or tool boundary, with the selected event highlighted.
+3. **Model context** — the ordered locally reconstructible context for the model invocation that produced the event or will consume it.
+4. **Token accounting** — input, cached input, output, reasoning-output, and total usage whenever the rollout records them.
+5. **Context boundary comparison** — compact before/after category totals and deltas, with compaction comparison when applicable.
+
+The primary context boundary depends on the event's role without changing the information hierarchy:
+
+- user messages and tool results lead to the next model invocation that consumes them;
+- assistant messages, reasoning summaries, and tool invocations lead back to the model invocation that produced them;
+- model-invocation events show their own input context;
+- token, compaction, and lifecycle events show the nearest provable boundary and label intermediate reconstruction explicitly.
+
+Context is rendered in model order as full readable blocks rather than only category totals or collapsed summaries. Each block identifies its role, source, token contribution, and fidelity. Extremely large blocks may use an inline scroll region, but the recorded content is already present and readable without another action. Unavailable server-side material and encrypted reasoning appear as explicit gaps. Inspector never fabricates missing text.
+
+### Structure-preserving real-session fixture
+
+The next wireframe fixture is derived from a real local Codex rollout log for a failed deployment investigation. Before entering the repository, the fixture normalizes repository names, absolute paths, run and job identifiers, session identifiers, and incidental account details.
+
+The sampled log established the real record vocabulary and shapes used in the wireframe:
+
+- separate `user_message`, `agent_message`, and `message` records;
+- recorded reasoning summaries plus encrypted reasoning content;
+- `function_call` and `function_call_output` pairs;
+- custom patch-call and patch-output pairs;
+- cumulative `token_count` records with input, cached input, output, reasoning output, total tokens, and model context-window size;
+- context compaction, task lifecycle, thread settings, web search, and abort/complete events;
+- large tool results that record truncation, original line count, and original token count.
+
+Representative content keeps the actual interaction shape: a user asks Codex to investigate a failed deployment; Codex states its next step; an `exec_command` call retrieves a workflow job log; the first result indicates a running process; a later poll returns a very large truncated log; and token-count records show how cumulative usage changes.
+
+The event ledger and evidence payloads are grounded in those normalized real records. Synthetic data may still be used to demonstrate a descendant-agent topology not present in that particular sampled root session; any such composite fixture should remain visibly described as structural demonstration data rather than source-exact evidence.

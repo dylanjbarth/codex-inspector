@@ -51,8 +51,13 @@ The customization flow is separate but uses the same dashboard surface:
 - A causal token map whose primary nodes are full agent turns and descendant sessions, with direct and inclusive downstream token accounting.
 - A stable absolute token scale, minimap, fit/zoom controls, and manual branch collapsing.
 - A persistent-map workspace: selecting a turn opens its chronological event ledger without discarding the session overview.
+- Automatic turn focus mode: selecting a turn collapses the full map into a sticky horizontal topology rail and brings the ledger into the primary viewport.
+- An inspector-local breadcrumb of Sessions / root session / full agent turn; Dashboard navigation remains exclusively in the top-level navigation.
 - A stacked context-accumulation rail aligned to recorded events.
-- Event evidence with exact payloads, provenance, token attribution, bounded large-content previews, and raw-record access.
+- Functional icons and explicit labels for user, assistant, recorded reasoning summary, model invocation, tool invocation/result, token usage, spawn/return, patch, web search, compaction, and lifecycle events.
+- An always-expanded event evidence surface for every event type: exact payload, surrounding model cycle, relevant model context, token accounting, and boundary comparison are visible together without tabs or disclosure actions.
+- Complete recorded user, assistant, reasoning-summary, tool input/output, token, compaction, and lifecycle payloads render inline; exceptionally large blocks may scroll internally but are not hidden.
+- Ordered literal context blocks with role, source, contribution, and fidelity; category totals and collapsed summaries do not substitute for the content sequence.
 - Explicit before/after context snapshots. Context seen by Codex is reserved for recorded model-call boundaries; intermediate state is labeled reconstructed.
 - First-class compaction markers and before/after comparisons.
 - Dynamic active-session updates that preserve viewport and selection without a hard page refresh.
@@ -72,6 +77,11 @@ The customization flow is separate but uses the same dashboard surface:
 - A search result explains why it matched and retains root-session identity when a descendant matched.
 - Direct and downstream tokens remain distinguishable without double-counting tool payloads.
 - Selecting a full agent turn reveals its chronological events while the map remains available.
+- Selecting a turn automatically enters focus mode without requiring manual page scrolling; expanding the topology rail restores the full map without losing selection.
+- Sessions and root-session breadcrumbs return to discovery and map overview respectively, while the top navigation owns Dashboard navigation.
+- Event icons remain paired with accessible type labels.
+- Every event type exposes its exact recorded payload, surrounding model cycle, and relevant ordered model context without an additional click.
+- Tool calls expose exact structured input and recorded output; user and assistant messages expose exact text alongside the full locally reconstructible prompt context.
 - Canonical model-call snapshots and intermediate reconstructed state are visibly distinct.
 - Context additions, removals, compactions, and unavailable gaps are visible in the accumulation rail.
 - The current session, turn, event, and before/after boundary remain clear while inspecting evidence.
@@ -85,13 +95,13 @@ The customization flow is separate but uses the same dashboard surface:
 - Deterministic analysis runs locally and is already indexed when the populated state loads.
 - Recorded token usage is exact where present; component-level token contribution may be estimated.
 - The first Context Inspector focuses on recorded execution, causal token topology, and locally reconstructible context, not recreating a complete server-side prompt.
-- The prototype uses synthetic data shaped like locally indexable records; it does not display the inspected user's real session content.
+- The prototype uses a composite fixture: representative turn events are structure-preserving normalized records derived from a real local rollout, while a clearly identified synthetic descendant branch demonstrates topology absent from the sampled session.
+- Absolute paths, identifiers, repository/account details, and incidental sensitive values are not copied verbatim into the fixture.
 - Layout changes are in-memory wireframe state; persistence, resizing, and collision rules remain implementation concerns.
 
 ## Open questions
 
 - Do deterministic Findings/Insights belong on the customizable Home canvas or a dedicated surface?
 - Does the eventual review experience belong inside the context inspector or in a separate Insights/Reviews area?
-- At which desktop width should the persistent map collapse into a dedicated full-page drill-down?
 - May an individual widget override the global relative-time range?
 - Which coverage gaps appear on each widget versus in a data-health drawer?
