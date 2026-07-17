@@ -865,6 +865,8 @@ The inspected current-format session recorded a 10,080-minute primary window, wh
 
 ### Daily, weekly, and ad hoc outcome review
 
+> **Superseded July 16, 2026.** The Build Week Reviews grilling session removed explicit usefulness ratings, daily ranking digests, and scheduled reviews from the initial product. Reviews are now explicitly started, evidence-grounded Codex tasks over a single session or time period. See [Codex Effectiveness Reviews brainstorming](./codex-effectiveness-reviews.md) for the authoritative direction. The notes below are retained as design history.
+
 Outcome feedback should use a periodic retrospective rather than a prompt after every session.
 
 - Reviews can run daily, weekly, or ad hoc based on user preference.
@@ -899,7 +901,7 @@ Inspector remains local-first for discovery, indexing, storage, scheduling, and 
 4. Is graph exploration a widget primitive or a dedicated Explore surface?
 5. Which coverage gaps appear directly on widgets versus in a data-health drawer?
 6. Should individual widgets be allowed to override the global relative-time range?
-7. What final outcome-label vocabulary balances usefulness with low feedback effort?
+7. What future evidence would justify revisiting explicit session-outcome feedback after Build Week?
 8. How should template discovery work for first-run users versus returning users?
 
 ## Next wireframe exercise
