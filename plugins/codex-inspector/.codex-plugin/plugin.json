@@ -1,0 +1,26 @@
+{
+  "name": "codex-inspector",
+  "version": "0.2.0",
+  "description": "Compare local Codex workflows and inspect the evidence behind each session.",
+  "author": {
+    "name": "Codex Inspector contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Inspector",
+    "shortDescription": "Compare Codex sessions and inspect workflow evidence.",
+    "longDescription": "Codex Inspector compares local Codex session metadata and lets engineers follow token, turn-time, compaction, tool-outcome, and subagent evidence from a workflow overview into each session. It excludes prompts, responses, source code, tool arguments, tool results, and project paths from its report. Codex Inspector is an independent project and is not an official OpenAI product.",
+    "developerName": "Codex Inspector contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Analyze my Codex sessions from the last 30 days",
+      "Show me which workflows are worth reviewing and why"
+    ],
+    "brandColor": "#6D5BD0"
+  },
+  "mcpServers": "./.mcp.json"
+}

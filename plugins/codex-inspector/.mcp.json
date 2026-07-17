@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "codexInspector": {
+      "title": "Codex Inspector",
+      "description": "Compare local Codex workflows and render an interactive evidence dashboard.",
+      "cwd": ".",
+      "command": "node",
+      "args": [
+        "./mcp/server.mjs",
+        "--stdio"
+      ]
+    }
+  }
+}
