@@ -1,0 +1,51 @@
+{
+  "policy_version": "0.2.0",
+  "guidance": {
+    "models": "https://learn.chatgpt.com/docs/models#recommended-models",
+    "subagents": "https://learn.chatgpt.com/docs/agent-configuration/subagents"
+  },
+  "global_thresholds": {
+    "minimum_occurrences": 3,
+    "positive_ratio": 0.6,
+    "improvement_ratio": 0.5,
+    "maximum_items_per_card": 3,
+    "representative_sessions": 5
+  },
+  "task_signatures": {
+    "clear_repeatable": {
+      "maximum_turns": 4,
+      "maximum_tool_calls": 8,
+      "maximum_tool_categories": 2,
+      "maximum_failures": 0,
+      "maximum_compactions": 0
+    },
+    "read_heavy": {
+      "minimum_read_calls": 8,
+      "minimum_read_categories": 2,
+      "maximum_failures": 1,
+      "maximum_compactions": 0
+    },
+    "complex_open_ended": {
+      "minimum_turns": 12,
+      "minimum_tool_calls": 20,
+      "minimum_tool_categories": 4,
+      "minimum_compactions": 1,
+      "substantial_write_minimum_tools": 10
+    }
+  },
+  "model_roles": {
+    "clear-repeatable": "luna",
+    "read-heavy-exploration": "terra",
+    "everyday": "terra",
+    "complex-open-ended": "sol"
+  },
+  "subagents": {
+    "everyday_maximum": 1,
+    "everyday_excessive": 4,
+    "complex_minimum_positive": 2,
+    "complex_maximum_positive": 4,
+    "minimum_completion_ratio": 0.75,
+    "majority_incomplete_ratio": 0.5,
+    "large_fanout": 5
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Data Context"
+  short_description: "Create reusable Codex metric and provenance context"
+  default_prompt: "Use $create-data-context to document reusable Codex metric definitions and source precedence."

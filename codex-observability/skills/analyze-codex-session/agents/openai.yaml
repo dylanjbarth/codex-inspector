@@ -1,0 +1,7 @@
+interface:
+  display_name: "Analyze Codex Session"
+  short_description: "Inspect Codex sessions with source-backed metrics"
+  icon_small: "./assets/telescope-small.svg"
+  icon_large: "./assets/telescope-large.svg"
+  brand_color: "#2563EB"
+  default_prompt: "Use $analyze-codex-session to analyze my latest Codex session."
