@@ -36,7 +36,7 @@
         font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
-      button, input, select { font: inherit; }
+      button, input, select, textarea { font: inherit; }
       button, select, input { min-height: 2.5rem; }
       button { cursor: pointer; }
 
@@ -113,13 +113,14 @@
         letter-spacing: 0.04em;
       }
 
-      select, input {
+      select, input, textarea {
         border: 1px solid var(--border-strong);
         border-radius: 3px;
         background: var(--surface);
         color: var(--text);
         padding: var(--space-2) var(--space-3);
       }
+      textarea { width: 100%; resize: vertical; }
 
       main { padding: var(--space-6); }
 
@@ -502,6 +503,133 @@
       .error-text { color: var(--danger); }
       .hidden { display: none !important; }
 
+      /* Effectiveness Reviews wireframe */
+      .reviews-header,
+      .review-plan-header,
+      .review-report-header,
+      .review-card-header,
+      .finding-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-4);
+      }
+      .reviews-header { margin-bottom: var(--space-5); }
+      .reviews-header .lede { margin-bottom: 0; }
+      .review-stack { display: grid; gap: var(--space-5); }
+      .review-panel,
+      .review-card,
+      .review-plan,
+      .review-report,
+      .finding-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+      .review-panel-header,
+      .review-card-header,
+      .review-plan-header,
+      .review-report-header,
+      .finding-card-header { padding: var(--space-4); border-bottom: 1px solid var(--border); }
+      .review-panel-header h2,
+      .review-card-header h2,
+      .review-plan-header h1,
+      .review-report-header h1,
+      .finding-card-header h2 { margin-bottom: var(--space-1); }
+      .review-card-body,
+      .review-plan-body,
+      .review-report-body,
+      .finding-card-body { padding: var(--space-4); }
+      .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+      .status-complete { color: #245f3e; border-color: #245f3e; }
+      .status-failed { color: var(--danger); border-color: var(--danger); }
+      .status-progress { color: #725219; border-color: #725219; }
+      .rubric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-top: 1px solid var(--border);
+      }
+      .rubric-item { padding: var(--space-4); border-right: 1px solid var(--border); }
+      .rubric-item:last-child { border-right: 0; }
+      .rubric-item p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+      .review-history { margin: 0; padding: 0; list-style: none; }
+      .review-history li + li { border-top: 1px solid var(--border); }
+      .review-history-button {
+        display: grid;
+        grid-template-columns: minmax(18rem, 1fr) repeat(3, auto);
+        align-items: center;
+        gap: var(--space-5);
+        width: 100%;
+        padding: var(--space-4);
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+      }
+      .review-history-button:hover { background: var(--surface-subtle); }
+      .review-history-button > span:not(:first-child) { white-space: nowrap; }
+      .review-plan-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.75fr); gap: var(--space-5); }
+      .review-plan-main,
+      .review-plan-summary,
+      .finding-list-grid { display: grid; gap: var(--space-4); }
+      .review-plan-summary { align-content: start; }
+      .scope-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+      .scope-choice .choice-card { align-items: flex-start; }
+      .scope-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+      .review-summary-card { padding: var(--space-4); background: var(--surface-subtle); border: 1px solid var(--border); }
+      .review-summary-card h2 { margin-bottom: var(--space-2); }
+      .review-summary-list { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-4); margin: 0; }
+      .review-summary-list dt { color: var(--muted); }
+      .review-summary-list dd { margin: 0; text-align: right; font-weight: 700; }
+      .review-details { border: 1px solid var(--border); }
+      .review-details summary { padding: var(--space-3) var(--space-4); cursor: pointer; font-weight: 700; }
+      .review-details-body { padding: 0 var(--space-4) var(--space-4); }
+      .prompt-block {
+        max-height: 15rem;
+        overflow: auto;
+        margin: 0;
+        padding: var(--space-4);
+        background: var(--surface-subtle);
+        border-left: 3px solid var(--border-strong);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .review-plan-footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); padding: var(--space-4); border-top: 1px solid var(--border); }
+      .review-report-meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+      .review-report-meta .summary-item { padding: var(--space-3) var(--space-4); border-right: 1px solid var(--border); }
+      .review-report-meta .summary-item:last-child { border-right: 0; }
+      .review-summary-copy { max-width: 75ch; }
+      .finding-card.opportunity { border-left: 4px solid var(--focus); }
+      .finding-card.strength { border-left: 4px solid #55705f; }
+      .finding-card-header { align-items: center; }
+      .finding-card-header h2 { font-size: 1.05rem; }
+      .finding-card-body h3 { margin-top: var(--space-4); }
+      .finding-card-body h3:first-child { margin-top: 0; }
+      .evidence-citations { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+      .evidence-link {
+        display: grid;
+        grid-template-columns: 9rem 1fr auto;
+        gap: var(--space-3);
+        align-items: center;
+        width: 100%;
+        padding: var(--space-3);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: inherit;
+        text-align: left;
+      }
+      .evidence-link:hover { background: var(--surface-subtle); }
+      .evidence-link .mono { font-size: 0.78rem; }
+      .action-prompt { margin-top: var(--space-4); border: 1px solid var(--border); }
+      .action-prompt-header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--border); }
+      .action-prompt-header h3 { margin: 0; }
+      .copy-status { min-height: 1.4rem; margin: var(--space-2) 0 0; color: #245f3e; }
+      .review-running { display: grid; place-items: center; min-height: 24rem; padding: var(--space-6); text-align: center; }
+      .review-running > div { max-width: 42rem; }
+      .review-running .mono { overflow-wrap: anywhere; }
+      .review-error { padding: var(--space-5); border-left: 4px solid var(--danger); background: var(--surface-subtle); }
+      .review-return { margin-bottom: var(--space-3); }
+      .session-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
       .visually-hidden {
         position: absolute;
         width: 1px;
@@ -525,6 +653,14 @@
         .inspector-layout { grid-template-columns: 15rem 1fr; }
         .evidence-column { grid-column: 1 / -1; border-top: 1px solid var(--border); }
         .context-column { border-right: 0; }
+        .rubric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .rubric-item:nth-child(2) { border-right: 0; }
+        .rubric-item:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+        .review-plan-layout { grid-template-columns: 1fr; }
+        .review-report-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .review-report-meta .summary-item { border-bottom: 1px solid var(--border); }
+        .review-history-button { grid-template-columns: minmax(18rem, 1fr) repeat(2, auto); }
+        .review-history-button > span:nth-child(3) { display: none; }
       }
 
       @media (max-width: 700px) {
@@ -563,6 +699,21 @@
         .context-summary { grid-template-columns: 1fr; }
         .definition-list { grid-template-columns: 1fr; }
         .definition-list dd { margin-bottom: var(--space-2); }
+        .reviews-header,
+        .review-plan-header,
+        .review-report-header,
+        .review-card-header,
+        .finding-card-header,
+        .review-plan-footer { align-items: stretch; flex-direction: column; }
+        .rubric-grid,
+        .scope-choice,
+        .scope-controls,
+        .review-report-meta { grid-template-columns: 1fr; }
+        .rubric-item { border-right: 0; border-bottom: 1px solid var(--border); }
+        .rubric-item:last-child { border-bottom: 0; }
+        .review-history-button { grid-template-columns: 1fr; gap: var(--space-2); }
+        .review-history-button > span:nth-child(3) { display: block; }
+        .evidence-link { grid-template-columns: 1fr; }
       }
 
       /* Context Inspector persistent-map wireframe */
@@ -973,6 +1124,7 @@
         <nav class="primary-nav" aria-label="Primary navigation">
           <button class="nav-button" data-route="dashboard">Dashboard</button>
           <button class="nav-button" data-route="context">Context inspector</button>
+          <button class="nav-button" data-route="reviews">Reviews</button>
         </nav>
         <div class="privacy-note">Local data only · Last indexed 2 min ago</div>
         <div class="prototype-state">
@@ -1088,7 +1240,7 @@
                 </div>
                 <div class="table-wrap">
                   <table>
-                    <thead><tr><th>Project / root session</th><th>Active</th><th>Agent tree</th><th>Recorded tokens</th><th></th></tr></thead>
+                    <thead><tr><th>Project / root session</th><th>Active</th><th>Agent tree</th><th>Recorded tokens</th><th>Actions</th></tr></thead>
                     <tbody id="session-table-body"></tbody>
                   </table>
                 </div>
@@ -1130,11 +1282,13 @@
             <section id="context-workspace" class="workspace-shell hidden" aria-labelledby="selected-session-title">
               <header class="workspace-session-header">
                 <div class="session-heading">
+                  <button id="back-to-review" class="breadcrumb-link review-return hidden" type="button">← Back to review finding</button>
                   <nav class="breadcrumbs" aria-label="Context Inspector breadcrumb"><button id="breadcrumb-sessions" class="breadcrumb-link" type="button">Sessions</button><span aria-hidden="true">/</span><button id="breadcrumb-session" class="breadcrumb-link" type="button">Investigate failed dev deployment</button><span id="breadcrumb-turn-wrap" class="hidden"><span aria-hidden="true">/</span> <span id="breadcrumb-turn" aria-current="page">Turn 1</span></span></nav>
                   <div class="session-status-row"><span id="session-status" class="tag status-active">Active</span><span id="session-freshness" class="muted">Indexed 2 seconds ago</span></div>
                   <h2 id="selected-session-title">Investigate failed dev deployment</h2>
                   <p id="selected-session-meta" class="mono muted"></p>
                 </div>
+                <button id="review-selected-session" class="button-secondary" type="button">Review effectiveness</button>
               </header>
 
               <div class="workspace-summary" aria-label="Selected root-session summary">
@@ -1191,6 +1345,70 @@
           </div>
 
           <div id="context-state" class="state-surface hidden" aria-live="polite"></div>
+        </section>
+
+        <section id="reviews-screen" class="screen hidden" aria-labelledby="reviews-title">
+          <div id="reviews-populated">
+            <section id="reviews-landing" aria-labelledby="reviews-title">
+              <header class="reviews-header">
+                <div><h1 id="reviews-title">Reviews</h1><p class="lede">Ask Codex to examine bounded session evidence and return a few concrete strengths and improvements.</p></div>
+                <button id="new-review-button" class="button-primary" type="button">New review</button>
+              </header>
+
+              <div class="review-stack">
+                <section class="review-panel" aria-labelledby="rubric-title">
+                  <div class="review-panel-header"><p class="meta">One visible Effectiveness Review</p><h2 id="rubric-title">What Codex reviews</h2><p class="muted">The rubric guides investigation without assigning a score or forcing findings into rigid categories.</p></div>
+                  <div class="rubric-grid">
+                    <div class="rubric-item"><strong>1 · Task framing &amp; steering</strong><p>Goals, constraints, decomposition, corrections, and success criteria.</p></div>
+                    <div class="rubric-item"><strong>2 · Execution efficiency</strong><p>Context, tokens, models, reasoning, tools, retries, and rework.</p></div>
+                    <div class="rubric-item"><strong>3 · Delegation &amp; workflow</strong><p>Subagent use, parallelism, coordination, and handoffs.</p></div>
+                    <div class="rubric-item"><strong>4 · Reusable leverage</strong><p>Patterns suited to instructions, skills, hooks, or automation.</p></div>
+                  </div>
+                </section>
+
+                <article class="review-card" aria-labelledby="active-review-title">
+                  <header class="review-card-header"><div><span class="tag status-progress">In progress</span><h2 id="active-review-title">Last 7 days · all projects</h2><p class="muted">Started today at 3:42 PM · high-capability model · high reasoning</p></div><button class="button-secondary" type="button" data-open-review="running">Open review</button></header>
+                  <div class="review-card-body"><strong>Codex is reviewing 12 root sessions and their descendant work.</strong><p class="muted">You can navigate away. The report will remain linked to Codex session <span class="mono">review_sess_42bd7</span>.</p></div>
+                </article>
+
+                <section class="review-panel" aria-labelledby="review-history-title">
+                  <div class="review-panel-header"><p class="meta">Saved locally</p><h2 id="review-history-title">Review history</h2></div>
+                  <ul class="review-history">
+                    <li><button class="review-history-button" type="button" data-open-review="complete"><span><strong>Effectiveness review · api-service</strong><br><span class="muted">Last 7 days · 6 root sessions · 3 findings</span></span><span>Jul 15</span><span>High reasoning</span><span class="tag status-complete">Complete</span></button></li>
+                    <li><button class="review-history-button" type="button" data-open-review="failed"><span><strong>Effectiveness review · single session</strong><br><span class="muted">Investigate failed dev deployment · report artifact incomplete</span></span><span>Jul 14</span><span>High reasoning</span><span class="tag status-failed">Failed</span></button></li>
+                  </ul>
+                </section>
+              </div>
+            </section>
+
+            <section id="review-plan" class="review-plan hidden" aria-labelledby="review-plan-title">
+              <header class="review-plan-header"><div><nav class="breadcrumbs" aria-label="Review breadcrumb"><button class="breadcrumb-link" type="button" data-back-reviews>Reviews</button><span aria-hidden="true">/</span><span aria-current="page">New review</span></nav><p class="meta">Effectiveness Review plan</p><h1 id="review-plan-title">Review before starting Codex</h1><p class="muted">Confirm exactly what Codex may inspect and the configuration it will use.</p></div><button class="button-secondary" type="button" data-cancel-review-plan>Cancel</button></header>
+              <form id="review-plan-form">
+                <div class="review-plan-body review-plan-layout">
+                  <div class="review-plan-main">
+                    <section aria-labelledby="review-scope-title"><h2 id="review-scope-title">1 · Scope</h2><div class="scope-choice"><label class="choice-card"><input type="radio" name="review-scope" value="period" checked><span><strong>Time period</strong><br><span class="muted">Review every eligible root session active in a bounded period.</span></span></label><label class="choice-card"><input type="radio" name="review-scope" value="session"><span><strong>Single session</strong><br><span class="muted">Review one user-initiated root and all descendant work.</span></span></label></div></section>
+                    <div id="review-period-controls" class="scope-controls"><div class="field"><label for="review-range">Time period</label><select id="review-range"><option value="24h">Last 24 hours</option><option value="7d" selected>Last 7 days</option><option value="custom">Custom range…</option></select></div><div class="field"><label for="review-project">Project filter</label><select id="review-project"><option value="all">All projects</option><option value="api-service">api-service</option><option value="web-app">web-app</option><option value="developer-docs">developer-docs</option><option value="cli-tools">cli-tools</option></select></div></div>
+                    <div id="review-session-control" class="field hidden"><label for="review-session-select">Root session</label><select id="review-session-select"><option value="sess_7f3a9b1c">api-service · Investigate failed dev deployment</option><option value="sess_120f8d2a">web-app · Refactor account settings flow</option><option value="sess_94ce1730">developer-docs · Explore onboarding architecture</option><option value="sess_b1104f9e">cli-tools · Add release verification command</option></select><span class="muted">The complete descendant tree is included once.</span></div>
+                    <section aria-labelledby="review-focus-title"><h2 id="review-focus-title">2 · Optional focus</h2><div class="field"><label for="review-focus">What should Codex pay special attention to?</label><textarea id="review-focus" rows="3" placeholder="For example: Pay special attention to how I delegate research work."></textarea></div><p class="coverage-note">Leave blank for the standard four-lens review. No usefulness rating is required.</p></section>
+                    <details class="review-details"><summary>Advanced model settings</summary><div class="review-details-body scope-controls"><div class="field"><label for="review-model">Model</label><select id="review-model"><option selected>High-capability Codex model</option><option>Use Codex default</option></select></div><div class="field"><label for="review-reasoning">Reasoning</label><select id="review-reasoning"><option selected>High</option><option>Medium</option></select></div></div></details>
+                    <details class="review-details"><summary>Preview fixed kickoff prompt</summary><div class="review-details-body"><pre id="review-prompt-preview" class="prompt-block">Use the bundled Codex Inspector Effectiveness Review rubric. Inspect only the sessions identified by the attached scope manifest. Evaluate task framing, execution efficiency, delegation, and reusable leverage. Treat tokens as capacity to right-size, not a cost to minimize. Write the versioned review artifact to the designated local output path.</pre></div></details>
+                  </div>
+                  <aside class="review-plan-summary" aria-labelledby="review-plan-summary-title">
+                    <div class="review-summary-card"><p class="meta">Dry run</p><h2 id="review-plan-summary-title">What Codex will review</h2><dl class="review-summary-list"><dt>Scope</dt><dd id="review-scope-summary">Last 7 days</dd><dt>Root sessions</dt><dd id="review-session-count">12</dd><dt>Full agent turns</dt><dd id="review-turn-count">86</dd><dt>Projects</dt><dd id="review-project-count">4</dd><dt>Initial input estimate</dt><dd id="review-input-estimate">~118k tokens</dd><dt>Output</dt><dd class="mono">review.json</dd></dl></div>
+                    <div class="review-summary-card"><h2>Review rubric</h2><ol><li>Task framing &amp; steering</li><li>Execution efficiency</li><li>Delegation &amp; workflow</li><li>Reusable leverage</li></ol><p class="muted">No maturity level, health score, or forced finding quota.</p></div>
+                    <div class="review-summary-card"><h2>Codex task</h2><p><strong id="review-config-summary">High-capability model · High reasoning</strong></p><p class="muted">Starting creates a visible, continuable Codex task. Repositories remain read-only during review.</p></div>
+                  </aside>
+                </div>
+                <footer class="review-plan-footer"><p class="muted">Raw session data stays local; starting this task invokes Codex over the bounded scope.</p><div class="review-actions"><button id="copy-kickoff-prompt" class="button-secondary" type="button">Copy fallback prompt</button><button class="button-primary" type="submit">Start review with Codex</button></div></footer>
+              </form>
+            </section>
+
+            <section id="review-detail" class="review-report hidden" aria-labelledby="review-detail-title">
+              <header class="review-report-header"><div><nav class="breadcrumbs" aria-label="Review breadcrumb"><button class="breadcrumb-link" type="button" data-back-reviews>Reviews</button><span aria-hidden="true">/</span><span aria-current="page">Review report</span></nav><div><span id="review-detail-status" class="tag status-complete">Complete</span></div><h1 id="review-detail-title">Effectiveness review · api-service</h1><p id="review-detail-subtitle" class="muted">Last 7 days · 6 root sessions · completed Jul 15 at 5:18 PM</p></div><div class="review-actions"><button class="button-secondary" type="button" id="open-review-task">Open Codex task</button><button class="button-secondary" type="button" id="review-scope-again">Review this scope again</button></div></header>
+              <div id="review-detail-content"></div>
+            </section>
+          </div>
+          <div id="reviews-state" class="state-surface hidden" aria-live="polite"></div>
         </section>
       </main>
 
@@ -1423,7 +1641,12 @@
       let mapZoom = 1;
       let liveEventCounter = 0;
       let agentBranchCollapsed = false;
-      let currentRoute = location.hash.includes("context") ? "context" : "dashboard";
+      let currentRoute = location.hash.includes("reviews") ? "reviews" : location.hash.includes("context") ? "context" : "dashboard";
+      let reviewPanel = "landing";
+      let reviewReturnRoute = "reviews";
+      let reviewEvidenceReturn = null;
+      let activeReviewState = "complete";
+      let currentReviewScope = { label: "Last 7 days · all projects", sessions: "12", turns: "86", kind: "aggregate" };
 
       const byId = (id) => document.getElementById(id);
 
@@ -1460,7 +1683,7 @@
             <td>${session.started}<br><span class="child-note">${session.duration}</span></td>
             <td><strong>1 root + ${session.agents - 1} spawned</strong><br><span class="child-note">${session.agents} sessions in tree</span></td>
             <td><div class="session-total"><strong>${kind === "root" ? formatTokens(session.rootTokens) : kind === "spawned" ? formatTokens(session.descendantTokens) : session.tokens}</strong><div class="stacked-track"><span class="root-fill" style="width:${Math.round(session.rootTokens / (session.rootTokens + session.descendantTokens) * 100)}%"></span><span class="spawned-fill" style="width:${Math.round(session.descendantTokens / (session.rootTokens + session.descendantTokens) * 100)}%"></span></div><span class="child-note">Root ${formatTokens(session.rootTokens)} · spawned ${formatTokens(session.descendantTokens)}</span></div></td>
-            <td><button class="text-button" type="button" data-inspect-session="${session.id}">Inspect context →</button></td>
+            <td><div class="session-actions"><button class="text-button" type="button" data-inspect-session="${session.id}">Inspect context</button><button class="text-button" type="button" data-review-session="${session.id}">Review effectiveness</button></div></td>
           </tr>
         `).join("");
         byId("session-count").textContent = `${filtered.length} user-initiated root${filtered.length === 1 ? "" : "s"} · descendants rolled up`;
@@ -1479,6 +1702,12 @@
           button.addEventListener("click", (event) => {
             event.stopPropagation();
             openSession(button.dataset.inspectSession);
+          });
+        });
+        document.querySelectorAll("[data-review-session]").forEach((button) => {
+          button.addEventListener("click", (event) => {
+            event.stopPropagation();
+            openReviewPlan(button.dataset.reviewSession, "dashboard");
           });
         });
       }
@@ -1818,6 +2047,8 @@ view_image({ path: string, detail?: "high" | "original" })
         byId("breadcrumb-session").textContent = session.task;
         byId("breadcrumb-turn-wrap").classList.toggle("hidden", !turnFocused || !selectedTurn);
         byId("breadcrumb-turn").textContent = selectedTurn ? selectedTurn.label : "";
+        byId("back-to-review").classList.toggle("hidden", !reviewEvidenceReturn);
+        if (reviewEvidenceReturn) byId("back-to-review").textContent = `← Back to review finding`;
         byId("selected-session-title").textContent = session.task;
         byId("selected-session-meta").textContent = `${session.project} · ${detail.workingDir} · ${session.id} · ${session.duration}`;
         byId("session-status").textContent = detail.active ? "Active" : "Complete";
@@ -1855,22 +2086,151 @@ view_image({ path: string, detail?: "high" | "original" })
         setRoute("context");
       }
 
+      function reviewScopeLabel() {
+        const scope = document.querySelector('input[name="review-scope"]:checked')?.value || "period";
+        if (scope === "session") {
+          const session = sessions.find((item) => item.id === byId("review-session-select").value);
+          return session ? session.task : "Single root session";
+        }
+        const range = byId("review-range");
+        const project = byId("review-project");
+        return `${range.options[range.selectedIndex].text}${project.value === "all" ? "" : ` · ${project.value}`}`;
+      }
+
+      function updateReviewPlan() {
+        const scope = document.querySelector('input[name="review-scope"]:checked')?.value || "period";
+        const single = scope === "session";
+        byId("review-period-controls").classList.toggle("hidden", single);
+        byId("review-session-control").classList.toggle("hidden", !single);
+        const projectFiltered = byId("review-project").value !== "all";
+        const shortRange = byId("review-range").value === "24h";
+        byId("review-scope-summary").textContent = reviewScopeLabel();
+        byId("review-session-count").textContent = single ? "1 root + descendants" : projectFiltered ? "6" : shortRange ? "4" : "12";
+        byId("review-turn-count").textContent = single ? "9" : projectFiltered ? "41" : shortRange ? "27" : "86";
+        byId("review-project-count").textContent = single || projectFiltered ? "1" : "4";
+        byId("review-input-estimate").textContent = single ? "~46k tokens" : projectFiltered ? "~74k tokens" : shortRange ? "~62k tokens" : "~118k tokens";
+        byId("review-config-summary").textContent = `${byId("review-model").value} · ${byId("review-reasoning").value} reasoning`;
+      }
+
+      function showReviewsLanding() {
+        reviewPanel = "landing";
+        renderReviews();
+      }
+
+      function openReviewPlan(sessionId = null, returnRoute = currentRoute) {
+        reviewReturnRoute = returnRoute;
+        reviewPanel = "plan";
+        reviewEvidenceReturn = null;
+        const scope = sessionId ? "session" : "period";
+        const radio = document.querySelector(`input[name="review-scope"][value="${scope}"]`);
+        if (radio) radio.checked = true;
+        if (sessionId) byId("review-session-select").value = sessionId;
+        setRoute("reviews");
+        updateReviewPlan();
+        requestAnimationFrame(() => byId("review-plan-title").focus?.());
+      }
+
+      function completeReviewMarkup() {
+        return `<div class="review-report-meta" aria-label="Review scope summary">
+          <div class="summary-item"><span>Root sessions</span><strong>6</strong></div><div class="summary-item"><span>Full agent turns</span><strong>41</strong></div><div class="summary-item"><span>Recorded tokens</span><strong>24.6M</strong></div><div class="summary-item"><span>Model / reasoning</span><strong>High capability · High</strong></div><div class="summary-item"><span>Codex session</span><strong class="mono">review_sess_1c48a</strong></div>
+        </div>
+        <div class="review-report-body">
+          <section class="review-summary-copy" aria-labelledby="report-summary-title"><p class="meta">Report summary</p><h2 id="report-summary-title">Strong evidence gathering, with opportunities to right-size routine work</h2><p>Across this project, you consistently grounded implementation decisions in repository and runtime evidence. The clearest improvement is to separate routine verification from deep investigation so model, reasoning, and context usage remain proportionate to each subtask.</p><p class="muted">Codex found 3 supported findings. No maturity level or aggregate efficiency score was calculated.</p></section>
+          <div class="finding-list-grid">
+            <article id="finding-capability" class="finding-card opportunity"><header class="finding-card-header"><div><span class="tag">Improvement opportunity</span><h2>Right-size routine verification after the deep investigation is complete</h2><p class="muted">Execution efficiency · <strong>Strongly supported</strong></p></div><span class="tag">Highest value</span></header><div class="finding-card-body"><h3>Observation</h3><p>High-capability, high-reasoning root turns remained active for routine merge and deployment-status checks after the architectural and debugging work was complete.</p><h3>Impact</h3><p>The expensive configuration was appropriate for diagnosing the deployment failure, but later binary checks carried the same reasoning and context burden without needing it.</p><h3>Evidence</h3><ul class="evidence-citations"><li><button class="evidence-link" type="button" data-review-evidence data-session="sess_7f3a9b1c" data-turn="turn-8" data-event="turn-8-tool" data-finding="finding-capability"><span class="mono">Turn 8 · Tool invocation</span><span>“Check whether the hotfix pull request has merged.”</span><span>Open evidence →</span></button></li><li><button class="evidence-link" type="button" data-review-evidence data-session="sess_7f3a9b1c" data-turn="turn-9" data-event="turn-9-user" data-finding="finding-capability"><span class="mono">Turn 9 · User message</span><span>Final merge verification continued in the same high-reasoning root.</span><span>Open evidence →</span></button></li></ul><h3>Recommendation</h3><p>After complex investigation converges, move bounded status checks to a lighter configuration and escalate again only when the check reveals ambiguity or failure.</p><div class="action-prompt"><div class="action-prompt-header"><h3>Codex kickoff prompt</h3><button class="button-secondary" type="button" data-copy-finding="capability">Copy prompt</button></div><pre id="prompt-capability" class="prompt-block">Review my Codex workflow instructions for routine verification steps. Using the cited Inspector evidence, propose a lightweight routing pattern for binary checks such as merge status and deployment completion. Preserve high-capability, high-reasoning work for ambiguous investigation and architecture. Verify the available model and reasoning options before proposing any persistent change.</pre></div><p id="copy-capability" class="copy-status" role="status"></p></div></article>
+
+            <article id="finding-delegation" class="finding-card strength"><header class="finding-card-header"><div><span class="tag status-complete">Strength</span><h2>Delegation preserved a focused root investigation</h2><p class="muted">Delegation &amp; workflow · <strong>Directly observed</strong></p></div></header><div class="finding-card-body"><h3>Observation</h3><p>The root session delegated an independent ECS evidence trace while retaining synthesis and user communication in the root turn.</p><h3>Impact</h3><p>This separated evidence gathering from decision-making and made the descendant token cost legible without duplicating the same investigation in the root.</p><h3>Evidence</h3><ul class="evidence-citations"><li><button class="evidence-link" type="button" data-review-evidence data-session="sess_7f3a9b1c" data-turn="agent-turn-1" data-event="agent-turn-1-user" data-finding="finding-delegation"><span class="mono">Spawned agent · Turn 1</span><span>Independent ECS service-event investigation attached to the initiating root turn.</span><span>Open evidence →</span></button></li></ul><h3>Recommendation</h3><p>Continue using this pattern when a branch can collect evidence independently and return a bounded result to the root.</p></div></article>
+
+            <article id="finding-output" class="finding-card opportunity"><header class="finding-card-header"><div><span class="tag">Improvement opportunity</span><h2>Bound large diagnostic outputs before they become persistent context</h2><p class="muted">Execution efficiency · <strong>Directly observed</strong></p></div></header><div class="finding-card-body"><h3>Observation</h3><p>A 30.9k-token workflow log entered the active context even though the stabilization failure occupied a small portion of the output.</p><h3>Impact</h3><p>The full payload remained visible across later model calls until compaction. The investigation was valuable; the avoidable cost came from transporting unrelated log lines.</p><h3>Evidence</h3><ul class="evidence-citations"><li><button class="evidence-link" type="button" data-review-evidence data-session="sess_7f3a9b1c" data-turn="turn-1" data-event="real-tool-large" data-finding="finding-output"><span class="mono">Turn 1 · Tool result</span><span>30.9k-token workflow log returned before the failure was narrowed.</span><span>Open evidence →</span></button></li></ul><h3>Recommendation</h3><p>Filter or summarize large diagnostic output at the command boundary, then retrieve a narrow surrounding slice when the failure location is known.</p><div class="action-prompt"><div class="action-prompt-header"><h3>Codex kickoff prompt</h3><button class="button-secondary" type="button" data-copy-finding="output">Copy prompt</button></div><pre id="prompt-output" class="prompt-block">Inspect the cited workflow-log tool call and propose a reusable diagnostic pattern that filters large command output before it enters model context. Prefer ordinary shell capabilities and preserve access to the complete log on demand. Determine whether this belongs in AGENTS.md only if the pattern recurs elsewhere.</pre></div><p id="copy-output" class="copy-status" role="status"></p></div></article>
+          </div>
+        </div>`;
+      }
+
+      function runningReviewMarkup() {
+        return `<div class="review-running"><div><span class="tag status-progress">In progress</span><h2>Codex is reviewing the selected session evidence</h2><p>The task may continue while you use Dashboard or Context Inspector. Inspector will render the immutable report artifact when it is ready.</p><dl class="definition-list"><dt>Scope</dt><dd>${escapeHtml(currentReviewScope.label)}</dd><dt>Root sessions</dt><dd>${escapeHtml(currentReviewScope.sessions)}</dd><dt>Full agent turns</dt><dd>${escapeHtml(currentReviewScope.turns)}</dd><dt>Codex session</dt><dd class="mono">review_sess_42bd7</dd><dt>Started</dt><dd>Today at 3:42 PM</dd></dl><div class="review-actions" style="justify-content:center"><button class="button-secondary" type="button" data-simulate-review-complete>Wireframe: simulate completion</button><button class="button-secondary" type="button" data-back-reviews>Navigate away</button></div><p class="coverage-note">No completion percentage is inferred from the running Codex turn.</p></div></div>`;
+      }
+
+      function failedReviewMarkup() {
+        return `<div class="review-report-body"><div class="review-error"><span class="tag status-failed">Report unavailable</span><h2>Inspector could not render the review artifact</h2><p>Codex created the task, but <span class="mono">review.json</span> ended before the required findings array was complete. The Codex conversation and raw artifact are still available.</p><dl class="definition-list"><dt>Codex session</dt><dd class="mono">review_sess_9ab31</dd><dt>Artifact</dt><dd class="mono">reviews/review_9ab31/review.json</dd><dt>Schema</dt><dd class="mono">codex-inspector.review/v1</dd></dl><div class="review-actions"><button class="button-primary" type="button">Open Codex task</button><button class="button-secondary" type="button">View raw artifact</button><button class="button-secondary" type="button" data-retry-review-render>Retry rendering</button></div><p id="retry-review-status" class="copy-status" role="status"></p></div></div>`;
+      }
+
+      function bindReviewDetailActions() {
+        document.querySelectorAll("[data-review-evidence]").forEach((button) => button.addEventListener("click", () => {
+          reviewEvidenceReturn = { state: activeReviewState, finding: button.dataset.finding };
+          selectedSessionId = button.dataset.session;
+          selectedTurnId = button.dataset.turn;
+          selectedEventId = button.dataset.event;
+          turnFocused = true;
+          setRoute("context");
+          renderContext();
+          renderTurnWorkspace();
+        }));
+        document.querySelectorAll("[data-copy-finding]").forEach((button) => button.addEventListener("click", () => {
+          const key = button.dataset.copyFinding;
+          const content = byId(`prompt-${key}`).textContent;
+          navigator.clipboard?.writeText(content).catch(() => {});
+          byId(`copy-${key}`).textContent = "Prompt copied. Paste it into a new Codex task when you are ready.";
+        }));
+        document.querySelector("[data-simulate-review-complete]")?.addEventListener("click", () => openReviewDetail("complete"));
+        document.querySelector("[data-retry-review-render]")?.addEventListener("click", () => { byId("retry-review-status").textContent = "Artifact checked again. The findings array is still incomplete; no review data was discarded."; });
+        document.querySelectorAll("#review-detail-content [data-back-reviews]").forEach((button) => button.addEventListener("click", showReviewsLanding));
+      }
+
+      function openReviewDetail(state = "complete") {
+        activeReviewState = state;
+        reviewPanel = "detail";
+        setRoute("reviews");
+        const status = byId("review-detail-status");
+        status.className = "tag";
+        if (state === "running") {
+          status.textContent = "In progress";
+          status.classList.add("status-progress");
+          byId("review-detail-title").textContent = currentReviewScope.kind === "session" ? "Effectiveness review · single session" : "Effectiveness review · all projects";
+          byId("review-detail-subtitle").textContent = `${currentReviewScope.label} · started today at 3:42 PM`;
+          byId("review-detail-content").innerHTML = runningReviewMarkup();
+        } else if (state === "failed") {
+          status.textContent = "Failed";
+          status.classList.add("status-failed");
+          byId("review-detail-title").textContent = "Effectiveness review · single session";
+          byId("review-detail-subtitle").textContent = "Investigate failed dev deployment · Jul 14";
+          byId("review-detail-content").innerHTML = failedReviewMarkup();
+        } else {
+          status.textContent = "Complete";
+          status.classList.add("status-complete");
+          byId("review-detail-title").textContent = "Effectiveness review · api-service";
+          byId("review-detail-subtitle").textContent = "Last 7 days · 6 root sessions · completed Jul 15 at 5:18 PM";
+          byId("review-detail-content").innerHTML = completeReviewMarkup();
+        }
+        byId("review-scope-again").classList.toggle("hidden", state !== "complete");
+        renderReviews();
+        bindReviewDetailActions();
+      }
+
+      function renderReviews() {
+        byId("reviews-landing").classList.toggle("hidden", reviewPanel !== "landing");
+        byId("review-plan").classList.toggle("hidden", reviewPanel !== "plan");
+        byId("review-detail").classList.toggle("hidden", reviewPanel !== "detail");
+        if (reviewPanel === "plan") updateReviewPlan();
+      }
+
       function setRoute(route) {
         currentRoute = route;
         location.hash = route;
         byId("dashboard-screen").classList.toggle("hidden", route !== "dashboard");
         byId("context-screen").classList.toggle("hidden", route !== "context");
+        byId("reviews-screen").classList.toggle("hidden", route !== "reviews");
         document.querySelectorAll(".nav-button").forEach((button) => {
           if (button.dataset.route === route) button.setAttribute("aria-current", "page");
           else button.removeAttribute("aria-current");
         });
         renderState();
         if (route === "context") renderContext();
+        if (route === "reviews") renderReviews();
       }
 
       function stateMarkup(state, route) {
-        if (state === "loading") return `<div><p class="tag">Loading</p><h2>${route === "dashboard" ? "Indexing local Codex history" : "Loading recorded context"}</h2><p class="muted">Source records stay on this machine. This view will update when the local index is ready.</p></div>`;
-        if (state === "empty") return `<div><p class="tag">Empty</p><h2>${route === "dashboard" ? "No sessions indexed yet" : "No context records for this session"}</h2><p class="muted">${route === "dashboard" ? "Scan local history to populate metrics and recent sessions." : "Choose another session or return to the dashboard."}</p><button class="button-primary" data-empty-action>${route === "dashboard" ? "Scan local history" : "Back to dashboard"}</button></div>`;
+        if (state === "loading") return `<div><p class="tag">Loading</p><h2>${route === "dashboard" ? "Indexing local Codex history" : route === "reviews" ? "Loading saved reviews" : "Loading recorded context"}</h2><p class="muted">Source records stay on this machine. This view will update when the local index is ready.</p></div>`;
+        if (state === "empty") return `<div><p class="tag">Empty</p><h2>${route === "dashboard" ? "No sessions indexed yet" : route === "reviews" ? "No reviews yet" : "No context records for this session"}</h2><p class="muted">${route === "dashboard" ? "Scan local history to populate metrics and recent sessions." : route === "reviews" ? "Start a bounded seven-day Effectiveness Review or choose one root session." : "Choose another session or return to the dashboard."}</p><button class="button-primary" data-empty-action>${route === "dashboard" ? "Scan local history" : route === "reviews" ? "New review" : "Back to dashboard"}</button></div>`;
         return `<div><p class="tag error-text">Error</p><h2>Inspector could not read this record format</h2><p class="muted">Codex CLI 0.42.0 · parser codex-log-v3. Source session data was not changed.</p><button class="button-secondary">View diagnostic details</button></div>`;
       }
 
@@ -1879,14 +2239,17 @@ view_image({ path: string, detail?: "high" | "original" })
         const isPopulated = state === "populated";
         byId("dashboard-populated").classList.toggle("hidden", !isPopulated);
         byId("context-populated").classList.toggle("hidden", !isPopulated);
+        byId("reviews-populated").classList.toggle("hidden", !isPopulated);
         byId("dashboard-state").classList.toggle("hidden", isPopulated || currentRoute !== "dashboard");
         byId("context-state").classList.toggle("hidden", isPopulated || currentRoute !== "context");
+        byId("reviews-state").classList.toggle("hidden", isPopulated || currentRoute !== "reviews");
         if (!isPopulated) {
-          const target = currentRoute === "dashboard" ? byId("dashboard-state") : byId("context-state");
+          const target = currentRoute === "dashboard" ? byId("dashboard-state") : currentRoute === "reviews" ? byId("reviews-state") : byId("context-state");
           target.innerHTML = stateMarkup(state, currentRoute);
           const action = target.querySelector("[data-empty-action]");
           if (action) action.addEventListener("click", () => {
             if (currentRoute === "dashboard") byId("state-select").value = "loading";
+            else if (currentRoute === "reviews") { byId("state-select").value = "populated"; openReviewPlan(null, "reviews"); }
             else setRoute("dashboard");
             renderState();
           });
@@ -2010,9 +2373,46 @@ view_image({ path: string, detail?: "high" | "original" })
       }
 
       document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => {
-        if (button.dataset.route === "context") showDiscovery();
+        if (button.dataset.route === "context") { reviewEvidenceReturn = null; showDiscovery(); }
+        if (button.dataset.route === "reviews") showReviewsLanding();
         setRoute(button.dataset.route);
       }));
+      byId("new-review-button").addEventListener("click", () => openReviewPlan(null, "reviews"));
+      document.querySelectorAll("[data-open-review]").forEach((button) => button.addEventListener("click", () => openReviewDetail(button.dataset.openReview)));
+      document.querySelectorAll("[data-back-reviews]").forEach((button) => button.addEventListener("click", showReviewsLanding));
+      document.querySelectorAll("[data-cancel-review-plan]").forEach((button) => button.addEventListener("click", () => {
+        if (reviewReturnRoute === "reviews") showReviewsLanding();
+        else setRoute(reviewReturnRoute);
+      }));
+      document.querySelectorAll('input[name="review-scope"]').forEach((input) => input.addEventListener("change", updateReviewPlan));
+      ["review-range", "review-project", "review-session-select", "review-model", "review-reasoning"].forEach((id) => byId(id).addEventListener("change", updateReviewPlan));
+      byId("review-plan-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const kind = document.querySelector('input[name="review-scope"]:checked')?.value || "period";
+        currentReviewScope = { label: reviewScopeLabel(), sessions: byId("review-session-count").textContent, turns: byId("review-turn-count").textContent, kind };
+        openReviewDetail("running");
+      });
+      byId("copy-kickoff-prompt").addEventListener("click", () => {
+        navigator.clipboard?.writeText(byId("review-prompt-preview").textContent).catch(() => {});
+        byId("copy-kickoff-prompt").textContent = "Fallback prompt copied";
+      });
+      byId("review-selected-session").addEventListener("click", () => {
+        if (selectedSessionId) openReviewPlan(selectedSessionId, "context");
+      });
+      byId("review-scope-again").addEventListener("click", () => {
+        byId("review-project").value = "api-service";
+        openReviewPlan(null, "reviews");
+      });
+      byId("open-review-task").addEventListener("click", () => {
+        byId("open-review-task").textContent = "Codex task opened · wireframe";
+      });
+      byId("back-to-review").addEventListener("click", () => {
+        const target = reviewEvidenceReturn;
+        if (!target) return;
+        setRoute("reviews");
+        openReviewDetail(target.state);
+        requestAnimationFrame(() => byId(target.finding)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      });
       byId("range-select").addEventListener("change", () => setDashboardRange(byId("range-select").value));
       byId("filter-button").addEventListener("click", () => {
         const open = byId("filter-menu").classList.toggle("hidden") === false;
@@ -2148,13 +2548,14 @@ view_image({ path: string, detail?: "high" | "original" })
         if (byId("follow-live").checked && selectedTurnId === "turn-9") byId("event-list").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
       byId("state-select").addEventListener("change", renderState);
-      window.addEventListener("hashchange", () => setRoute(location.hash.includes("context") ? "context" : "dashboard"));
+      window.addEventListener("hashchange", () => setRoute(location.hash.includes("reviews") ? "reviews" : location.hash.includes("context") ? "context" : "dashboard"));
 
       updateDashboardFilters();
       document.querySelectorAll(".widget").forEach(bindWidget);
       renderSelectedView();
       renderWizardStep();
       renderContext();
+      renderReviews();
       setRoute(currentRoute);
     </script>
   </body>

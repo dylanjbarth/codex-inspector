@@ -2,7 +2,7 @@
 
 ## Current decisions
 
-- Start with two connected surfaces: Dashboard and Context inspector.
+- Use three connected top-level surfaces: Dashboard, Context inspector, and Reviews.
 - Use a standalone low-fidelity HTML prototype before choosing the production framework or visual system.
 - Make session finding available on both surfaces.
 - Make **Token & Capacity** the first dashboard template and recorded tokens the dominant analytical hierarchy.
@@ -35,7 +35,25 @@
 - Render the exact event payload, surrounding model cycle, relevant ordered context blocks, token accounting, and compact boundary comparison together. Large blocks may scroll inline, but content is not gated behind another action.
 - Pair every event type with a functional icon and an explicit accessible label; distinguish recorded reasoning summaries from unavailable encrypted reasoning content.
 - Ground representative event fixtures in normalized real rollout records while keeping source paths, IDs, repository/account details, and incidental sensitive data out of the repository.
-- Defer the optional Codex review flow and the final Findings/Insights naming decision.
+- Name the top-level model-powered area Reviews, its saved artifact a review report, and its evidence-backed observations findings.
+- Make one bounded review run the Build Week unit; defer developer levels, longitudinal coaching, and universal quality scoring.
+- Use one shared Review plan from Reviews, Dashboard, and Context Inspector. Dashboard and inspector entry points preselect the relevant root session.
+- Support one root session or a time period with an optional project filter. Default aggregate reviews to the last seven days.
+- Use one visible Effectiveness Review rubric with four non-exclusive lenses: task framing and steering, execution efficiency, delegation and workflow, and reusable leverage.
+- Remove explicit usefulness ratings, daily ranking digests, recurring schedules, and multiple review profiles from Build Week.
+- Treat token efficiency as task-to-capability fit rather than token minimization. Findings may describe cross-cutting model, reasoning, tool, context, and delegation patterns.
+- Use a calm single-page plan with optional custom focus, visible scope and estimate, a fixed prompt preview, and collapsed model/reasoning overrides.
+- Default the review task to a high-capability, high-reasoning configuration and show that choice before launch.
+- Start a visible, continuable Codex-style task with one primary button; copying the kickoff prompt is a fallback.
+- Keep review status simple: In progress, Complete, or Failed. Do not show invented percentages or ceremonial phases.
+- Make the structured review artifact authoritative and immutable even when the linked Codex conversation continues.
+- Render returned reports with light structural validation and graceful fallbacks instead of semantically overruling Codex findings.
+- Cap reports at five evidence-backed findings without forcing a strength/improvement quota or rigid failure taxonomy.
+- Use Directly observed, Strongly supported, and Worth investigating instead of numerical confidence.
+- Show compact citations in Reviews and deep-link full evidence into Context Inspector with a preserved return route.
+- Require persistent-change recommendations to be proportionate to recurring evidence through prompt guidance, not a large deterministic policy engine.
+- Make Copy prompt the must-ship finding action. Direct creation of a fix task remains stretch scope, and Inspector never applies changes silently.
+- Preserve review history without automatic comparison, progress scoring, or scheduled reruns.
 
 ## Deferred alternatives
 
