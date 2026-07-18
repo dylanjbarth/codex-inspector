@@ -1,0 +1,11 @@
+{
+  "name": "codex-inspector-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "pnpm --filter @codex-inspector/web build",
+    "lint": "pnpm --filter @codex-inspector/web lint",
+    "typecheck": "pnpm --filter @codex-inspector/web typecheck",
+    "test": "pnpm --filter @codex-inspector/web test"
+  }
+}

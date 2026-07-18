@@ -1,0 +1,7 @@
+{
+  "name": "codex-inspector",
+  "version": "0.1.0",
+  "description": "Local-first observability for Codex sessions.",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}
