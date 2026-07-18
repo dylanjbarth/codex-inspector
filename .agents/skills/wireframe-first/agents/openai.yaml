@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wireframe First"
+  short_description: "Prototype UI structure before visual polish"
+  default_prompt: "Use $wireframe-first to turn these requirements into an interactive low-fidelity UI for review."
