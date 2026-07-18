@@ -1,0 +1,15 @@
+{
+  "active": {
+    "path": "/fake/codex-home/sessions/2026/07/01/rollout-root-001.jsonl",
+    "sourceKind": "active_rollout",
+    "sessionId": "root-001",
+    "segmentFingerprint": "sha256:fake-root-segment"
+  },
+  "afterArchiveMove": {
+    "path": "/fake/codex-home/archived_sessions/rollout-root-001.jsonl",
+    "sourceKind": "archived_rollout",
+    "sessionId": "root-001",
+    "segmentFingerprint": "sha256:fake-root-segment"
+  },
+  "expectedLogicalArtifacts": 1
+}

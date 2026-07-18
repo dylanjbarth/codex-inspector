@@ -1,0 +1,1 @@
+{"session_id":"fake-session","turn_id":"fake-turn","transcript_path":"/fake/rollout.jsonl","cwd":"/fake/project","hook_event_name":"Stop","model":"gpt-fake","permission_mode":"default","stop_hook_active":false}

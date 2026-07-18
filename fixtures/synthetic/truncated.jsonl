@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-02T10:00:00Z","type":"session_meta","payload":{"id":"truncated-001","session_id":"truncated-001","timestamp":"2026-07-02T10:00:00Z","cwd":"/fake/truncated","originator":"codex-tui","cli_version":"0.144.1","source":"cli","model_provider":"openai"}}
+{"timestamp":"2026-07-02T10:00:01Z","type":"turn_context","payload":{"turn_id":"turn-truncated-1","cwd":"/fake/truncated","model":"gpt-fake","effort":"medium"}}
+{"timestamp":"2026-07-02T10:00:02Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-truncated-1","started_at":"2026-07-02T10:00:02Z","model_context_window":99999,"collaboration_mode_kind":"default"}}
+{"timestamp":"2026-07-02T10:00:03Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"This final record is intentionally truncated"}]

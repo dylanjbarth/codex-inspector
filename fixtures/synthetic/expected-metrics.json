@@ -1,0 +1,34 @@
+{
+  "formulaVersion": 1,
+  "recordedTokens": 2500,
+  "recordedTokensByKind": {
+    "user_root_direct": 2000,
+    "descendant": 500,
+    "inspector_review": 0,
+    "other_orphan": 0
+  },
+  "tokenComposition": {
+    "uncached_input": 1350,
+    "cached_input": 600,
+    "visible_output": 440,
+    "reasoning_output": 110,
+    "residual": 0
+  },
+  "topRootSessions": [
+    { "rootSessionId": "root-001", "inclusiveTokens": 2500, "directTokens": 2000, "descendantTokens": 500 }
+  ],
+  "latestCapacityObservation": {
+    "limitId": "fake-plan",
+    "usedPercent": 45,
+    "windowMinutes": 300,
+    "resetsAt": 1782910800
+  },
+  "recordedTokensOverTime": [
+    { "start": "2026-07-01T00:00:00Z", "byKind": { "user_root_direct": 2000, "descendant": 500 } }
+  ],
+  "capacityDrawdown": [
+    { "observedAt": "2026-07-01T10:00:06Z", "limitId": "fake-plan", "usedPercent": 40, "windowMinutes": 300, "resetsAt": 1782907200 },
+    { "observedAt": "2026-07-01T11:00:04Z", "limitId": "fake-plan", "usedPercent": 45, "windowMinutes": 300, "resetsAt": 1782910800 }
+  ],
+  "coverage": { "eligibleTurns": 3, "observedTurns": 3, "excludedReasons": {} }
+}

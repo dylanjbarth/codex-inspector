@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"fake-review-thread"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"fake-item","type":"agent_message","text":"Fake review complete."}}
+{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":20,"reasoning_output_tokens":5}}
