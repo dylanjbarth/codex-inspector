@@ -1168,6 +1168,59 @@ type Status struct {
 	Boundary, Watermark                                                                           *string
 }
 
+type SourceInventory struct {
+	Total, Current, Discovered, Supported, Indexing, Unsupported, Failed, RequiresRebuild, Missing int
+}
+
+func (s *Store) SourceInventoryAt(ctx context.Context, epoch string, revision int64, sessionIDs []string) (SourceInventory, error) {
+	query := `SELECT v.state,count(*)
+ FROM source_artifact_versions v
+ WHERE v.epoch_id=? AND v.source_kind<>'session_index'
+ AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id AND x.revision<=?)
+	`
+	args := []any{epoch, revision}
+	if len(sessionIDs) > 0 {
+		query += ` AND EXISTS (SELECT 1 FROM source_artifacts a JOIN sessions s ON s.epoch_id=a.epoch_id AND s.source_session_id=a.source_session_id WHERE a.epoch_id=v.epoch_id AND a.id=v.source_id AND s.id IN (` + strings.TrimRight(strings.Repeat("?,", len(sessionIDs)), ",") + `))`
+		for _, id := range sessionIDs {
+			args = append(args, id)
+		}
+	}
+	query += ` GROUP BY v.state`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return SourceInventory{}, err
+	}
+	defer rows.Close()
+	var out SourceInventory
+	for rows.Next() {
+		var state string
+		var count int
+		if err = rows.Scan(&state, &count); err != nil {
+			return SourceInventory{}, err
+		}
+		out.Total += count
+		switch state {
+		case "current":
+			out.Current = count
+		case "discovered":
+			out.Discovered = count
+		case "supported":
+			out.Supported = count
+		case "indexing":
+			out.Indexing = count
+		case "unsupported":
+			out.Unsupported = count
+		case "failed":
+			out.Failed = count
+		case "requires_rebuild":
+			out.RequiresRebuild = count
+		case "missing":
+			out.Missing = count
+		}
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Status() (Status, error) {
 	epoch, rev, e := s.Snapshot()
 	if e != nil {

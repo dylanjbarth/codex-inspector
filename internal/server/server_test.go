@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,12 +19,161 @@ import (
 	"github.com/dylanjbarth/codex-inspector/internal/compat"
 	"github.com/dylanjbarth/codex-inspector/internal/home"
 	"github.com/dylanjbarth/codex-inspector/internal/hook"
+	"github.com/dylanjbarth/codex-inspector/internal/indexer"
 	proc "github.com/dylanjbarth/codex-inspector/internal/process"
+	"github.com/dylanjbarth/codex-inspector/internal/reviews"
+	"github.com/dylanjbarth/codex-inspector/internal/storage"
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
 func startTestServer(t *testing.T, idle time.Duration) (proc.Metadata, home.Layout, context.CancelFunc, <-chan error) {
 	return startTestServerWith(t, idle, nil)
+}
+
+func TestReviewPlanHandlerFrozenContractAndConfirmationGate(t *testing.T) {
+	root := t.TempDir()
+	layout := home.Layout{Root: filepath.Join(root, "inspector")}
+	layout.Reviews = filepath.Join(layout.Root, "reviews")
+	layout.Queue = filepath.Join(layout.Root, "queue")
+	layout.Run = filepath.Join(layout.Root, "run")
+	layout.Logs = filepath.Join(layout.Root, "logs")
+	layout.Cache = filepath.Join(layout.Root, "cache")
+	if err := home.Ensure(layout); err != nil {
+		t.Fatal(err)
+	}
+	codexHome := filepath.Join(root, "codex")
+	sessions := filepath.Join(codexHome, "sessions")
+	if err := os.MkdirAll(sessions, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"root.jsonl", "descendant.jsonl"} {
+		b, err := os.ReadFile(filepath.Join("..", "..", "fixtures", "synthetic", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(sessions, name), b, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := indexer.Run(context.Background(), indexer.Config{Layout: layout, CodexHome: codexHome}); err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rootID, projectID string
+	if err = store.DB().QueryRow(`SELECT id FROM sessions WHERE source_session_id='root-001'`).Scan(&rootID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DB().QueryRow(`SELECT id FROM projects LIMIT 1`).Scan(&projectID); err != nil {
+		t.Fatal(err)
+	}
+	epoch, baselineRevision, err := store.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.Close()
+	manager, err := reviews.New(layout, "/definitely/missing/codex", codexHome, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &state{layout: layout, reviewManager: manager}
+	body, _ := json.Marshal(map[string]any{"scope": map[string]any{"kind": "single_session", "rootSessionId": rootID}, "model": "configured-default", "reasoningEffort": "high", "focus": "demo focus"})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/review-plans", bytes.NewReader(body))
+	s.reviewPlan(recorder, request)
+	if recorder.Code != 200 {
+		t.Fatalf("plan=%d %s", recorder.Code, recorder.Body.String())
+	}
+	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan any
+	if err = json.Unmarshal(recorder.Body.Bytes(), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if err = doc.Components.Schemas["ReviewPlan"].Value.VisitJSON(plan); err != nil {
+		t.Fatalf("plan violates frozen OpenAPI: %v\n%s", err, recorder.Body.String())
+	}
+	planMap := plan.(map[string]any)
+	if planMap["coverage"].(map[string]any)["fidelity"] != "exact" {
+		t.Fatalf("complete source inventory was not exact: %s", recorder.Body.String())
+	}
+	planID := planMap["planId"].(string)
+	timeBody, _ := json.Marshal(map[string]any{"scope": map[string]any{"kind": "time_period", "start": "2026-07-01T00:00:00Z", "end": "2026-07-02T00:00:00Z", "timezone": "UTC", "projectId": projectID}, "model": "configured-default", "reasoningEffort": "high", "requestedRevision": baselineRevision})
+	timeRecorder := httptest.NewRecorder()
+	s.reviewPlan(timeRecorder, httptest.NewRequest(http.MethodPost, "/v1/review-plans", bytes.NewReader(timeBody)))
+	if timeRecorder.Code != 200 {
+		t.Fatalf("project plan=%d %s", timeRecorder.Code, timeRecorder.Body.String())
+	}
+	var timePlan map[string]any
+	if err = json.Unmarshal(timeRecorder.Body.Bytes(), &timePlan); err != nil {
+		t.Fatal(err)
+	}
+	manifest := timePlan["manifestPreview"].(map[string]any)
+	scope := manifest["scope"].(map[string]any)
+	projects := timePlan["projectSummary"].(map[string]any)["projects"].([]any)
+	if scope["projectId"] != projectID || len(projects) != 1 || projects[0].(map[string]any)["projectId"] != projectID || len(manifest["includedSessionIds"].([]any)) != 2 || len(manifest["includedTurnIds"].([]any)) != 3 {
+		t.Fatalf("canonical project did not reach frozen plan: %s", timeRecorder.Body.String())
+	}
+	if err = doc.Components.Schemas["ReviewPlan"].Value.VisitJSON(timePlan); err != nil {
+		t.Fatalf("project plan violates frozen OpenAPI: %v\n%s", err, timeRecorder.Body.String())
+	}
+
+	store, err = storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sourceID string
+	if err = store.DB().QueryRow(`SELECT source_id FROM source_artifact_versions WHERE epoch_id=? AND source_kind<>'session_index' ORDER BY revision DESC LIMIT 1`, epoch).Scan(&sourceID); err != nil {
+		t.Fatal(err)
+	}
+	partialRevision := baselineRevision + 1
+	tx, err := store.DB().Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(`INSERT INTO index_revisions(epoch_id,revision,committed_at,reason) VALUES(?,?,?,'inventory')`, epoch, partialRevision, time.Now().UTC().Format(time.RFC3339Nano)); err == nil {
+		_, err = tx.Exec(`INSERT INTO source_artifact_versions(epoch_id,source_id,revision,source_kind,canonical_path,inode,byte_size,mtime_ns,detected_codex_version,adapter_version,state,state_reason,source_evidence_availability,availability_observed_at)
+		 SELECT epoch_id,source_id,?,source_kind,canonical_path,inode,byte_size,mtime_ns,detected_codex_version,adapter_version,'indexing','synthetic indexing state',source_evidence_availability,availability_observed_at
+		 FROM source_artifact_versions WHERE epoch_id=? AND source_id=? ORDER BY revision DESC LIMIT 1`, partialRevision, epoch, sourceID)
+	}
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	store.Close()
+	partialBody, _ := json.Marshal(map[string]any{"scope": map[string]any{"kind": "single_session", "rootSessionId": rootID}, "model": "configured-default", "reasoningEffort": "high", "requestedRevision": partialRevision})
+	partialRecorder := httptest.NewRecorder()
+	s.reviewPlan(partialRecorder, httptest.NewRequest(http.MethodPost, "/v1/review-plans", bytes.NewReader(partialBody)))
+	if partialRecorder.Code != 200 {
+		t.Fatalf("partial plan=%d %s", partialRecorder.Code, partialRecorder.Body.String())
+	}
+	var partialPlan map[string]any
+	_ = json.Unmarshal(partialRecorder.Body.Bytes(), &partialPlan)
+	if partialPlan["coverage"].(map[string]any)["fidelity"] != "derived" || !strings.Contains(partialRecorder.Body.String(), "still indexing") {
+		t.Fatalf("partial inventory was not visible: %s", partialRecorder.Body.String())
+	}
+	launch := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPost, "/v1/reviews", strings.NewReader(`{"planId":"`+planID+`","confirmed":false}`))
+	s.launchReview(launch, request)
+	if launch.Code != 400 {
+		t.Fatalf("unconfirmed launch=%d", launch.Code)
+	}
+	if entries, _ := os.ReadDir(layout.Reviews); len(entries) != 1 {
+		t.Fatalf("unconfirmed launch created review artifacts: %v", entries)
+	} // hidden acceptance DB only
+	bad := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPost, "/v1/review-plans", strings.NewReader(`{"scope":{"kind":"single_session","rootSessionId":"`+rootID+`"},"model":"m","reasoningEffort":"high","payload":"secret"}`))
+	s.reviewPlan(bad, request)
+	if bad.Code != 400 || strings.Contains(bad.Body.String(), "secret") {
+		t.Fatalf("unknown/payload leaked: %d %s", bad.Code, bad.Body.String())
+	}
 }
 func startTestServerWith(t *testing.T, idle time.Duration, supplied *compat.Snapshot) (proc.Metadata, home.Layout, context.CancelFunc, <-chan error) {
 	t.Helper()

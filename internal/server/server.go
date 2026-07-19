@@ -32,6 +32,7 @@ import (
 	"github.com/dylanjbarth/codex-inspector/internal/inspector"
 	"github.com/dylanjbarth/codex-inspector/internal/metrics"
 	proc "github.com/dylanjbarth/codex-inspector/internal/process"
+	"github.com/dylanjbarth/codex-inspector/internal/reviews"
 	"github.com/dylanjbarth/codex-inspector/internal/storage"
 	"github.com/dylanjbarth/codex-inspector/internal/version"
 )
@@ -40,12 +41,13 @@ import (
 var assets embed.FS
 
 type Config struct {
-	Layout        home.Layout
-	CodexHome     string
-	IdleTimeout   time.Duration
-	Ready         chan<- proc.Metadata
-	Compatibility *compat.Snapshot
-	AutoSync      bool
+	Layout          home.Layout
+	CodexHome       string
+	IdleTimeout     time.Duration
+	Ready           chan<- proc.Metadata
+	Compatibility   *compat.Snapshot
+	AutoSync        bool
+	CodexExecutable string
 }
 type state struct {
 	mu            sync.Mutex
@@ -63,6 +65,7 @@ type state struct {
 	indexProgress indexer.Progress
 	indexError    string
 	metricEngine  *metrics.Engine
+	reviewManager *reviews.Manager
 	events        *eventBuffer
 }
 
@@ -159,6 +162,15 @@ func Run(ctx context.Context, c Config) error {
 		snapshot = compat.Inspect(c.Layout, false)
 	}
 	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer()}
+	s.reviewManager, err = reviews.New(c.Layout, c.CodexExecutable, c.CodexHome, func(id, status string) {
+		s.mu.Lock()
+		s.lastActive = time.Now()
+		s.mu.Unlock()
+		s.events.publish("review.changed", map[string]any{"reviewId": id, "status": status})
+	})
+	if err != nil {
+		return err
+	}
 	defer s.indexWG.Wait()
 	if c.AutoSync {
 		s.startIndex()
@@ -196,7 +208,7 @@ func Run(ctx context.Context, c Config) error {
 				}
 			}
 			s.mu.Lock()
-			idle := !s.indexing && time.Since(s.lastActive) >= c.IdleTimeout
+			idle := !s.indexing && !s.reviewManager.Active() && time.Since(s.lastActive) >= c.IdleTimeout
 			s.mu.Unlock()
 			if idle {
 				shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -249,6 +261,10 @@ func (s *state) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/sessions/{sessionId}/turns/{turnId}/ledger", s.auth(s.turnLedger))
 	m.HandleFunc("GET /v1/evidence/{evidenceId}", s.auth(s.evidence))
 	m.HandleFunc("GET /v1/context/{evidenceId}", s.auth(s.recordedContext))
+	m.HandleFunc("POST /v1/review-plans", s.auth(s.sameOrigin(s.reviewPlan)))
+	m.HandleFunc("GET /v1/reviews", s.auth(s.reviews))
+	m.HandleFunc("POST /v1/reviews", s.auth(s.sameOrigin(s.launchReview)))
+	m.HandleFunc("GET /v1/reviews/{reviewId}", s.auth(s.reviewDetail))
 }
 func (s *state) validHost(r *http.Request) bool { return r.Host == s.host }
 func (s *state) validOrigin(r *http.Request) bool {
@@ -769,6 +785,139 @@ func (s *state) recordedContext(w http.ResponseWriter, r *http.Request) {
 	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": chunk.DatasetEpoch, "appliedRevision": chunk.AppliedRevision, "coverage": coverage, "evidenceId": id, "fidelity": fidelity, "reason": reason, "blocks": []any{block}})
 }
 
+func (s *state) reviewPlan(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var request reviews.PlanRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&request) != nil {
+		s.problem(w, 400, "invalid_review_plan", "Review plan request is invalid")
+		return
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		s.problem(w, 400, "invalid_review_plan", "Review plan request must contain one object")
+		return
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	plan, err := s.reviewManager.Plan(r.Context(), store, request)
+	if err != nil {
+		switch {
+		case errors.Is(err, reviews.ErrInvalidRequest):
+			s.problem(w, 400, "invalid_review_plan", "Review plan request is invalid")
+		case errors.Is(err, reviews.ErrRevisionUnavailable):
+			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
+		case errors.Is(err, reviews.ErrScopeEmpty):
+			s.problem(w, 409, "review_scope_empty", "No eligible completed turns exist in this scope")
+		case errors.Is(err, reviews.ErrScopeTooLarge):
+			s.problem(w, 413, "review_scope_too_large", "Review scope exceeds the frozen manifest bounds")
+		default:
+			s.problem(w, 500, "review_plan_failed", "Review plan could not be created")
+		}
+		return
+	}
+	if !s.writeBounded(w, plan, 2*1024*1024) {
+		s.problem(w, 413, "review_plan_too_large", "Review plan exceeds the bounded response")
+	}
+}
+
+func (s *state) launchReview(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var request struct {
+		PlanID    string `json:"planId"`
+		Confirmed bool   `json:"confirmed"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&request) != nil || !request.Confirmed || !opaqueID.MatchString(request.PlanID) {
+		s.problem(w, 400, "review_confirmation_required", "Explicit Review confirmation is required")
+		return
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		s.problem(w, 400, "invalid_review_launch", "Review launch request must contain one object")
+		return
+	}
+	summary, err := s.reviewManager.Launch(s.ctx, request.PlanID, request.Confirmed)
+	if err != nil {
+		if errors.Is(err, reviews.ErrConfirmation) {
+			s.problem(w, 403, "review_confirmation_required", "Explicit Review confirmation is required")
+		} else if errors.Is(err, reviews.ErrPlanUnavailable) {
+			s.problem(w, 409, "review_plan_unavailable", "Review plan is unavailable or already launched")
+		} else {
+			s.problem(w, 500, "review_launch_failed", "Review launch could not be prepared")
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+func (s *state) reviews(w http.ResponseWriter, r *http.Request) {
+	for key := range r.URL.Query() {
+		if key != "cursor" && key != "pageSize" {
+			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+			return
+		}
+	}
+	limit, offset := 50, 0
+	var err error
+	if raw := r.URL.Query().Get("pageSize"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > 200 {
+			s.problem(w, 400, "invalid_page_size", "Page size is invalid")
+			return
+		}
+	}
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		offset, err = strconv.Atoi(raw)
+		if err != nil || offset < 0 || len(raw) > 512 {
+			s.problem(w, 400, "invalid_cursor", "Cursor is invalid")
+			return
+		}
+	}
+	items, next, err := s.reviewManager.List(offset, limit)
+	if err != nil {
+		s.problem(w, 500, "review_history_failed", "Review history is unavailable")
+		return
+	}
+	response := map[string]any{"items": items}
+	if next != "" {
+		response["nextCursor"] = next
+	}
+	s.write(w, response)
+}
+
+func (s *state) reviewDetail(w http.ResponseWriter, r *http.Request) {
+	if len(r.URL.Query()) != 0 {
+		s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+		return
+	}
+	id := r.PathValue("reviewId")
+	if !opaqueID.MatchString(id) {
+		s.problem(w, 400, "invalid_review_id", "Review ID is invalid")
+		return
+	}
+	detail, err := s.reviewManager.Detail(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			s.problem(w, 404, "review_not_found", "Review was not found")
+		} else {
+			s.problem(w, 500, "review_read_failed", "Review could not be read")
+		}
+		return
+	}
+	if !s.writeBounded(w, detail, 2*1024*1024) {
+		s.problem(w, 413, "review_response_too_large", "Review response exceeds the bounded response")
+	}
+}
+
 func (s *state) evidence(w http.ResponseWriter, r *http.Request) {
 	allowed := map[string]bool{"revision": true, "offset": true, "limit": true}
 	for key := range r.URL.Query() {
@@ -941,6 +1090,15 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 func (s *state) write(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+func (s *state) writeBounded(w http.ResponseWriter, v any, limit int) bool {
+	b, err := json.Marshal(v)
+	if err != nil || len(b)+1 > limit {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(append(b, '\n'))
+	return true
 }
 func (s *state) problem(w http.ResponseWriter, status int, code, title string) {
 	w.Header().Set("Content-Type", "application/problem+json")

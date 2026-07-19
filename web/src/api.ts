@@ -8,6 +8,11 @@ export type SessionMap = components['schemas']['SessionMap']
 export type LedgerPage = components['schemas']['LedgerPage']
 export type EvidenceChunk = components['schemas']['EvidenceChunk']
 export type RecordedContext = components['schemas']['RecordedContext']
+export type ReviewPlanRequest = components['schemas']['ReviewPlanRequest']
+export type ReviewPlan = components['schemas']['ReviewPlan']
+export type ReviewSummary = components['schemas']['ReviewSummary']
+export type ReviewPage = components['schemas']['ReviewPage']
+export type ReviewDetail = components['schemas']['ReviewDetail']
 
 export type DashboardQuery = {
   metricKeys: string[]; timezone: string; grain: 'hour'|'day'|'week'|'month';
@@ -58,6 +63,16 @@ export function fetchSessionMap(sessionId:string,revision:number):Promise<Sessio
 export function fetchLedger(sessionId:string,turnId:string,revision:number,cursor?:string):Promise<LedgerPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'200'});if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/ledger?${params}`,'Turn evidence is unavailable')}
 export function fetchEvidence(evidenceId:string,revision:number,offset=0):Promise<EvidenceChunk>{return inspectorJSON(`/v1/evidence/${encodeURIComponent(evidenceId)}?revision=${revision}&offset=${offset}&limit=65536`,'Exact evidence is unavailable')}
 export function fetchRecordedContext(evidenceId:string,revision:number):Promise<RecordedContext>{return inspectorJSON(`/v1/context/${encodeURIComponent(evidenceId)}?revision=${revision}`,'Recorded context state is unavailable')}
+
+async function inspectorMutation<T>(path:string,body:unknown,message:string):Promise<T>{
+  const response=await fetch(path,{method:'POST',headers:{'content-type':'application/json','X-Inspector-Origin':location.origin},body:JSON.stringify(body)})
+  if(!response.ok){let detail='';try{const problem=await response.json() as {title?:string};detail=problem.title||''}catch{/* bounded fallback */}throw new Error(detail||message)}
+  return response.json() as Promise<T>
+}
+export function createReviewPlan(request:ReviewPlanRequest):Promise<ReviewPlan>{return inspectorMutation('/v1/review-plans',request,'Review plan could not be created')}
+export function launchReview(planId:string):Promise<ReviewSummary>{return inspectorMutation('/v1/reviews',{planId,confirmed:true},'Review could not be started')}
+export function fetchReviews(cursor?:string):Promise<ReviewPage>{const params=new URLSearchParams({pageSize:'50'});if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/reviews?${params}`,'Review history is unavailable')}
+export function fetchReview(reviewId:string):Promise<ReviewDetail>{return inspectorJSON(`/v1/reviews/${encodeURIComponent(reviewId)}`,'Review is unavailable')}
 
 type InspectorEvent={event:string;data:Record<string,unknown>}
 const testSubscribers=new Set<(event:InspectorEvent)=>void>()
