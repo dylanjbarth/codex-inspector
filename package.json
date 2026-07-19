@@ -7,5 +7,8 @@
     "lint": "pnpm --filter @codex-inspector/web lint",
     "typecheck": "pnpm --filter @codex-inspector/web typecheck",
     "test": "pnpm --filter @codex-inspector/web test"
+  },
+  "devDependencies": {
+    "@playwright/cli": "0.1.17"
   }
 }

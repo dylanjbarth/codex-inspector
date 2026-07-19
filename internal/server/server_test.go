@@ -369,7 +369,10 @@ func TestSyncRejectsUnknownTrailingAndMalformedRequests(t *testing.T) {
 }
 
 func TestSchemaV2HealthAndSessionSnapshotContract(t *testing.T) {
-	m, _, cancel, errs := startTestServer(t, time.Second)
+	// Loading and validating the OpenAPI document can exceed the production
+	// activity cadence under the race detector; keep the server alive for the
+	// contract assertions instead of testing idle shutdown here.
+	m, _, cancel, errs := startTestServer(t, 10*time.Second)
 	defer func() { cancel(); <-errs }()
 	headers := map[string]string{"Authorization": "Bearer " + m.AccessToken}
 	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
@@ -421,7 +424,72 @@ func TestSSEBufferIsBoundedResumableAndContractValid(t *testing.T) {
 	}
 }
 
-func TestContextInspectorAPIEndToEnd(t *testing.T) {
+func phase6ShellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func phase6FakeCodex(t *testing.T, root string) string {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "phase6-fake-codex")
+	script := "#!/bin/sh\nGO_WANT_PHASE6_CODEX_HELPER=1 exec " + phase6ShellQuote(executable) + " -test.run '^TestPhase6FakeCodexProcess$'\n"
+	if err = os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestPhase6FakeCodexProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_PHASE6_CODEX_HELPER") != "1" {
+		return
+	}
+	manifestBytes, err := os.ReadFile("manifest.json")
+	if err != nil {
+		os.Exit(10)
+	}
+	var manifest reviews.Manifest
+	if err = json.Unmarshal(manifestBytes, &manifest); err != nil || len(manifest.Evidence) == 0 {
+		os.Exit(11)
+	}
+	report := reviews.Report{
+		SchemaVersion: reviews.SchemaVersion,
+		ReviewID:      manifest.ReviewID,
+		Scope: reviews.ReportScope{
+			Kind:          manifest.Scope.Kind,
+			Summary:       "Synthetic Phase 6 end-to-end scope.",
+			DatasetEpoch:  manifest.DatasetEpoch,
+			IndexRevision: manifest.IndexRevision,
+		},
+		Model:       "gpt-synthetic",
+		Reasoning:   "high",
+		CompletedAt: "2026-07-19T12:00:00Z",
+		Summary:     "Synthetic end-to-end Review completed.",
+		Findings: []reviews.Finding{{
+			FindingID:       "finding-phase6",
+			Kind:            "strength",
+			Lens:            "reusable_leverage",
+			Title:           "The evidence path remains reusable",
+			Observation:     "The synthetic task used the frozen manifest evidence reference.",
+			Impact:          "The Review can return to the same Context Inspector evidence.",
+			Support:         "directly_observed",
+			EvidenceSummary: "The citation is one of the manifest-authorized evidence IDs.",
+			Citations:       []string{manifest.Evidence[0].EvidenceID},
+			Recommendation:  "Keep the evidence-linked workflow.",
+		}},
+	}
+	reportBytes, err := json.Marshal(report)
+	if err != nil || os.WriteFile("review.json", reportBytes, 0o600) != nil {
+		os.Exit(12)
+	}
+	fmt.Println(`{"type":"thread.started","thread_id":"thread-phase6-e2e"}`)
+	fmt.Println(`{"type":"turn.completed"}`)
+	os.Exit(0)
+}
+
+func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	root := t.TempDir()
 	layout := home.Layout{Root: filepath.Join(root, "inspector")}
 	layout.Reviews = filepath.Join(layout.Root, "reviews")
@@ -451,8 +519,9 @@ func TestContextInspectorAPIEndToEnd(t *testing.T) {
 	defer cancel()
 	pv, pp := "0.1.0", 1
 	snapshot := compat.Snapshot{Checks: []compat.Check{{Name: "plugin", Status: "ok"}}, PluginVersion: &pv, PluginProtocol: &pp, CLICompatibility: "supported"}
+	fakeCodex := phase6FakeCodex(t, root)
 	go func() {
-		errs <- Run(ctx, Config{Layout: layout, CodexHome: codexHome, IdleTimeout: 20 * time.Second, Ready: ready, Compatibility: &snapshot, AutoSync: true})
+		errs <- Run(ctx, Config{Layout: layout, CodexHome: codexHome, IdleTimeout: 20 * time.Second, Ready: ready, Compatibility: &snapshot, AutoSync: true, CodexExecutable: fakeCodex})
 	}()
 	var meta proc.Metadata
 	select {
@@ -507,6 +576,13 @@ func TestContextInspectorAPIEndToEnd(t *testing.T) {
 	}
 	validate("SessionPage", sessionBody)
 	rootID := sessions.Items[0].SessionID
+	origin := fmt.Sprintf("http://127.0.0.1:%d", meta.Port)
+	metricRequest := []byte(`{"metricKeys":["recorded_tokens","recorded_tokens_by_kind","top_root_sessions_by_tokens"],"timezone":"UTC","grain":"day"}`)
+	response, metricBody := req(t, meta, "POST", "/v1/metrics/query", metricRequest, map[string]string{"Authorization": "Bearer " + meta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	if response.StatusCode != 200 || !bytes.Contains(metricBody, []byte(`"value":2500`)) || !bytes.Contains(metricBody, []byte(rootID)) {
+		t.Fatalf("metric path failed: status=%d body=%s", response.StatusCode, metricBody)
+	}
+	validate("MetricResult", metricBody)
 	mapPath := fmt.Sprintf("/v1/sessions/%s/map?revision=%d", rootID, sessions.AppliedRevision)
 	response, mapBody := req(t, meta, "GET", mapPath, nil, headers)
 	if response.StatusCode != 200 {
@@ -563,6 +639,62 @@ func TestContextInspectorAPIEndToEnd(t *testing.T) {
 		t.Fatalf("recorded compaction contract failed: %s", compactBody)
 	}
 	validate("RecordedContext", compactBody)
+	planRequest, _ := json.Marshal(map[string]any{
+		"scope":             map[string]any{"kind": "single_session", "rootSessionId": rootID},
+		"model":             "configured-default",
+		"reasoningEffort":   "high",
+		"requestedRevision": sessions.AppliedRevision,
+	})
+	response, planBody := req(t, meta, "POST", "/v1/review-plans", planRequest, map[string]string{"Authorization": "Bearer " + meta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	if response.StatusCode != 200 {
+		t.Fatalf("review plan status=%d body=%s", response.StatusCode, planBody)
+	}
+	validate("ReviewPlan", planBody)
+	var reviewPlan struct {
+		PlanID          string `json:"planId"`
+		ManifestPreview struct {
+			ReviewID string `json:"reviewId"`
+		} `json:"manifestPreview"`
+	}
+	if err = json.Unmarshal(planBody, &reviewPlan); err != nil || reviewPlan.PlanID == "" || reviewPlan.ManifestPreview.ReviewID == "" {
+		t.Fatalf("invalid review plan: %s", planBody)
+	}
+	launchRequest, _ := json.Marshal(map[string]any{"planId": reviewPlan.PlanID, "confirmed": true})
+	response, launchBody := req(t, meta, "POST", "/v1/reviews", launchRequest, map[string]string{"Authorization": "Bearer " + meta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	if response.StatusCode != 202 {
+		t.Fatalf("review launch status=%d body=%s", response.StatusCode, launchBody)
+	}
+	var detailBody []byte
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		response, detailBody = req(t, meta, "GET", "/v1/reviews/"+reviewPlan.ManifestPreview.ReviewID, nil, headers)
+		if response.StatusCode == 200 && bytes.Contains(detailBody, []byte(`"status":"complete"`)) {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if !bytes.Contains(detailBody, []byte(`"status":"complete"`)) || !bytes.Contains(detailBody, []byte(`"threadId":"thread-phase6-e2e"`)) || !bytes.Contains(detailBody, []byte(`"availability":"available"`)) {
+		t.Fatalf("accepted Review and task handoff failed: %s", detailBody)
+	}
+	validate("ReviewDetail", detailBody)
+	var detail struct {
+		AcceptedReport struct {
+			Findings []struct {
+				Citations []struct {
+					EvidenceID string `json:"evidenceId"`
+				} `json:"citations"`
+			} `json:"findings"`
+		} `json:"acceptedReport"`
+	}
+	if err = json.Unmarshal(detailBody, &detail); err != nil || len(detail.AcceptedReport.Findings) != 1 || len(detail.AcceptedReport.Findings[0].Citations) != 1 {
+		t.Fatalf("citation return contract missing: %s", detailBody)
+	}
+	citationID := detail.AcceptedReport.Findings[0].Citations[0].EvidenceID
+	response, citationBody := req(t, meta, "GET", fmt.Sprintf("/v1/evidence/%s?revision=%d", citationID, sessions.AppliedRevision), nil, headers)
+	if response.StatusCode != 200 || !bytes.Contains(citationBody, []byte(`"availability":"available"`)) {
+		t.Fatalf("review citation did not return to evidence: status=%d body=%s", response.StatusCode, citationBody)
+	}
+	validate("EvidenceChunk", citationBody)
 	if err = os.Remove(filepath.Join(sessionsDir, "root.jsonl")); err != nil {
 		t.Fatal(err)
 	}
