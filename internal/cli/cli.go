@@ -22,6 +22,7 @@ import (
 	"github.com/dylanjbarth/codex-inspector/internal/compat"
 	"github.com/dylanjbarth/codex-inspector/internal/home"
 	"github.com/dylanjbarth/codex-inspector/internal/hook"
+	"github.com/dylanjbarth/codex-inspector/internal/indexer"
 	proc "github.com/dylanjbarth/codex-inspector/internal/process"
 	"github.com/dylanjbarth/codex-inspector/internal/server"
 	"github.com/dylanjbarth/codex-inspector/internal/version"
@@ -53,6 +54,8 @@ func Main(args []string, streams IO) int {
 		err = hookCmd(args[1:], streams)
 	case "_serve":
 		err = serveCmd(args[1:], streams)
+	case "_worker":
+		err = workerCmd(args[1:], streams)
 	default:
 		usage(streams.Err)
 		return 2
@@ -182,6 +185,13 @@ func syncCmd(args []string, s IO) error {
 	if e != nil {
 		return e
 	}
+	if mode == "wait" {
+		progress, runErr := indexer.Run(context.Background(), indexer.Config{Layout: l})
+		if runErr != nil {
+			return runErr
+		}
+		return json.NewEncoder(s.Out).Encode(map[string]any{"state": "complete", "inventoried": progress.Inventoried, "processed": progress.Processed, "skipped": progress.Skipped, "failed": progress.Failed, "requiresRebuild": progress.RequiresRebuild, "queueConsumed": progress.QueueConsumed, "reverseScanBoundary": progress.Boundary})
+	}
 	m, e := proc.Read(l.Run)
 	if e != nil || !proc.Healthy(m) {
 		return errors.New("Inspector server is not running; run codex-inspector open")
@@ -191,8 +201,22 @@ func syncCmd(args []string, s IO) error {
 	if e != nil {
 		return e
 	}
-	fmt.Fprintf(s.Out, "Phase 1 sync accepted (indexing begins in Phase 2): %s", out)
+	fmt.Fprintf(s.Out, "%s", out)
 	return nil
+}
+func workerCmd(args []string, s IO) error {
+	if len(args) > 0 {
+		return errors.New("_worker takes no arguments")
+	}
+	l, e := home.Resolve()
+	if e != nil {
+		return e
+	}
+	p, e := indexer.Run(context.Background(), indexer.Config{Layout: l})
+	if e != nil {
+		return e
+	}
+	return json.NewEncoder(s.Out).Encode(p)
 }
 func openCmd(args []string, s IO) error {
 	f := flag.NewFlagSet("open", flag.ContinueOnError)
@@ -317,7 +341,7 @@ func serveCmd(args []string, s IO) error {
 	if e != nil {
 		return e
 	}
-	return server.Run(context.Background(), server.Config{Layout: l, IdleTimeout: *idle})
+	return server.Run(context.Background(), server.Config{Layout: l, IdleTimeout: *idle, AutoSync: true})
 }
 func request(m proc.Metadata, method, path string, body []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

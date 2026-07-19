@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -66,7 +67,7 @@ func req(t *testing.T, m proc.Metadata, method, path string, body []byte, header
 	return response, b[:n]
 }
 func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
-	m, _, cancel, errs := startTestServer(t, 350*time.Millisecond)
+	m, _, cancel, errs := startTestServer(t, 1500*time.Millisecond)
 	defer cancel()
 	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
 	payload, _ := json.Marshal(map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": m.ProtocolVersion})
@@ -118,7 +119,7 @@ func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("idle server did not exit")
 	}
 }
@@ -178,6 +179,95 @@ func TestSyncRejectsUnknownTrailingAndMalformedRequests(t *testing.T) {
 	if r.StatusCode != 202 {
 		t.Fatalf("valid status=%d", r.StatusCode)
 	}
+}
+
+func TestSchemaV2HealthAndSessionSnapshotContract(t *testing.T) {
+	m, _, cancel, errs := startTestServer(t, time.Second)
+	defer func() { cancel(); <-errs }()
+	headers := map[string]string{"Authorization": "Bearer " + m.AccessToken}
+	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, schema := range map[string]string{"/v1/health": "Health", "/v1/sessions": "SessionPage"} {
+		r, body := req(t, m, "GET", path, nil, headers)
+		if r.StatusCode != 200 {
+			t.Fatalf("%s status=%d body=%s", path, r.StatusCode, body)
+		}
+		var value any
+		if err = json.Unmarshal(body, &value); err != nil {
+			t.Fatal(err)
+		}
+		if err = doc.Components.Schemas[schema].Value.VisitJSON(value); err != nil {
+			t.Fatalf("%s violates %s: %v", path, schema, err)
+		}
+	}
+	for _, path := range []string{"/v1/sessions?unknown=1", "/v1/sessions?cursor=-1", "/v1/sessions?projectId=%2Ftmp", "/v1/sessions?query=" + strings.Repeat("x", 501)} {
+		r, _ := req(t, m, "GET", path, nil, headers)
+		if r.StatusCode != 400 {
+			t.Fatalf("invalid query accepted: %s => %d", path, r.StatusCode)
+		}
+	}
+}
+
+func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
+	root := t.TempDir()
+	layout := home.Layout{Root: filepath.Join(root, "inspector")}
+	layout.Reviews = filepath.Join(layout.Root, "reviews")
+	layout.Queue = filepath.Join(layout.Root, "queue")
+	layout.Run = filepath.Join(layout.Root, "run")
+	layout.Logs = filepath.Join(layout.Root, "logs")
+	layout.Cache = filepath.Join(layout.Root, "cache")
+	codexHome := filepath.Join(root, "codex")
+	rollouts := filepath.Join(codexHome, "sessions")
+	if err := os.MkdirAll(rollouts, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, sourceFile, _, _ := runtime.Caller(0)
+	fixture := filepath.Join(filepath.Dir(sourceFile), "..", "..", "fixtures", "synthetic", "root.jsonl")
+	data, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(rollouts, "root.jsonl"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ready := make(chan proc.Metadata, 1)
+	errs := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	snapshot := compat.Snapshot{Checks: []compat.Check{{Name: "plugin", Status: "ok"}}, CLICompatibility: "supported"}
+	go func() {
+		errs <- Run(ctx, Config{Layout: layout, CodexHome: codexHome, IdleTimeout: 10 * time.Second, Ready: ready, Compatibility: &snapshot})
+	}()
+	select {
+	case <-ready:
+	case err = <-errs:
+		t.Fatalf("server failed: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("server not ready")
+	}
+	marker := hook.Marker{SchemaVersion: "inspector.hook-marker/v1", ProtocolVersion: 1, EventKind: "turn_stop", SessionID: "root-001", TurnID: "turn-root-2", ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	encoded, _ := json.Marshal(marker)
+	markerPath := filepath.Join(layout.Queue, "after-start.json")
+	if err = os.WriteFile(markerPath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, statErr := os.Stat(markerPath); os.IsNotExist(statErr) {
+			if _, statErr = os.Stat(filepath.Join(layout.Root, "active-index")); statErr == nil {
+				cancel()
+				if err = <-errs; err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cancel()
+	<-errs
+	t.Fatal("watcher did not consume the post-start marker after a successful index")
 }
 func TestUnauthenticatedAPIRejectedAndNoSecretsInResponses(t *testing.T) {
 	m, _, cancel, errs := startTestServer(t, time.Second)

@@ -76,7 +76,7 @@ origin="http://127.0.0.1:${port}"
 curl --fail --silent --show-error -c "${proof_root}/cookies" -H "Origin: ${origin}" -H 'Content-Type: application/json' --data "{\"token\":\"${fragment}\",\"instanceId\":\"${instance_id}\",\"protocolVersion\":${protocol_version}}" "${origin}/v1/token/exchange" >/dev/null
 curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/" | grep -q 'Codex Inspector'
 curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/v1/status" | jq -e '.process.state == "degraded" and .process.cliCompatibility == "unknown" and .index.state == "empty" and .hook.state == "healthy"' >/dev/null
-PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" codex-inspector sync --background | grep -q '^Phase 1 sync accepted'
+PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" codex-inspector sync --background | grep -q '"state"'
 printf '%s\n' 'stage=dashboard_authenticated'
 curl --fail --silent --show-error -b "${proof_root}/cookies" -H "Origin: ${origin}" -X POST "${origin}/v1/heartbeat" >/dev/null
 sleep 3
