@@ -46,16 +46,19 @@ func TestPluginContractAndSevenNonBlockingHooks(t *testing.T) {
 func TestPluginShimDiagnosticsAreAtomicPrivateRateLimitedAndPayloadFree(t *testing.T) {
 	shim, _ := filepath.Abs(root("plugin", "codex-inspector", "hooks", "inspector-hook.sh"))
 	data := t.TempDir()
-	run := func(path string) {
+	run := func(data, path, hookLog string) {
 		t.Helper()
 		cmd := exec.Command("/bin/sh", shim)
 		cmd.Env = []string{"PATH=" + path, "PLUGIN_DATA=" + data}
+		if hookLog != "" {
+			cmd.Env = append(cmd.Env, "FAKE_HOOK_LOG="+hookLog)
+		}
 		cmd.Stdin = strings.NewReader(`{"prompt":"PAYLOAD-CANARY"}`)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("shim must be nonblocking: %v %s", err, out)
 		}
 	}
-	run("/usr/bin:/bin")
+	run(data, "/usr/bin:/bin", "")
 	missing := filepath.Join(data, "hook-diagnostic-missing_cli.json")
 	b, err := os.ReadFile(missing)
 	if err != nil {
@@ -69,29 +72,72 @@ func TestPluginShimDiagnosticsAreAtomicPrivateRateLimitedAndPayloadFree(t *testi
 		t.Fatalf("mode=%o", info.Mode().Perm())
 	}
 	first := info.ModTime()
-	run("/usr/bin:/bin")
+	run(data, "/usr/bin:/bin", "")
 	info, _ = os.Stat(missing)
 	if !info.ModTime().Equal(first) {
 		t.Fatal("diagnostic was not rate limited")
 	}
+	for _, tc := range []struct {
+		name, version string
+	}{
+		{"protocol", "codex-inspector 0.1.0 (protocol 2, index schema 2)"},
+		{"index_schema", "codex-inspector 0.1.0 (protocol 1, index schema 1)"},
+	} {
+		t.Run(tc.name+" mismatch", func(t *testing.T) {
+			mismatchData := t.TempDir()
+			bin := t.TempDir()
+			hookLog := filepath.Join(t.TempDir(), "hook.log")
+			fake := filepath.Join(bin, "codex-inspector")
+			script := "#!/bin/sh\nif [ \"${1:-}\" = version ]; then echo '" + tc.version + "'; exit 0; fi\nprintf '%s\\n' \"$*\" >> \"${FAKE_HOOK_LOG}\"\n"
+			if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			run(mismatchData, bin+":/usr/bin:/bin", hookLog)
+			protocol := filepath.Join(mismatchData, "hook-diagnostic-protocol_mismatch.json")
+			b, err := os.ReadFile(protocol)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(b), "PAYLOAD-CANARY") {
+				t.Fatal("payload leaked")
+			}
+			info, _ := os.Stat(protocol)
+			if info.Mode().Perm() != 0o600 {
+				t.Fatalf("mode=%o", info.Mode().Perm())
+			}
+			if _, err := os.Stat(hookLog); !os.IsNotExist(err) {
+				t.Fatalf("incompatible CLI invoked _hook: %v", err)
+			}
+		})
+	}
+
+	compatibleData := t.TempDir()
+	for _, name := range []string{"hook-diagnostic-missing_cli.json", "hook-diagnostic-protocol_mismatch.json"} {
+		if err := os.WriteFile(filepath.Join(compatibleData, name), []byte("stale"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	bin := t.TempDir()
+	hookLog := filepath.Join(t.TempDir(), "hook.log")
 	fake := filepath.Join(bin, "codex-inspector")
-	if err = os.WriteFile(fake, []byte("#!/bin/sh\necho 'codex-inspector 0.1.0 (protocol 2, index schema 1)'\n"), 0o700); err != nil {
+	compatible := "#!/bin/sh\nif [ \"${1:-}\" = version ]; then echo 'codex-inspector 0.1.0 (protocol 1, index schema 2)'; exit 0; fi\nprintf '%s\\n' \"$*\" >> \"${FAKE_HOOK_LOG}\"\n"
+	if err := os.WriteFile(fake, []byte(compatible), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	run(bin + ":/usr/bin:/bin")
-	protocol := filepath.Join(data, "hook-diagnostic-protocol_mismatch.json")
-	b, err = os.ReadFile(protocol)
+	run(compatibleData, bin+":/usr/bin:/bin", hookLog)
+	invocation, err := os.ReadFile(hookLog)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(b), "PAYLOAD-CANARY") {
-		t.Fatal("payload leaked")
+	if string(invocation) != "_hook --protocol 1\n" || strings.Contains(string(invocation), "PAYLOAD-CANARY") {
+		t.Fatalf("unexpected compatible hook invocation: %q", invocation)
 	}
-	info, _ = os.Stat(protocol)
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("mode=%o", info.Mode().Perm())
+	for _, name := range []string{"hook-diagnostic-missing_cli.json", "hook-diagnostic-protocol_mismatch.json"} {
+		if _, err := os.Stat(filepath.Join(compatibleData, name)); !os.IsNotExist(err) {
+			t.Fatalf("compatible CLI did not clear %s: %v", name, err)
+		}
 	}
+
 	entries, _ := os.ReadDir(data)
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), ".") {

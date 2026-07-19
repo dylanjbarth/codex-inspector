@@ -27,7 +27,7 @@ if ! command -v codex-inspector >/dev/null 2>&1; then
 fi
 [ -n "${PLUGIN_DATA:-}" ] && rm -f "${PLUGIN_DATA}/hook-diagnostic-missing_cli.json" 2>/dev/null || true
 
-if ! codex-inspector version 2>/dev/null | grep -q '^codex-inspector 0\.1\.[0-9][0-9]* (protocol 1, index schema 1)$'; then
+if ! codex-inspector version 2>/dev/null | grep -q '^codex-inspector 0\.1\.[0-9][0-9]* (protocol 1, index schema 2)$'; then
   record_diagnostic protocol_mismatch error
   exit 0
 fi

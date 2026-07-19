@@ -17,7 +17,7 @@ mkdir -p "${codex_home}" "${install_bin}" "${artifact_dir}"
 (cd "${artifact_dir}" && shasum -a 256 -c codex-inspector-darwin-arm64.sha256)
 printf '%s\n' 'stage=package_verified'
 install -m 0755 "${artifact_dir}/codex-inspector-darwin-arm64" "${install_bin}/codex-inspector"
-PATH="${install_bin}:${PATH}" codex-inspector version | grep -q '^codex-inspector 0.1.0 (protocol 1, index schema 1)$'
+PATH="${install_bin}:${PATH}" codex-inspector version | grep -q '^codex-inspector 0.1.0 (protocol 1, index schema 2)$'
 
 CODEX_HOME="${codex_home}" codex plugin marketplace add "${repo_root}" >/dev/null
 CODEX_HOME="${codex_home}" codex plugin add codex-inspector@codex-inspector-development --json >/dev/null
@@ -41,7 +41,7 @@ printf '%s\n' 'stage=missing_cli_nonblocking'
 # payload-free plugin diagnostic until a compatible hook run clears it.
 fake_bin="${proof_root}/fake-bin"
 mkdir -p "${fake_bin}"
-printf '%s\n' '#!/bin/sh' "echo 'codex-inspector 0.1.0 (protocol 2, index schema 1)'" > "${fake_bin}/codex-inspector"
+printf '%s\n' '#!/bin/sh' "echo 'codex-inspector 0.1.0 (protocol 1, index schema 1)'" > "${fake_bin}/codex-inspector"
 chmod 700 "${fake_bin}/codex-inspector"
 PATH="${fake_bin}:/usr/bin:/bin" PLUGIN_DATA="${plugin_data}" "${repo_root}/plugin/codex-inspector/hooks/inspector-hook.sh" < "${repo_root}/fixtures/hooks/stop.json"
 test "$(stat -f '%Lp' "${plugin_data}/hook-diagnostic-protocol_mismatch.json")" = 600
@@ -75,7 +75,11 @@ protocol_version=$(jq -r .protocolVersion "${inspector_home}/run/server.json")
 origin="http://127.0.0.1:${port}"
 curl --fail --silent --show-error -c "${proof_root}/cookies" -H "Origin: ${origin}" -H 'Content-Type: application/json' --data "{\"token\":\"${fragment}\",\"instanceId\":\"${instance_id}\",\"protocolVersion\":${protocol_version}}" "${origin}/v1/token/exchange" >/dev/null
 curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/" | grep -q 'Codex Inspector'
-curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/v1/status" | jq -e '.process.state == "degraded" and .process.cliCompatibility == "unknown" and .index.state == "empty" and .hook.state == "healthy"' >/dev/null
+curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/v1/status" > "${proof_root}/dashboard-status.json"
+if ! jq -e '.process.state == "degraded" and .process.cliCompatibility == "unknown" and .index.state == "empty" and .hook.state == "idle" and (.hook.diagnostics | length) == 0' "${proof_root}/dashboard-status.json" >/dev/null; then
+  jq '{process: .process, index: {state: .index.state}, hook: {state: .hook.state, diagnostics: .hook.diagnostics}}' "${proof_root}/dashboard-status.json" >&2
+  exit 1
+fi
 PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" codex-inspector sync --background | grep -q '"state"'
 printf '%s\n' 'stage=dashboard_authenticated'
 curl --fail --silent --show-error -b "${proof_root}/cookies" -H "Origin: ${origin}" -X POST "${origin}/v1/heartbeat" >/dev/null

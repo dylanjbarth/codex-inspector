@@ -33,6 +33,13 @@ dashboard through a real HTTP client, performs the frozen one-time
 token/instance/protocol exchange, and observes idle shutdown. It never reads
 the developer's Codex corpus.
 
+The frozen `v0.1.x` plugin compatibility probe accepts the exact released CLI
+shape `codex-inspector 0.1.x (protocol 1, index schema 2)`. A protocol or index
+schema mismatch is non-blocking, records only the private payload-free
+`protocol_mismatch` diagnostic, and does not invoke `_hook`. The clean-install
+proof explicitly rejects the former index schema 1 output before proving that
+the packaged schema 2 CLI creates marker-only queue state.
+
 The hook benchmark times the registered plugin shell shim, including its CLI
 version probe and second CLI process for marker creation. Before timing, it
 also exercises the shim's missing-CLI diagnostic branch. A direct `_hook`
