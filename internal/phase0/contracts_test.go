@@ -3,7 +3,6 @@ package phase0
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"io"
 	"os"
@@ -448,7 +447,7 @@ func TestReviewSchemas(t *testing.T) {
 		"rubric":            []any{"task_framing_and_steering", "execution_efficiency", "delegation_and_workflow", "reusable_leverage"},
 		"model":             "gpt-fake",
 		"reasoning":         "medium",
-		"evidence":          []any{map[string]any{"evidenceId": "evidence-001", "sourceId": "source-001", "sourceFingerprint": strings.Repeat("a", 64), "eventFingerprint": strings.Repeat("b", 64), "adapterVersion": AdapterVersion, "recordOrdinal": float64(3), "byteStart": float64(100), "byteEnd": float64(200), "sessionId": "root-001", "turnId": "turn-root-1", "eventKind": "message", "observedAt": "2026-07-01T10:00:03Z", "availability": "available"}},
+		"evidence":          []any{map[string]any{"evidenceId": "evidence-001", "sourceId": "source-001", "sourcePrefixSha256": strings.Repeat("a", 64), "eventFingerprint": strings.Repeat("b", 64), "adapterVersion": AdapterVersion, "recordOrdinal": float64(3), "byteStart": float64(100), "byteEnd": float64(200), "sessionId": "root-001", "turnId": "turn-root-1", "eventKind": "message", "observedAt": "2026-07-01T10:00:03Z", "availability": "available", "availabilityObservedAt": "2026-07-18T12:00:00Z", "availabilityRevision": nil}},
 		"reportDestination": "./review.json",
 		"reportSchema":      "./report.schema.json",
 		"limits":            map[string]any{"maxFindings": float64(5), "maxReportBytes": float64(1048576)},
@@ -470,6 +469,12 @@ func TestReviewSchemas(t *testing.T) {
 	validateSchema(t, "manifest.schema.json", manifest)
 	validateSchema(t, "run.schema.json", run)
 	validateSchema(t, "report.schema.json", report)
+	badManifest := cloneMap(t, manifest)
+	badEvidence := badManifest["evidence"].([]any)[0].(map[string]any)
+	delete(badEvidence, "availabilityObservedAt")
+	if err := schemaFor(t, "manifest.schema.json").Validate(badManifest); err == nil {
+		t.Fatal("manifest accepted live availability without availabilityObservedAt")
+	}
 
 	badReport := cloneMap(t, report)
 	badReport["findings"] = []any{report["findings"].([]any)[0], report["findings"].([]any)[0], report["findings"].([]any)[0], report["findings"].([]any)[0], report["findings"].([]any)[0], report["findings"].([]any)[0]}
@@ -516,6 +521,7 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 		}
 	}
 	assertSchemaRequired(t, doc.Components.Schemas, "ProcessStatus", "state", "inspectorVersion", "cliVersion", "cliCompatibility", "pluginVersion", "pluginProtocolVersion", "pid", "startedAt")
+	assertSchemaRequired(t, doc.Components.Schemas, "Snapshot", "schemaVersion", "datasetEpoch", "appliedRevision", "coverage")
 	assertSchemaRequired(t, doc.Components.Schemas, "IndexStatus", "state", "datasetEpoch", "appliedRevision", "schemaVersion", "databaseBytes", "sourceCount", "supportedSourceCount", "unsupportedSourceCount", "pendingTailCount", "queuedSessionChanges", "processedCount", "queuedCount", "skippedCount", "failedCount", "requiresRebuildCount", "reverseScanBoundary", "completedWatermark")
 	assertSchemaRequired(t, doc.Components.Schemas, "HookStatus", "state", "registeredEvents", "lastMarker", "diagnostics")
 	assertSchemaRequired(t, doc.Components.Schemas, "MetricMetadata", "formulaVersion", "fidelity", "coverage", "indexedCoverage", "timeBoundary", "exclusionReasons")
@@ -526,11 +532,18 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	assertSchemaRequired(t, doc.Components.Schemas, "RootTurn", "turnId", "ordinal", "state", "startedAt")
 	assertSchemaRequired(t, doc.Components.Schemas, "SpawnTurnTopology", "parentSessionId", "childSessionId", "spawnTurnId", "edgeKind", "ordinal")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewManifestPreview", "schemaVersion", "reviewId", "createdAt", "datasetEpoch", "indexRevision", "scope", "includedSessionIds", "includedTurnIds", "sources", "aggregateMetrics", "coverageGaps", "evidenceRules", "rubric", "model", "reasoning", "evidence", "reportDestination", "reportSchema", "limits")
+	assertSchemaRequired(t, doc.Components.Schemas, "ManifestEvidence", "evidenceId", "sourceId", "sourcePrefixSha256", "eventFingerprint", "availability", "availabilityObservedAt", "availabilityRevision")
 	assertSchemaRequired(t, doc.Components.Schemas, "ManifestAggregateMetrics", "recorded_tokens", "recorded_tokens_by_kind", "recorded_tokens_over_time", "token_composition", "top_root_sessions_by_tokens", "latest_capacity_observation", "capacity_drawdown")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewDetail", "summary", "manifest", "run", "reportState", "acceptedReport")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewPlan", "planId", "manifestPreview", "launchPrompt", "estimatedInputTokens", "sourceByteCounts", "indexedTimeCoverage", "projectSummary")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewSourceByteCounts", "sourceCount", "discoveredBytes", "indexedBytes", "includedBytes")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewProjectSummary", "projectCount", "projects")
+	assertSchemaRequired(t, doc.Components.Schemas, "EvidenceLocator", "sourceId", "recordOrdinal", "byteStart", "byteEnd")
+	assertSchemaRequired(t, doc.Components.Schemas, "EvidenceAvailability", "availability", "availabilityObservedAt", "availabilityRevision")
+	assertSchemaRequired(t, doc.Components.Schemas, "EvidenceChunk", "evidenceId", "locator", "sourcePrefixSha256", "eventFingerprint", "offset", "bytes", "complete")
+	assertSchemaRequired(t, doc.Components.Schemas, "ContextBlock", "evidenceId", "kind", "locator", "sourcePrefixSha256", "eventFingerprint")
+	assertSchemaRequired(t, doc.Components.Schemas, "ReviewCitationState", "evidenceId", "sourcePrefixSha256", "eventFingerprint")
+	assertSchemaRequired(t, doc.Components.Schemas, "RevisionAvailableData", "schemaVersion", "datasetEpoch", "revision", "fullRefreshRequired")
 	metricItems, ok := doc.Components.Schemas["MetricItem"]["oneOf"].([]any)
 	if !ok || len(metricItems) != 7 {
 		t.Fatalf("MetricItem variants = %d, want all seven", len(metricItems))
@@ -589,7 +602,7 @@ func TestGeneratedTypeScriptContractExists(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, required := range []string{"auto-generated by openapi-typescript", "streamEvents", "StatusChangedEvent", "RevisionAvailableEvent", "ProcessStatus", "IndexStatus", "queuedSessionChanges", "requiresRebuildCount", "HookDiagnostic", "RecordedTokensMetric", "indexedCoverage", "timeBoundary", "CapacityDrawdownMetric", "remainingPercent", "RootTurn", "SpawnTurnTopology", "ReviewManifestPreview", "ReviewSourceByteCounts", "indexedTimeCoverage", "ReviewProjectSummary", "AcceptedReviewReport", "ReviewCitationState"} {
+	for _, required := range []string{"auto-generated by openapi-typescript", "streamEvents", "StatusChangedEvent", "RevisionAvailableEvent", "ProcessStatus", "IndexStatus", "schemaVersion: 2", "queuedSessionChanges", "requiresRebuildCount", "HookDiagnostic", "RecordedTokensMetric", "indexedCoverage", "timeBoundary", "CapacityDrawdownMetric", "remainingPercent", "RootTurn", "SpawnTurnTopology", "EvidenceLocator", "EvidenceAvailability", "sourcePrefixSha256", "availabilityObservedAt", "ReviewManifestPreview", "ReviewSourceByteCounts", "indexedTimeCoverage", "ReviewProjectSummary", "AcceptedReviewReport", "ReviewCitationState"} {
 		if !strings.Contains(text, required) {
 			t.Errorf("generated TypeScript missing %q", required)
 		}
@@ -639,91 +652,6 @@ func assertSchemaRequired(t *testing.T, schemas map[string]map[string]any, name 
 		if !properties[field] {
 			t.Errorf("OpenAPI schema %s does not define %s", name, field)
 		}
-	}
-}
-
-func TestSQLiteSchemaAndIdentityConstraints(t *testing.T) {
-	db, err := sql.Open("sqlite", "file:phase0?mode=memory&cache=shared")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	schema, err := os.ReadFile(repoPath("docs", "contracts", "schema.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(string(schema)); err != nil {
-		t.Fatalf("apply schema: %v", err)
-	}
-	if _, err := db.Exec(`INSERT INTO dataset_epochs(id,schema_version,adapter_version,state,created_at,activated_at) VALUES('epoch-1',1,?,'active','2026-07-18T00:00:00Z','2026-07-18T00:00:00Z')`, AdapterVersion); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO index_revisions(epoch_id,revision,committed_at,reason) VALUES('epoch-1',1,'2026-07-18T00:00:01Z','fixture')`); err != nil {
-		t.Fatal(err)
-	}
-	insert := `INSERT INTO source_artifacts(id,epoch_id,source_kind,source_session_id,segment_fingerprint,canonical_path,byte_size,state,first_seen_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?,?)`
-	args := []any{"source-1", "epoch-1", "active_rollout", "fake-session", "fake-fingerprint", "/fake/source", 1, "current", "2026-07-18T00:00:00Z", "2026-07-18T00:00:00Z"}
-	if _, err := db.Exec(insert, args...); err != nil {
-		t.Fatal(err)
-	}
-	args[0] = "source-2"
-	if _, err := db.Exec(insert, args...); err == nil {
-		t.Fatal("duplicate stable source identity was accepted")
-	}
-	args[0] = "source-archive"
-	args[2] = "archived_rollout"
-	args[5] = "/fake/archive"
-	if _, err := db.Exec(insert, args...); err == nil {
-		t.Fatal("active-to-archive move created a duplicate logical source")
-	}
-	if _, err := db.Exec(`INSERT INTO dataset_epochs(id,schema_version,adapter_version,state,created_at,activated_at) VALUES('epoch-2',1,?,'active','2026-07-18T00:00:00Z','2026-07-18T00:00:00Z')`, AdapterVersion); err == nil {
-		t.Fatal("second active dataset epoch was accepted")
-	}
-	if _, err := db.Exec(`INSERT INTO dataset_epochs(id,schema_version,adapter_version,state,created_at) VALUES('epoch-building',1,?,'building','2026-07-18T00:00:00Z')`, AdapterVersion); err != nil {
-		t.Fatal(err)
-	}
-	insertSession := `INSERT INTO sessions(id,epoch_id,source_session_id,root_work_unit_id,purpose,lineage_coverage) VALUES(?,?,?,?,?,?)`
-	if _, err := db.Exec(insertSession, "epoch-1:fake-session", "epoch-1", "fake-session", "fake-session", "user", "exact"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(insertSession, "epoch-building:fake-session", "epoch-building", "fake-session", "fake-session", "user", "exact"); err != nil {
-		t.Fatalf("building epoch could not coexist with active logical session: %v", err)
-	}
-	const rawSearchPayload = "FAKE-RAW-PAYLOAD-DO-NOT-STORE"
-	if _, err := db.Exec(`INSERT INTO source_segments(id,epoch_id,session_id,source_id,segment_fingerprint,ordinal) VALUES('segment-1','epoch-1','epoch-1:fake-session','source-1','segment',0)`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO events(id,epoch_id,segment_id,record_ordinal,semantic_phase,event_kind,observed_at,content_sha256,payload_length,adapter_version) VALUES('event-1','epoch-1','segment-1',1,'message','message','2026-07-18T00:00:00Z',?,1,?)`, strings.Repeat("c", 64), AdapterVersion); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO messages(event_id,role,phase,source_message_id,readable,content_length,content_sha256) VALUES('event-1','user','input','fake-message',1,1,?)`, strings.Repeat("d", 64)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO tool_calls(id,epoch_id,session_id,source_call_id,semantic_phase,event_id,tool_name,tool_family) VALUES('tool-1','epoch-1','epoch-1:fake-session','call-1','request','event-1','exec_command','shell')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO capacity_observations(id,epoch_id,event_id,limit_id,window_minutes,used_percent,remaining_percent,resets_at,observed_at) VALUES('capacity-1','epoch-1','event-1','fake-plan',300,45,55,'2026-07-18T01:00:00Z','2026-07-18T00:00:00Z')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO evidence_refs(id,epoch_id,event_id,source_id,event_fingerprint,availability) VALUES('evidence-1','epoch-1','event-1','source-1',?,'available')`, strings.Repeat("e", 64)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO coverage_observations(epoch_id,scope_kind,scope_id,field_key,fidelity,observed_count,eligible_count,reason) VALUES('epoch-1','turn','fake-turn','usage','unavailable',0,1,'missing')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO event_search_documents(rowid,event_id,match_category) VALUES(1,'event-1','message')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO event_search(rowid,content) VALUES(1,?)`, rawSearchPayload); err != nil {
-		t.Fatal(err)
-	}
-	var eventID, category string
-	var recovered sql.NullString
-	if err := db.QueryRow(`SELECT d.event_id,d.match_category,s.content FROM event_search s JOIN event_search_documents d ON d.rowid=s.rowid WHERE event_search MATCH 'payload'`).Scan(&eventID, &category, &recovered); err != nil {
-		t.Fatal(err)
-	}
-	if eventID != "event-1" || category != "message" || recovered.Valid {
-		t.Fatalf("contentless search leaked raw content: id=%q category=%q content=%q", eventID, category, recovered.String)
 	}
 }
 

@@ -101,11 +101,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["evidenceId", "sourceId", "sourceFingerprint", "eventFingerprint", "adapterVersion", "recordOrdinal", "sessionId", "turnId", "eventKind", "observedAt", "availability"],
+        "required": ["evidenceId", "sourceId", "sourcePrefixSha256", "eventFingerprint", "adapterVersion", "recordOrdinal", "sessionId", "turnId", "eventKind", "observedAt", "availability", "availabilityObservedAt", "availabilityRevision"],
         "properties": {
           "evidenceId": { "$ref": "#/$defs/id" },
           "sourceId": { "$ref": "#/$defs/id" },
-          "sourceFingerprint": { "$ref": "#/$defs/sha256" },
+          "sourcePrefixSha256": { "$ref": "#/$defs/sha256" },
           "eventFingerprint": { "$ref": "#/$defs/sha256" },
           "adapterVersion": { "const": "rollout-jsonl/codex-cli-0.144.1/v1" },
           "recordOrdinal": { "type": "integer", "minimum": 0 },
@@ -115,7 +115,9 @@
           "turnId": { "$ref": "#/$defs/id" },
           "eventKind": { "type": "string", "minLength": 1, "maxLength": 100 },
           "observedAt": { "type": "string", "format": "date-time" },
-          "availability": { "enum": ["available", "source_missing", "fingerprint_mismatch", "unreadable"] }
+          "availability": { "enum": ["available", "source_missing", "fingerprint_mismatch", "unreadable"] },
+          "availabilityObservedAt": { "type": "string", "format": "date-time" },
+          "availabilityRevision": { "type": ["integer", "null"], "minimum": 1 }
         }
       }
     },

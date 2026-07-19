@@ -83,6 +83,95 @@ type NormalizedCorpus struct {
 	Evidence       []NormalizedEvidence   `json:"evidence"`
 }
 
+type RevisionGolden struct {
+	SchemaVersion                    int               `json:"schemaVersion"`
+	PinnedRevisionOne                RevisionSnapshot  `json:"pinnedRevisionOne"`
+	PinnedRevisionTwo                RevisionSnapshot  `json:"pinnedRevisionTwo"`
+	CrossSegmentResumeTokens         int64             `json:"crossSegmentResumeTokens"`
+	NullTurnBeforeWatermarkAccepted  bool              `json:"nullTurnBeforeWatermarkAccepted"`
+	NullTurnAfterWatermarkRejected   bool              `json:"nullTurnAfterWatermarkRejected"`
+	ChildRevisionInheritanceEnforced bool              `json:"childRevisionInheritanceEnforced"`
+	EvidenceFingerprintsValidated    bool              `json:"evidenceFingerprintsValidated"`
+	ProvisionalTurnRejected          bool              `json:"provisionalTurnRejected"`
+	V1RequiresRebuild                bool              `json:"v1RequiresRebuild"`
+	V2EpochSwapValidated             bool              `json:"v2EpochSwapValidated"`
+	OrderedSourceKeys                []string          `json:"orderedSourceKeys"`
+	OrderedTurnKeys                  []string          `json:"orderedTurnKeys"`
+	OrderedEventKeys                 []string          `json:"orderedEventKeys"`
+	ProjectDisplayNames              map[string]string `json:"projectDisplayNames"`
+}
+
+type RevisionSnapshot struct {
+	AppliedRevision        int      `json:"appliedRevision"`
+	SourceKind             string   `json:"sourceKind"`
+	SourcePath             string   `json:"sourcePath"`
+	SessionTitle           string   `json:"sessionTitle"`
+	RootWorkUnitID         string   `json:"rootWorkUnitId"`
+	Purpose                string   `json:"purpose"`
+	TitleMatches           []string `json:"titleMatches"`
+	EvidenceFactRevision   int      `json:"evidenceFactRevision"`
+	EvidenceAvailability   string   `json:"evidenceAvailability"`
+	AvailabilityObservedAt string   `json:"availabilityObservedAt"`
+	AvailabilityRevision   *int     `json:"availabilityRevision"`
+	CoverageFidelity       string   `json:"coverageFidelity"`
+	CoverageObserved       int      `json:"coverageObserved"`
+	CoverageEligible       int      `json:"coverageEligible"`
+}
+
+// SourceOrderKey freezes semantic segment order independently of scan order.
+func SourceOrderKey(start, segmentFingerprint string) (string, error) {
+	stamp, err := time.Parse(time.RFC3339Nano, start)
+	if err != nil {
+		return "", fmt.Errorf("source order timestamp: %w", err)
+	}
+	if len(segmentFingerprint) != 64 || strings.IndexFunc(segmentFingerprint, func(r rune) bool {
+		return (r < '0' || r > '9') && (r < 'a' || r > 'f')
+	}) >= 0 {
+		return "", errors.New("source order fingerprint must be 64 lowercase hex characters")
+	}
+	nanoseconds := stamp.UTC().UnixNano()
+	if nanoseconds < 0 {
+		return "", errors.New("source order timestamp predates Unix epoch")
+	}
+	return fmt.Sprintf("%020d:%s", nanoseconds, segmentFingerprint), nil
+}
+
+func TurnOrderKey(segmentOrderKey string, firstTurnContextOrdinal int) (string, error) {
+	if len(segmentOrderKey) != 85 || firstTurnContextOrdinal < 0 {
+		return "", errors.New("invalid segment key or turn ordinal")
+	}
+	return fmt.Sprintf("%s:%020d", segmentOrderKey, firstTurnContextOrdinal), nil
+}
+
+func EventOrderKey(segmentOrderKey string, recordOrdinal int, semanticPhase string) (string, error) {
+	if len(segmentOrderKey) != 85 || recordOrdinal < 0 || semanticPhase == "" || strings.Contains(semanticPhase, ":") {
+		return "", errors.New("invalid segment key, event ordinal, or semantic phase")
+	}
+	return fmt.Sprintf("%s:%020d:%s", segmentOrderKey, recordOrdinal, semanticPhase), nil
+}
+
+// ProjectDisplayName derives the immutable display label from canonical identity.
+func ProjectDisplayName(identityKind, canonicalIdentity string) (string, error) {
+	if identityKind != "git_remote" && identityKind != "git_root" && identityKind != "cwd" {
+		return "", fmt.Errorf("unsupported project identity kind %q", identityKind)
+	}
+	normalized := strings.TrimSpace(canonicalIdentity)
+	if normalized == "" {
+		return "", errors.New("empty canonical project identity")
+	}
+	normalized = strings.TrimRight(normalized, "/")
+	if normalized == "" {
+		return canonicalIdentity, nil
+	}
+	if identityKind == "git_remote" {
+		normalized = strings.TrimSuffix(normalized, ".git")
+	}
+	if slash := strings.LastIndex(normalized, "/"); slash >= 0 && slash+1 < len(normalized) {
+		return normalized[slash+1:], nil
+	}
+	return normalized, nil
+}
+
 type NormalizedSource struct {
 	Name                string `json:"name"`
 	SourceID            string `json:"sourceId"`
@@ -189,16 +278,16 @@ type NormalizedCoverage struct {
 }
 
 type NormalizedEvidence struct {
-	EvidenceID        string `json:"evidenceId"`
-	EventID           string `json:"eventId"`
-	SourceID          string `json:"sourceId"`
-	SourceFingerprint string `json:"sourceFingerprint"`
-	EventFingerprint  string `json:"eventFingerprint"`
-	RecordOrdinal     int    `json:"recordOrdinal"`
-	ByteStart         int64  `json:"byteStart"`
-	ByteEnd           int64  `json:"byteEnd"`
-	Availability      string `json:"availability"`
-	AdapterVersion    string `json:"adapterVersion"`
+	EvidenceID         string `json:"evidenceId"`
+	EventID            string `json:"eventId"`
+	SourceID           string `json:"sourceId"`
+	SourcePrefixSHA256 string `json:"sourcePrefixSha256"`
+	EventFingerprint   string `json:"eventFingerprint"`
+	RecordOrdinal      int    `json:"recordOrdinal"`
+	ByteStart          int64  `json:"byteStart"`
+	ByteEnd            int64  `json:"byteEnd"`
+	Availability       string `json:"availability"`
+	AdapterVersion     string `json:"adapterVersion"`
 }
 
 type Metrics struct {
@@ -220,20 +309,20 @@ type MetricCoverage struct {
 type MetricFilter struct{ Start, End, Project, Model, Reasoning, ContributionKind string }
 
 func CalculateMetricsFiltered(sources []SourceDecision, filter MetricFilter) (Metrics, error) {
-	filtered := make([]SourceDecision, len(sources))
-	copy(filtered, sources)
+	normalizedSources, err := normalizeSources(sources)
+	if err != nil {
+		return Metrics{}, err
+	}
+	filtered := make([]SourceDecision, len(normalizedSources))
+	copy(filtered, normalizedSources)
 	for i := range filtered {
-		normalized, err := normalizeTurns(sources[i].Turns)
-		if err != nil {
-			return Metrics{}, err
-		}
 		filtered[i].Turns = nil
 		kind := "user_root_direct"
 		if filtered[i].ParentSessionID != "" {
 			kind = "descendant"
 		}
-		for _, turn := range normalized {
-			if filter.Project != "" && sources[i].ProjectRemote != filter.Project || filter.Model != "" && turn.Model != filter.Model || filter.Reasoning != "" && turn.ReasoningEffort != filter.Reasoning || filter.ContributionKind != "" && kind != filter.ContributionKind {
+		for _, turn := range normalizedSources[i].Turns {
+			if filter.Project != "" && normalizedSources[i].ProjectRemote != filter.Project || filter.Model != "" && turn.Model != filter.Model || filter.Reasoning != "" && turn.ReasoningEffort != filter.Reasoning || filter.ContributionKind != "" && kind != filter.ContributionKind {
 				continue
 			}
 			if filter.Start != "" && turn.CompletedAt < filter.Start || filter.End != "" && turn.CompletedAt >= filter.End {
@@ -642,7 +731,7 @@ func NormalizeCorpus(inputs []CorpusInput) (NormalizedCorpus, error) {
 			evidenceID := "evidence:" + sha256Hex([]byte(eventID+":"+eventFingerprint))
 			corpus.Evidence = append(corpus.Evidence, NormalizedEvidence{
 				EvidenceID: evidenceID, EventID: eventID, SourceID: sourceID,
-				SourceFingerprint: CheckpointFingerprint(input.Data, located.End), EventFingerprint: eventFingerprint,
+				SourcePrefixSHA256: CheckpointFingerprint(input.Data, located.End), EventFingerprint: eventFingerprint,
 				RecordOrdinal: ordinal, ByteStart: located.Start, ByteEnd: located.End,
 				Availability: "available", AdapterVersion: AdapterVersion,
 			})
@@ -903,7 +992,11 @@ func CalculateMetrics(sources []SourceDecision) (Metrics, error) {
 	rootTotals := map[string]*RootMetric{}
 	buckets := map[string]map[string]int64{}
 	latestCapacityObservedAt := ""
-	for _, source := range sources {
+	normalizedSources, err := normalizeSources(sources)
+	if err != nil {
+		return Metrics{}, err
+	}
+	for _, source := range normalizedSources {
 		if !source.Supported {
 			continue
 		}
@@ -916,11 +1009,7 @@ func CalculateMetrics(sources []SourceDecision) (Metrics, error) {
 		if rootTotals[rootID] == nil {
 			rootTotals[rootID] = &RootMetric{RootSessionID: rootID}
 		}
-		turns, err := normalizeTurns(source.Turns)
-		if err != nil {
-			return Metrics{}, fmt.Errorf("session %s: %w", source.SessionID, err)
-		}
-		for _, turn := range turns {
+		for _, turn := range source.Turns {
 			if !turn.Completed {
 				continue
 			}
@@ -990,6 +1079,31 @@ func normalizeTurns(turns []Turn) ([]Turn, error) {
 		if normalized[i].Cumulative != nil {
 			copy := *normalized[i].Cumulative
 			previous = &copy
+		}
+	}
+	return normalized, nil
+}
+
+func normalizeSources(sources []SourceDecision) ([]SourceDecision, error) {
+	normalized := append([]SourceDecision(nil), sources...)
+	previousBySession := map[string]*Usage{}
+	for i := range normalized {
+		normalized[i].Turns = append([]Turn(nil), sources[i].Turns...)
+		previous := previousBySession[sources[i].SessionID]
+		for j := range normalized[i].Turns {
+			turn := &normalized[i].Turns[j]
+			if turn.Usage == nil && turn.Cumulative != nil && previous != nil {
+				delta, err := subtractUsage(*turn.Cumulative, *previous)
+				if err != nil {
+					return nil, fmt.Errorf("session %s turn %s: %w", sources[i].SessionID, turn.ID, err)
+				}
+				turn.Usage = &delta
+			}
+			if turn.Cumulative != nil {
+				copy := *turn.Cumulative
+				previous = &copy
+				previousBySession[sources[i].SessionID] = previous
+			}
 		}
 	}
 	return normalized, nil

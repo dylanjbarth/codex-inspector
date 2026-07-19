@@ -17,6 +17,20 @@ scripts/phase0/generate-internal-api.sh --check
 scripts/phase0/generate-fact-golden.sh --check
 ```
 
+The fact generator writes only `expected-facts.json`.
+`expected-revisions.json` is an independently authored expected projection;
+schema-v2 tests derive actual revision selection, fingerprint separation, live
+evidence overlay, and real separate-file rebuild/catalog-swap outcomes.
+
+Phase acceptance uses the demo-critical boundary in the architecture. The CLI
+is the sole trusted writer to the local derived database. Contract tests prove
+the normal writer path: paired provenance/FTS insertion, exact FTS token
+cardinality and digest validation, changed-checkpoint revision allocation, and
+validated one-way epoch activation. Hostile/manual direct-SQL mutation by the
+same OS user, exhaustive FTS shadow-table guards, exhaustive corrupt-candidate
+matrices, and query-plan perfection are recorded as post-demo hardening rather
+than Phase 0 or Phase 2 blockers.
+
 `check-local-contracts.sh` prints only versions, counts, and structural
 decisions. It never prints rollout paths, IDs, messages, tool payloads, or
 credentials. Live plugin installation/trust and disposable Review launch use

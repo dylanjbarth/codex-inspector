@@ -7,12 +7,18 @@ The Review contract version is `inspector.review/v1`. Canonical schemas:
 - [`report.schema.json`](../../schemas/reviews/report.schema.json)
 
 The manifest freezes the dataset epoch and index revision, included session
-and turn IDs, source locators and fingerprints, aggregate metric facts,
+and turn IDs, source locators, exact source-prefix and event fingerprints,
+aggregate metric facts,
 coverage gaps, citation rules, fixed rubric, requested model/reasoning, and the
 single report destination. The report repeats the scope identity and records
 the actual model, reasoning, and completion time. Each finding carries an
 observation, impact, one primary lens, and one of `directly_observed`,
 `strongly_supported`, or `worth_investigating` support.
+
+Each manifest evidence entry also records the live availability overlay seen
+when the manifest was created as `availability`, `availabilityObservedAt`, and
+nullable `availabilityRevision`. Those fields do not rewrite or claim to be at
+the manifest's `indexRevision`; the locator and both fingerprints remain pinned.
 
 ## Filesystem layout
 

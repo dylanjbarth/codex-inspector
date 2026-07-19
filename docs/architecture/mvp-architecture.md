@@ -1,6 +1,6 @@
 # Codex Inspector demo architecture
 
-- **Status:** Demo scope aligned; ready for Phase 0 implementation
+- **Status:** Authoritative demo-critical implementation contract; Phase 0 and Phase 1 accepted
 - **Date:** July 17, 2026
 - **Scope:** macOS plugin installation, current-format local indexing, Token & Capacity, session inspection, and basic Effectiveness Reviews
 - **Authority:** Sole implementation authority for the demo milestone
@@ -66,6 +66,8 @@ This document is the sole implementation authority. Earlier brainstorming, Build
 10. **Reviews are explicit Codex tasks.** Inspector provides scope, a plugin skill, and a report contract; a persisted `codex exec` session performs the qualitative analysis with ordinary Codex tools.
 11. **No opaque score.** Resource use, friction, context, delegation, and review findings remain separate concepts.
 12. **Every phase ends in a working vertical slice.**
+13. **Demo-critical acceptance is behavioral.** A phase is accepted when its user-visible vertical slice works through the normal Inspector application path, external/manual proofs are documented where automation cannot establish behavior, privacy and security boundaries hold, schema/API compatibility is maintained, and deterministic tests are reliable. Reviewers may approve with clearly labeled non-blocking hardening findings; no unresolved demo-critical finding may remain.
+14. **The CLI is the trusted local writer.** The Inspector CLI is the sole supported writer to its derived SQLite database. A malicious same-user process or hostile/manual direct SQL is outside the demo threat model; application writer APIs and integration tests enforce invariants that SQLite, especially FTS5 virtual tables, cannot practically enforce alone.
 
 ## 3. Technology and deployment
 
@@ -289,16 +291,30 @@ Source inventory and checkpoints allow the indexer to:
 
 Every committed normalization write is idempotent. Re-reading the same record with the same adapter version produces the same fact identity and does not change metric totals. File identity, inode, timestamps, and paths are discovery hints; stable session/segment metadata and content fingerprints prevent an active-to-archive move from creating duplicates.
 
-The demo adapter assumes supported rollouts append complete JSONL records or move unchanged between active and archive locations. A truncated final record is retried. A source that shrinks or whose indexed prefix changes is marked `requires_rebuild`; it is not patched speculatively while queries are active. Rebuilding that source or changing adapter versions creates a new dataset epoch and atomically replaces the old derived dataset after validation.
+Schema v2 uses source-derived ordering keys for segments, turns, and records;
+reverse-chronological ingestion priority never becomes semantic order. A scan
+allocates a revision when any persisted fact, alias, label, source version,
+source state, or checkpoint changes. An unchanged scan allocates no revision.
+Each changed normalization transaction writes the revision, facts or version
+rows, and its supporting checkpoint atomically, so no query-visible fact can
+precede the checkpoint that proves it.
+
+The demo adapter assumes supported rollouts append complete JSONL records or move unchanged between active and archive locations. A truncated final record is retried. A source that shrinks or whose indexed prefix changes is marked `requires_rebuild`; it is not patched speculatively while queries are active. Rebuilding that source or changing adapter versions creates a new dataset epoch in a separately named database and activates it after validation through the atomic catalog-pointer procedure in Section 8.4, **Incremental UI updates**.
 
 ### 5.4 Turn consistency
 
-A turn is provisional until a completion or terminal record makes it eligible for committed facts and metrics.
+A turn is provisional until a completion or terminal record makes it eligible for committed facts. Provisional turns are checkpoint-buffer state and are never stored in the query-visible `turns` table.
 
 - Dashboard metrics include completed turns.
 - Context Inspector shows data through the last indexed completed turn.
 - Active-turn records remain in the source checkpoint buffer and are not exposed as committed event facts.
 - Aborted, interrupted, or truncated turns are classified explicitly during reconciliation.
+
+Every stored terminal turn (`completed`, `aborted`, `interrupted`, or
+`reconciled_truncated`) has a commit revision. Turn-bound events use that exact
+revision. A null-turn event is allowed only for a frozen session/source-level
+kind and only within a reconciled completed/terminal watermark; it is never a
+fallback for unresolved, provisional, or post-watermark data.
 
 Completed-turn consistency is the user-facing promise. Event-level live updates are out of scope.
 
@@ -327,9 +343,16 @@ Codex rollout sources
 
 SQLite stores normalized facts, not complete raw session payloads and not widget-owned totals.
 
+Schema v2 uses a hybrid revision model. Immutable query-visible rows carry the
+revision at which they became visible. Values that can evolve without changing
+identity use append-only version tables selected by the greatest revision not
+newer than the applied revision. Immutable child rows do not duplicate revision
+columns: message, tool, capacity, compaction, and evidence queries join their
+revision-bearing event parent, while usage joins its terminal turn.
+
 The fact schema must cover every metric required by Token & Capacity, the causal map and completed-turn event ledger, Review scope selection, and evidence citations. Efficiency & Friction facts are added only when they fall out cheaply from the same normalized events.
 
-Adding a future metric that needs facts omitted by the installed index schema may require building and atomically swapping a new dataset epoch. This is acceptable as part of a later release/index-schema upgrade.
+Adding a future metric that needs facts omitted by the installed index schema may require building a new database/epoch and activating it with the Section 8.4 catalog-pointer procedure. This is acceptable as part of a later release/index-schema upgrade.
 
 ### 6.2 Fact families
 
@@ -362,7 +385,7 @@ Phase 0 must freeze a concrete schema and synthetic contract fixtures before the
 
 | Concept | Stable identity and ownership |
 | --- | --- |
-| Source artifact | Canonical source kind plus immutable session/segment metadata and prefix fingerprint; path and inode are aliases |
+| Source artifact | Immutable session/segment metadata plus its identity fingerprint; source kind, path, inode, size, and mtime are versioned discovery aliases and never identity inputs |
 | Logical session | Source-provided session/thread ID |
 | Source segment | Logical session ID plus source-provided segment identity or deterministic segment fingerprint |
 | Root work unit | User-initiated root session ID |
@@ -391,6 +414,22 @@ If a source log is moved, archived, or becomes unreadable:
 - exact payload evidence may become unavailable;
 - the UI explains the missing source without silently deleting the metric or report reference;
 - retained observations are no longer described as rebuildable or currently verifiable until the source is rediscovered.
+- pinned facts, metrics, coverage, locators, and fingerprints remain exactly as
+  recorded at the applied revision while only the separately labeled live
+  availability overlay changes.
+
+Pinned evidence stores two distinct hashes: `source_prefix_sha256` covers exact
+source bytes `[0,event.byte_end)`, while `event_fingerprint` covers only the
+exact record bytes. The mutable checkpoint prefix hash is operational and can
+never substitute for either pinned evidence hash.
+
+Current evidence availability is a live overlay. Source-level state and
+record-level availability observations may change after the pinned fact
+revision; read-time revalidation may override availability without advancing
+the index revision. Responses therefore keep epoch, applied revision, locator,
+event fingerprint, and source-prefix fingerprint pinned while separately
+reporting `availabilityObservedAt` and an optional `availabilityRevision`.
+Metric and session coverage remains pinned to the applied revision.
 
 Source deletion, “forget this session,” and retention controls are deferred from the demo. The plan must not imply that deleting a Codex source automatically deletes Inspector-derived data.
 
@@ -405,7 +444,7 @@ Navigation lineage and metric ownership are related but separate.
 - An explicit continuation with a new identity may remain another segment in the same work unit when the source proves that relationship.
 - A user-created fork starts a new root work unit and retains a `forked_from` lineage edge.
 - Inherited fork context is provenance, not newly consumed historical tokens.
-- A session with an unresolved parent becomes an orphan root with reduced lineage coverage; Inspector never guesses.
+- A session with an unresolved parent remains unresolved while inventory is incomplete. It becomes an orphan root with reduced lineage coverage only after full inventory reconciliation proves the parent absent; Inspector never guesses.
 - Worktree identity is a project/environment dimension, not a lineage relationship.
 - Inspector Review roots and their descendants retain an `inspector_review` purpose classification. They are excluded from future Review scopes but not silently removed from recorded-capacity accounting.
 
@@ -562,9 +601,9 @@ Measures remain separate rather than becoming an efficiency or friction score. E
 
 The application never hard-refreshes the page in response to indexing.
 
-Each committed indexing transaction receives a monotonically increasing index revision within one dataset epoch. Only immutable facts from completed turns become query-visible, and each records the revision at which it became visible. A browser session pins one applied revision for all data queries, which filter out facts from newer revisions.
+Each committed indexing transaction receives a monotonically increasing index revision within one dataset epoch. Immutable core rows are visible when their creation, observation, or commit revision is not newer than the applied revision. Evolving source/session/label/coverage values are append-only versions selected by greatest revision not newer than the applied revision. A proven lineage edge and the corrected child session version that supplies root/purpose ownership are committed at the same revision.
 
-The demo does not perform in-place corrections to committed metric/event facts. A supported append adds new completed-turn facts. An adapter change, changed source prefix, or other correction builds a new dataset epoch and swaps it into place only after validation; open browsers must then accept a full dataset refresh. This constraint is what makes revision-pinned queries implementable without retaining general historical row versions.
+The demo does not perform in-place corrections to immutable metric/event facts. A supported append adds facts; source moves, labels, lineage completion, coverage, and other mutable state add versions. An adapter change, changed indexed prefix, schema-v1 database, or immutable-fact correction builds a separately named schema-v2 database and dataset epoch and validates it while the active catalog still names the old file. Activation atomically renames a small same-directory catalog pointer to the validated v2 filename; SQLite does not atomically rename or transact across the two database files. New requests resolve the new catalog, while already-open read handles finish against the old immutable file. Revisions are monotonic only within an epoch; epoch replacement requires a full browser refresh. Schema v1 is never ALTERed in place.
 
 The local server emits index-status and new-revision notifications through server-sent events. Incoming commits do not automatically advance the browser's applied revision or replace displayed data.
 
@@ -772,6 +811,13 @@ The browser does not join normalized tables, calculate metrics, reconstruct cont
 
 Phase 0 defines an internal OpenAPI document or equivalently generated Go-first schema covering every required endpoint, request, response, error, and SSE event. TypeScript contracts are generated from that source; “where practical” is not sufficient for a phase boundary. List/search endpoints are paginated, metric responses limit buckets and series, and evidence responses use explicit byte/chunk limits. The API may change with coordinated CLI/dashboard releases and is not a public integration surface in the demo.
 
+Status and checkpoints describe current operational state and may be newer than
+a page's applied revision. Fact, metric, session, label, and coverage responses
+remain pinned to the requested epoch/revision. Evidence responses combine a
+pinned locator and both pinned fingerprints with a separately timestamped live
+availability overlay; the API never presents current availability as if it
+were historical coverage.
+
 ## 12. Repository shape
 
 ```text
@@ -832,6 +878,7 @@ The developer's real local supported-format corpus is the integration and demo c
 - **Accounting law tests:** cumulative token deduplication, root/descendant attribution, filter consistency, and missing-data behavior.
 - **Indexer tests:** reverse ordering, idempotence, checkpoints, truncated lines, coalesced markers, monotonic commit revisions, and crash recovery.
 - **Dataset-epoch tests:** changed-prefix detection, rebuild, validation, atomic swap, and cache invalidation.
+- **Writer-path invariant tests:** trusted CLI writer operations keep provenance and FTS rows paired, allocate a revision for each persisted checkpoint change, and perform one-way validated epoch activation. Direct hostile-SQL mutation matrices are optional hardening rather than demo acceptance evidence.
 - **Evidence tests:** raw locator resolution, archive/move rediscovery, and unavailable-source behavior.
 - **Inspector tests:** map/ledger ordering, focus state, exact payload resolution, compaction evidence, and unavailable-context states.
 - **Review tests:** scope manifests, `codex exec` event parsing, run discovery, strict report schema, first-valid acceptance, missing citations, and partial directories.
@@ -862,6 +909,7 @@ Deliver:
 10. Freeze the internal API/SSE schema and generated TypeScript contract path in `docs/contracts/internal-api.md`.
 11. Freeze versioned manifest, run, and report JSON schemas plus the Review launch prompt contract.
 12. Record explicit performance budgets for hook latency, indexing concurrency/transaction size, API page and payload sizes, browser evidence chunks, and process idle timing.
+13. Freeze the trusted-writer boundary: normal CLI writes use contract writer APIs; FTS validation checks provenance and token cardinality/digests; rebuild activation records successful validation before the one-way epoch transition.
 
 Exit gate:
 
@@ -871,6 +919,7 @@ Exit gate:
 - one synthetic root/descendant corpus produces agreed facts and Token & Capacity results;
 - a disposable Review task writes a schema-valid report, yields a session ID, and can be opened or resumed;
 - downstream workers can import frozen schemas rather than inventing parallel contracts.
+- deterministic contract tests prove normal writer-path FTS pairing, checkpoint revision allocation, and validated one-way epoch activation; resistance to arbitrary direct SQL by the same user is not an exit requirement.
 
 ### Phase 1 — Plugin foundation
 
@@ -908,15 +957,16 @@ Deliver:
 1. Rollout and archive discovery.
 2. `session_index.jsonl` label adapter.
 3. The one frozen current-format rollout adapter plus explicit unsupported-version detection.
-4. The frozen SQLite schema, migrations, dataset epoch, and source state machine.
+4. The frozen rebuild-only SQLite schema v2, dataset epoch/swap rules, v1 rejection, and source state machine.
 5. Source checkpoints, fingerprints, idempotent normalization, and single-writer coordination.
 6. Hook queue consumption and completed-turn reconciliation.
 7. Reverse-chronological partial indexing with bounded concurrency.
-8. Monotonic commit revisions and revision-addressable immutable fact queries.
+8. Monotonic per-epoch revisions, revision-addressable immutable facts, and latest-at-applied source/session/label/coverage selectors.
 9. Session lineage and work-unit ownership, including forks, resumes, continuations, and orphans.
 10. Message, token, model, tool, compaction, capacity, coverage, evidence-locator, and local full-text-search facts.
 11. Opaque evidence resolution with fingerprint verification, move/archive rediscovery, escaped range reads, and unavailable-source behavior.
 12. Synthetic golden normalization, accounting-law, checkpoint, changed-prefix, crash-recovery, and unsupported-version tests.
+13. Integration through the trusted CLI writer path for paired FTS/provenance inserts, changed-scan revision/checkpoint commits, and validated rebuild activation.
 
 Exit gate:
 
@@ -929,6 +979,9 @@ Exit gate:
 - queries can remain pinned to an applied revision while newer commits arrive;
 - unknown or missing fields produce coverage gaps rather than zeros;
 - active and truncated turns never appear as completed metrics or completed-turn event evidence.
+- source moves, label changes, lineage corrections, and newer commits do not alter facts or coverage pinned to an older revision; evidence disappearance changes only the separately timestamped live availability overlay while pinned facts, coverage, locator, source-prefix hash, and event fingerprint remain unchanged;
+- schema-v1 data is rebuilt into a separately validated schema-v2 database/epoch and activated by atomic replacement of the catalog pointer rather than ALTERed or renamed as part of a SQLite transaction.
+- normal application writes preserve the frozen invariants; exhaustive resistance to manual direct-SQL mutation is deferred and does not block Phases 2–5.
 
 ### Phase 3 — Token & Capacity dashboard
 
@@ -1036,6 +1089,7 @@ Deliver:
 6. Empty, partial, unsupported, stale-capacity, missing-source, malformed-report, and failed-review demo rehearsals.
 7. Exact tested-version documentation, privacy disclosure, sensitive-data warning, known limitations, and demo runbook.
 8. One end-to-end automated smoke path covering open, sync, metrics, session map, event evidence, Review launch, report rendering, citation return, and task handoff.
+9. Optional hardening may exercise additional direct-SQL corruption and query-plan cases only after the required demo path is green.
 
 Exit gate:
 
@@ -1045,6 +1099,7 @@ Exit gate:
 - no raw payload appears in logs, doctor output, copied diagnostics, repository artifacts, or test snapshots;
 - every required failure state has a rehearsed recovery or honest terminal explanation;
 - all required tests and build commands pass from the documented clean checkout.
+- any remaining hardening findings are explicitly recorded as non-blocking and do not conceal a user-visible, compatibility, privacy, security-boundary, or normal application-path defect.
 
 ## 15. Worker-agent phase contract
 
@@ -1067,6 +1122,8 @@ A worker must:
 6. record any discovered source-format mismatch or required architecture change instead of guessing;
 7. stop for an architecture decision when a frozen invariant cannot be met.
 
+Review findings are classified as either demo-critical or non-blocking hardening. A reviewer may return `APPROVED` with documented non-blocking hardening work, but must return `CHANGES_REQUIRED` for any unresolved demo-critical behavior, external proof, privacy/security boundary, application-path invariant, schema/API compatibility, or deterministic-test failure.
+
 The coordinator accepts a phase only when every exit criterion is evidenced. A later phase must not be used to excuse an incomplete earlier vertical slice. Architecture changes discovered during implementation are made here first, with the affected contract and downstream phases updated in the same change.
 
 ## 16. Explicit deferred scope
@@ -1085,6 +1142,7 @@ The architecture preserves extension points for these items, but the initial imp
 - Public local HTTP API.
 - Public terminal metric queries, session inspection, review execution, or exports.
 - Hardening against malicious processes already running as the same OS user.
+- Resistance to hostile/manual direct SQL against the derived database, including exhaustive mutation guards and direct raw FTS5 UPDATE/DELETE protection.
 
 ### Source adapters
 
@@ -1104,12 +1162,13 @@ The architecture preserves extension points for these items, but the initial imp
 - Drag-and-drop, resizing, and layout persistence.
 - Widget configuration and the widget wizard.
 - Arbitrary SQL.
+- Exhaustive corrupt-candidate matrices and query-plan perfection; Phase 6 may add these if time remains after the demo-critical path is accepted.
 - The complete Efficiency & Friction view; it is the first stretch phase after the demo.
 - Workflow Profile and Outcomes & Reviews templates.
 - Memory, automation, context, and parser-health templates.
 - Graph exploration beyond the root-session causal map.
 
-New plugin/CLI releases may add metrics. If they require new facts, the index schema upgrade builds and atomically swaps a new dataset epoch.
+New plugin/CLI releases may add metrics. If they require new facts, the index schema upgrade builds a separately named database/epoch and activates it with the Section 8.4 catalog-pointer procedure.
 
 ### Analysis and updates
 

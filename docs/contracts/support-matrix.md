@@ -13,7 +13,11 @@
 | plugin protocol | `1` | plugin and CLI must agree |
 | plugin version | `0.1.x` | Phase 1 initial range |
 | CLI range | `>=0.1.0 <0.2.0` | declared by the plugin |
-| index schema | `1` | a newer schema requires migration/rebuild rules |
+| index schema | `2` | exact runtime schema; schema 1 is rebuild input only, never opened as current or ALTERed |
+| schema-1 transition | separate-file rebuild | validate a separately named v2 database, then atomically replace the same-directory active-catalog pointer |
+| API snapshot schema | `2` | every indexed snapshot and revision event identifies schema 2 |
+| revision scope | dataset epoch | monotonic only within one epoch; epoch replacement requires full refresh |
+| evidence availability | live overlay | pinned facts/fingerprints remain at the applied revision; observed availability is separately timestamped and may have no revision |
 
 “Supported” means the metadata and required event shapes match; it does not
 mean every file produced by a process reporting the same CLI version is parsed

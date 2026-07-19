@@ -7,7 +7,7 @@ Feasibility and frozen contracts.
 The frozen demo contract is identified by:
 
 - Inspector protocol: `1`
-- index schema: `1`
+- index schema: `2` (rebuild-only from v1)
 - rollout adapter: `rollout-jsonl/codex-cli-0.144.1/v1`
 - Review artifact contract: `inspector.review/v1`
 - supported release target: macOS arm64
@@ -34,3 +34,9 @@ phases, compaction, capacity, coverage, evidence locators, fingerprints, and
 adapter provenance. Regenerate it with
 `scripts/phase0/generate-fact-golden.sh`; use `--check` in verification to
 prove it is reproducible from the synthetic rollouts.
+
+`fixtures/synthetic/expected-revisions.json` freezes schema-v2 pinned-revision,
+lineage, label, evidence-overlay, null-turn, cumulative-resume, and real
+separate-file epoch-activation outcomes. It is an independently authored
+expected projection; executable SQL/filesystem scenarios derive the actual
+projection and compare it to this fixture. The fact generator never rewrites it.

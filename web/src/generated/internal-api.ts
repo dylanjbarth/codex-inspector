@@ -275,6 +275,8 @@ export interface components {
             reason?: string;
         };
         Snapshot: {
+            /** @constant */
+            schemaVersion: 2;
             datasetEpoch: components["schemas"]["OpaqueId"];
             appliedRevision: number;
             coverage: components["schemas"]["Coverage"];
@@ -300,6 +302,8 @@ export interface components {
             /** @constant */
             protocolVersion: 1;
             cliVersion: string;
+            /** @constant */
+            indexSchemaVersion: 2;
         };
         ProcessStatus: {
             /** @enum {unknown} */
@@ -319,7 +323,7 @@ export interface components {
             datasetEpoch: string | null;
             appliedRevision: number;
             /** @constant */
-            schemaVersion: 1;
+            schemaVersion: 2;
             databaseBytes: number;
             sourceCount: number;
             supportedSourceCount: number;
@@ -613,10 +617,23 @@ export interface components {
             }[];
             nextCursor?: string;
         };
-        EvidenceChunk: components["schemas"]["Snapshot"] & {
-            evidenceId: components["schemas"]["OpaqueId"];
+        EvidenceLocator: {
+            sourceId: components["schemas"]["OpaqueId"];
+            recordOrdinal: number;
+            byteStart: number;
+            byteEnd: number;
+        };
+        EvidenceAvailability: {
             /** @enum {unknown} */
             availability: "available" | "source_missing" | "fingerprint_mismatch" | "unreadable";
+            availabilityObservedAt: components["schemas"]["Timestamp"];
+            availabilityRevision: number | null;
+        };
+        EvidenceChunk: components["schemas"]["Snapshot"] & components["schemas"]["EvidenceAvailability"] & {
+            evidenceId: components["schemas"]["OpaqueId"];
+            locator: components["schemas"]["EvidenceLocator"];
+            sourcePrefixSha256: string;
+            eventFingerprint: string;
             offset: number;
             bytes: number;
             text?: string;
@@ -624,12 +641,13 @@ export interface components {
             encoding?: "utf-8" | "escaped-bytes";
             complete: boolean;
         };
-        ContextBlock: {
+        ContextBlock: components["schemas"]["EvidenceAvailability"] & {
             evidenceId: components["schemas"]["OpaqueId"];
             /** @enum {unknown} */
             kind: "model_input" | "compaction" | "context_event";
-            /** @enum {unknown} */
-            availability: "exact" | "unavailable";
+            locator: components["schemas"]["EvidenceLocator"];
+            sourcePrefixSha256: string;
+            eventFingerprint: string;
             reason?: string;
         };
         RecordedContext: components["schemas"]["Snapshot"] & {
@@ -742,7 +760,7 @@ export interface components {
         ManifestEvidence: {
             evidenceId: components["schemas"]["OpaqueId"];
             sourceId: components["schemas"]["OpaqueId"];
-            sourceFingerprint: string;
+            sourcePrefixSha256: string;
             eventFingerprint: string;
             /** @constant */
             adapterVersion: "rollout-jsonl/codex-cli-0.144.1/v1";
@@ -755,6 +773,8 @@ export interface components {
             observedAt: components["schemas"]["Timestamp"];
             /** @enum {unknown} */
             availability: "available" | "source_missing" | "fingerprint_mismatch" | "unreadable";
+            availabilityObservedAt: components["schemas"]["Timestamp"];
+            availabilityRevision: number | null;
         };
         ReviewManifestPreview: {
             /** @constant */
@@ -852,10 +872,10 @@ export interface components {
             failureCode?: string;
             failureMessage?: string;
         };
-        ReviewCitationState: {
+        ReviewCitationState: components["schemas"]["EvidenceAvailability"] & {
             evidenceId: components["schemas"]["OpaqueId"];
-            /** @enum {unknown} */
-            availability: "available" | "source_missing" | "fingerprint_mismatch" | "unreadable";
+            sourcePrefixSha256: string;
+            eventFingerprint: string;
         };
         ReviewFinding: {
             findingId: components["schemas"]["OpaqueId"];
@@ -905,6 +925,8 @@ export interface components {
             queuedChanges: number;
         };
         RevisionAvailableData: {
+            /** @constant */
+            schemaVersion: 2;
             datasetEpoch: components["schemas"]["OpaqueId"];
             revision: number;
             fullRefreshRequired: boolean;
