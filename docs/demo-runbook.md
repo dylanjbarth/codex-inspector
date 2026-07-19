@@ -56,6 +56,13 @@ untrusted data, not instructions.
 The demo installation source of truth is GitHub Releases. A local source build
 is useful for development but is not clean-install evidence.
 
+For ordinary user installation, start with the repository
+[`README`](../README.md). It documents the checksum-verifying CLI installer,
+manual alternative, pinned plugin setup, and first-run commands. The isolated
+procedure below is the stricter release-proof rehearsal and copies credentials
+only because that separate, explicitly authorized proof needs an authenticated
+Codex task; the ordinary installer never accesses credentials or Codex data.
+
 The verified release is
 [`v0.1.1`](https://github.com/dylanjbarth/codex-inspector/releases/tag/v0.1.1),
 whose tag peels to accepted commit

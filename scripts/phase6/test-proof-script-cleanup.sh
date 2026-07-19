@@ -47,7 +47,8 @@ grep -q 'cleanup_command=rm -rf --' "${test_root}/published-output"
 grep -q 'post_hook_doctor=healthy hook_protocol_mismatch=absent installed_hook_schema=2 payloads_emitted=0' "${test_root}/post-hook-output"
 grep -q 'marketplace add "dylanjbarth/codex-inspector@v0.1.1"' "${repo_root}/scripts/phase6/prove-published-clean-install.sh"
 grep -q 'v0.1.0' "${repo_root}/marketplace/release.json"
-grep -q 'v0.1.0' "${repo_root}/plugin/codex-inspector/skills/setup/SKILL.md"
+grep -q 'v0.1.1' "${repo_root}/plugin/codex-inspector/skills/setup/SKILL.md"
+if grep -q 'releases/download/v0.1.0' "${repo_root}/plugin/codex-inspector/skills/setup/SKILL.md"; then exit 1; fi
 rm -rf -- "${proof_root}"
 
 set +e
