@@ -1,0 +1,1 @@
+export const capacityCountdown=(reset:string,now:number)=>{const seconds=Math.max(0,Math.ceil((new Date(reset).getTime()-now)/1000));if(seconds===0)return'Reset time passed';const hours=Math.floor(seconds/3600),minutes=Math.floor((seconds%3600)/60),rest=seconds%60;return`${hours}h ${minutes}m ${rest}s until recorded reset`}

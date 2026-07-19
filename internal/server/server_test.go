@@ -1,11 +1,13 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -124,6 +126,41 @@ func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
 	}
 }
 
+func TestBrowserCookieJarExchangeAuthenticatesCatalog(t *testing.T) {
+	m, _, cancel, errs := startTestServer(t, time.Second)
+	defer func() { cancel(); <-errs }()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Jar: jar}
+	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
+	payload, _ := json.Marshal(map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": m.ProtocolVersion})
+	request, _ := http.NewRequest("POST", origin+"/v1/token/exchange", bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Inspector-Origin", origin)
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("exchange=%d", response.StatusCode)
+	}
+	if got := len(jar.Cookies(request.URL)); got != 1 {
+		t.Fatalf("session cookie count=%d want=1", got)
+	}
+	response, err = client.Get(origin + "/v1/metrics/catalog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("catalog=%d", response.StatusCode)
+	}
+}
+
 func TestExchangeRejectsIncompleteMismatchedAndExtraBootstrap(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -210,6 +247,30 @@ func TestSchemaV2HealthAndSessionSnapshotContract(t *testing.T) {
 	}
 }
 
+func TestSSEBufferIsBoundedResumableAndContractValid(t *testing.T) {
+	b := newEventBuffer()
+	for i := 1; i <= 140; i++ {
+		b.publish("revision.available", map[string]any{"schemaVersion": 2, "datasetEpoch": "epoch-demo", "revision": i, "fullRefreshRequired": false})
+	}
+	if got := len(b.after(0)); got != 128 {
+		t.Fatalf("buffer=%d", got)
+	}
+	resumed := b.after(139)
+	if len(resumed) != 1 || resumed[0]["id"] != "140" {
+		t.Fatalf("resume=%v", resumed)
+	}
+	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(resumed[0])
+	var eventJSON any
+	_ = json.Unmarshal(encoded, &eventJSON)
+	if err = doc.Components.Schemas["StatusEvent"].Value.VisitJSON(eventJSON); err != nil {
+		t.Fatalf("event violates contract: %v", err)
+	}
+}
+
 func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 	root := t.TempDir()
 	layout := home.Layout{Root: filepath.Join(root, "inspector")}
@@ -239,13 +300,33 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 	go func() {
 		errs <- Run(ctx, Config{Layout: layout, CodexHome: codexHome, IdleTimeout: 10 * time.Second, Ready: ready, Compatibility: &snapshot})
 	}()
+	var serverMeta proc.Metadata
 	select {
-	case <-ready:
+	case serverMeta = <-ready:
 	case err = <-errs:
 		t.Fatalf("server failed: %v", err)
 	case <-time.After(3 * time.Second):
 		t.Fatal("server not ready")
 	}
+	streamCtx, stopStream := context.WithCancel(context.Background())
+	defer stopStream()
+	streamEvents := make(chan string, 32)
+	go func() {
+		request, _ := http.NewRequestWithContext(streamCtx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/events", serverMeta.Port), nil)
+		request.Header.Set("Authorization", "Bearer "+serverMeta.AccessToken)
+		request.Header.Set("Origin", fmt.Sprintf("http://127.0.0.1:%d", serverMeta.Port))
+		response, requestErr := http.DefaultClient.Do(request)
+		if requestErr != nil {
+			return
+		}
+		defer response.Body.Close()
+		scanner := bufio.NewScanner(response.Body)
+		for scanner.Scan() {
+			if strings.HasPrefix(scanner.Text(), "event: ") {
+				streamEvents <- strings.TrimPrefix(scanner.Text(), "event: ")
+			}
+		}
+	}()
 	marker := hook.Marker{SchemaVersion: "inspector.hook-marker/v1", ProtocolVersion: 1, EventKind: "turn_stop", SessionID: "root-001", TurnID: "turn-root-2", ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	encoded, _ := json.Marshal(marker)
 	markerPath := filepath.Join(layout.Queue, "after-start.json")
@@ -256,6 +337,76 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 	for time.Now().Before(deadline) {
 		if _, statErr := os.Stat(markerPath); os.IsNotExist(statErr) {
 			if _, statErr = os.Stat(filepath.Join(layout.Root, "active-index")); statErr == nil {
+				origin := fmt.Sprintf("http://127.0.0.1:%d", serverMeta.Port)
+				body := []byte(`{"metricKeys":["recorded_tokens","latest_capacity_observation"],"timezone":"UTC","grain":"day"}`)
+				response, resultBody := req(t, serverMeta, "POST", "/v1/metrics/query", body, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+				if response.StatusCode != 200 {
+					t.Fatalf("metric query=%d %s", response.StatusCode, resultBody)
+				}
+				var resultJSON any
+				if err = json.Unmarshal(resultBody, &resultJSON); err != nil {
+					t.Fatal(err)
+				}
+				doc, loadErr := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
+				if loadErr != nil {
+					t.Fatal(loadErr)
+				}
+				if err = doc.Components.Schemas["MetricResult"].Value.VisitJSON(resultJSON); err != nil {
+					t.Fatalf("metric response violates contract: %v", err)
+				}
+				appliedRevision := int64(resultJSON.(map[string]any)["appliedRevision"].(float64))
+				catalogPath := fmt.Sprintf("/v1/metrics/catalog?requestedRevision=%d", appliedRevision)
+				catalogResponse, catalogBody := req(t, serverMeta, "GET", catalogPath, nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				if catalogResponse.StatusCode != 200 {
+					t.Fatalf("catalog=%d", catalogResponse.StatusCode)
+				}
+				var catalogJSON any
+				_ = json.Unmarshal(catalogBody, &catalogJSON)
+				if err = doc.Components.Schemas["MetricCatalog"].Value.VisitJSON(catalogJSON); err != nil {
+					t.Fatalf("catalog contract: %v", err)
+				}
+				catalogObject := catalogJSON.(map[string]any)
+				if int64(catalogObject["appliedRevision"].(float64)) != appliedRevision || catalogObject["filterOptions"] == nil {
+					t.Fatalf("catalog snapshot=%v", catalogObject)
+				}
+				firstMetric := catalogObject["metrics"].([]any)[0].(map[string]any)
+				if _, permissiveNestedOptions := firstMetric["filterOptions"]; permissiveNestedOptions {
+					t.Fatal("filter options escaped the generated top-level contract")
+				}
+				oldResponse, oldBody := req(t, serverMeta, "GET", "/v1/metrics/catalog?requestedRevision=1", nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				if oldResponse.StatusCode != 200 {
+					t.Fatalf("old catalog=%d", oldResponse.StatusCode)
+				}
+				var oldCatalog map[string]any
+				_ = json.Unmarshal(oldBody, &oldCatalog)
+				oldOptions := oldCatalog["filterOptions"].(map[string]any)
+				if oldCatalog["appliedRevision"].(float64) != 1 || len(oldOptions["projects"].([]any)) != 0 || len(oldOptions["models"].([]any)) != 0 {
+					t.Fatalf("revision-one catalog=%v", oldCatalog)
+				}
+				invalidCatalog, _ := req(t, serverMeta, "GET", "/v1/metrics/catalog?unknown=1", nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				if invalidCatalog.StatusCode != 400 {
+					t.Fatalf("invalid catalog query=%d", invalidCatalog.StatusCode)
+				}
+				unavailableCatalog, _ := req(t, serverMeta, "GET", fmt.Sprintf("/v1/metrics/catalog?requestedRevision=%d", appliedRevision+1000), nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				if unavailableCatalog.StatusCode != 409 {
+					t.Fatalf("unavailable catalog revision=%d", unavailableCatalog.StatusCode)
+				}
+				oversized := []byte(`{"metricKeys":["recorded_tokens_over_time"],"timezone":"UTC","grain":"hour","start":"2026-01-01T00:00:00Z","end":"2026-04-01T00:00:00Z"}`)
+				bounded, _ := req(t, serverMeta, "POST", "/v1/metrics/query", oversized, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+				if bounded.StatusCode != 413 {
+					t.Fatalf("oversized metric=%d", bounded.StatusCode)
+				}
+				seenRevision := false
+				eventDeadline := time.After(2 * time.Second)
+				for !seenRevision {
+					select {
+					case name := <-streamEvents:
+						seenRevision = name == "revision.available"
+					case <-eventDeadline:
+						t.Fatal("actual SSE stream did not emit per-commit revision.available")
+					}
+				}
+				stopStream()
 				cancel()
 				if err = <-errs; err != nil {
 					t.Fatal(err)
@@ -265,6 +416,7 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	stopStream()
 	cancel()
 	<-errs
 	t.Fatal("watcher did not consume the post-start marker after a successful index")

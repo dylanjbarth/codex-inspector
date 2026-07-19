@@ -31,6 +31,13 @@ offer **New data available**; it does not mutate the page's applied revision.
 Revisions compare only within one epoch. `fullRefreshRequired` is true for an
 epoch replacement, and the event carries schema version 2.
 
+The metric catalog is also an indexed snapshot. Its optional
+`requestedRevision` query parameter uses the same resolution rules, and the
+response returns `datasetEpoch`, `appliedRevision`, coverage, the seven metric
+definitions, and filter options selected at that revision. Project, model, and
+reasoning choices are bounded; a complete catalog that exceeds the response
+contract returns `413` instead of silently truncating usable choices.
+
 Required SSE event names are `status.changed`, `revision.available`,
 `sync.progress`, `review.changed`, and `heartbeat`. Each event has an ID and
 protocol version and is resumable with `Last-Event-ID` within the process's
@@ -44,6 +51,11 @@ seven-hook marker/diagnostic fields. Metric query results are a discriminated
 union covering all seven frozen formulas, including fidelity, coverage,
 exclusion reasons, contribution and root identities, time buckets, token
 composition/residual, and capacity window/reset/staleness state.
+
+Metric filter options are part of the generated `MetricCatalog` response, not
+an extension field on one metric definition. The generated response closes
+unknown properties and bounds project, model, reasoning, and contribution-kind
+arrays.
 
 Index status also exposes queued session changes and processed, queued,
 skipped, failed, and requires-rebuild counts. Every metric item carries both

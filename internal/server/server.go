@@ -29,6 +29,7 @@ import (
 	"github.com/dylanjbarth/codex-inspector/internal/home"
 	"github.com/dylanjbarth/codex-inspector/internal/hook"
 	"github.com/dylanjbarth/codex-inspector/internal/indexer"
+	"github.com/dylanjbarth/codex-inspector/internal/metrics"
 	proc "github.com/dylanjbarth/codex-inspector/internal/process"
 	"github.com/dylanjbarth/codex-inspector/internal/storage"
 	"github.com/dylanjbarth/codex-inspector/internal/version"
@@ -60,6 +61,43 @@ type state struct {
 	indexing      bool
 	indexProgress indexer.Progress
 	indexError    string
+	metricEngine  *metrics.Engine
+	events        *eventBuffer
+}
+
+type eventBuffer struct {
+	mu     sync.Mutex
+	next   int64
+	events []map[string]any
+	wake   chan struct{}
+}
+
+func newEventBuffer() *eventBuffer { return &eventBuffer{wake: make(chan struct{}, 1)} }
+func (b *eventBuffer) publish(name string, data any) {
+	b.mu.Lock()
+	b.next++
+	ev := map[string]any{"id": strconv.FormatInt(b.next, 10), "protocolVersion": 1, "event": name, "emittedAt": time.Now().UTC().Format(time.RFC3339Nano), "data": data}
+	b.events = append(b.events, ev)
+	if len(b.events) > 128 {
+		b.events = b.events[len(b.events)-128:]
+	}
+	b.mu.Unlock()
+	select {
+	case b.wake <- struct{}{}:
+	default:
+	}
+}
+func (b *eventBuffer) after(id int64) []map[string]any {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := []map[string]any{}
+	for _, e := range b.events {
+		n, _ := strconv.ParseInt(e["id"].(string), 10, 64)
+		if n > id {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 var opaqueID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
@@ -119,7 +157,7 @@ func Run(ctx context.Context, c Config) error {
 	} else {
 		snapshot = compat.Inspect(c.Layout, false)
 	}
-	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, compat: snapshot}
+	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer()}
 	defer s.indexWG.Wait()
 	if c.AutoSync {
 		s.startIndex()
@@ -127,7 +165,9 @@ func Run(ctx context.Context, c Config) error {
 	mux := http.NewServeMux()
 	s.routes(mux)
 	h := s.headers(mux)
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
+	// Streaming responses stay open until the browser disconnects; bounded JSON
+	// handlers enforce their own body and response limits.
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 	if c.Ready != nil {
 		c.Ready <- m
 	}
@@ -199,14 +239,23 @@ func (s *state) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/health", s.auth(s.health))
 	m.HandleFunc("POST /v1/heartbeat", s.auth(s.sameOrigin(s.heartbeat)))
 	m.HandleFunc("GET /v1/status", s.auth(s.status))
+	m.HandleFunc("GET /v1/metrics/catalog", s.auth(s.metricCatalog))
+	m.HandleFunc("POST /v1/metrics/query", s.auth(s.sameOrigin(s.metricQuery)))
+	m.HandleFunc("GET /v1/events", s.auth(s.sameOrigin(s.streamEvents)))
 	m.HandleFunc("POST /v1/sync", s.auth(s.sameOrigin(s.sync)))
 	m.HandleFunc("GET /v1/sessions", s.auth(s.sessions))
 	m.HandleFunc("GET /v1/evidence/{evidenceId}", s.auth(s.evidence))
 }
 func (s *state) validHost(r *http.Request) bool { return r.Host == s.host }
+func (s *state) validOrigin(r *http.Request) bool {
+	if r.Header.Get("Origin") == s.origin {
+		return true
+	}
+	return r.Header.Get("Origin") == "" && r.Header.Get("X-Inspector-Origin") == s.origin && r.Header.Get("Sec-Fetch-Site") == "same-origin"
+}
 func (s *state) sameOrigin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.validHost(r) || r.Header.Get("Origin") != s.origin {
+		if !s.validHost(r) || !s.validOrigin(r) {
 			s.problem(w, 403, "origin_rejected", "Request origin rejected")
 			return
 		}
@@ -234,7 +283,7 @@ func (s *state) auth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func (s *state) exchange(w http.ResponseWriter, r *http.Request) {
-	if !s.validHost(r) || r.Header.Get("Origin") != s.origin {
+	if !s.validHost(r) || !s.validOrigin(r) {
 		s.problem(w, 403, "origin_rejected", "Request origin rejected")
 		return
 	}
@@ -324,9 +373,30 @@ func (s *state) startIndex() string {
 	s.lastActive = time.Now()
 	s.indexWG.Add(1)
 	s.mu.Unlock()
+	s.events.publish("status.changed", map[string]any{"state": "scanning", "queuedChanges": 0})
 	go func() {
 		defer s.indexWG.Done()
-		p, err := indexer.Run(s.ctx, indexer.Config{Layout: s.layout, CodexHome: s.codexHome, OnCommit: func(p indexer.Progress) { s.mu.Lock(); s.indexProgress = p; s.lastActive = time.Now(); s.mu.Unlock() }})
+		var lastEpoch string
+		var lastRevision int64
+		if store, e := storage.Open(filepath.Join(s.layout.Root, "inspector.db")); e == nil {
+			lastEpoch, lastRevision, _ = store.Snapshot()
+			_ = store.Close()
+		}
+		p, err := indexer.Run(s.ctx, indexer.Config{Layout: s.layout, CodexHome: s.codexHome, OnCommit: func(p indexer.Progress) {
+			s.mu.Lock()
+			s.indexProgress = p
+			s.lastActive = time.Now()
+			s.mu.Unlock()
+			s.events.publish("sync.progress", map[string]any{"processed": p.Processed, "queued": max(0, p.Inventoried-p.Processed-p.Skipped-p.Failed-p.RequiresRebuild), "skipped": p.Skipped, "failed": p.Failed, "inventoryComplete": p.Processed+p.Skipped+p.Failed+p.RequiresRebuild >= p.Inventoried})
+			if store, e := storage.Open(filepath.Join(s.layout.Root, "inspector.db")); e == nil {
+				epoch, revision, _ := store.Snapshot()
+				_ = store.Close()
+				if epoch != lastEpoch || revision > lastRevision {
+					s.events.publish("revision.available", map[string]any{"schemaVersion": 2, "datasetEpoch": epoch, "revision": revision, "fullRefreshRequired": lastEpoch != "" && epoch != lastEpoch})
+					lastEpoch, lastRevision = epoch, revision
+				}
+			}
+		}})
 		s.mu.Lock()
 		s.indexProgress = p
 		s.indexing = false
@@ -335,8 +405,142 @@ func (s *state) startIndex() string {
 		}
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+		stateName := "idle"
+		if err != nil {
+			stateName = "failed"
+		}
+		s.events.publish("status.changed", map[string]any{"state": stateName, "queuedChanges": 0})
+		if store, e := storage.Open(filepath.Join(s.layout.Root, "inspector.db")); e == nil {
+			epoch, revision, _ := store.Snapshot()
+			_ = store.Close()
+			if epoch != lastEpoch || revision > lastRevision {
+				s.events.publish("revision.available", map[string]any{"schemaVersion": 2, "datasetEpoch": epoch, "revision": revision, "fullRefreshRequired": lastEpoch != "" && epoch != lastEpoch})
+			}
+		}
 	}()
 	return "running"
+}
+
+func (s *state) metricCatalog(w http.ResponseWriter, r *http.Request) {
+	for key := range r.URL.Query() {
+		if key != "requestedRevision" {
+			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+			return
+		}
+	}
+	revision, err := storage.ParseRevision(r.URL.Query().Get("requestedRevision"))
+	if err != nil {
+		s.problem(w, 400, "invalid_revision", "Revision is invalid")
+		return
+	}
+	catalog := s.metricEngine.Catalog()
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	epoch, applied, options, err := metrics.Options(r.Context(), store, revision)
+	if err != nil {
+		if err.Error() == "revision_unavailable" {
+			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
+		} else if errors.Is(err, metrics.ErrResponseTooLarge) {
+			s.problem(w, 413, "response_too_large", "Metric filter catalog exceeds the bounded response")
+		} else {
+			s.problem(w, 500, "query_failed", "Metric catalog query failed")
+		}
+		return
+	}
+	observed := len(options.Projects) + len(options.Models) + len(options.ReasoningEfforts) + len(options.ContributionKinds)
+	catalog["schemaVersion"] = version.IndexSchema
+	catalog["datasetEpoch"] = epoch
+	catalog["appliedRevision"] = applied
+	catalog["coverage"] = map[string]any{"fidelity": "exact", "observed": observed, "eligible": observed}
+	catalog["filterOptions"] = options
+	s.write(w, catalog)
+}
+
+func (s *state) metricQuery(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var q metrics.Query
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if d.Decode(&q) != nil {
+		s.problem(w, 400, "invalid_metric_query", "Metric query is invalid")
+		return
+	}
+	var extra any
+	if d.Decode(&extra) != io.EOF {
+		s.problem(w, 400, "invalid_metric_query", "Metric query must contain one object")
+		return
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	result, err := s.metricEngine.Query(r.Context(), store, q)
+	if err != nil {
+		if err.Error() == "revision_unavailable" {
+			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
+		} else if errors.Is(err, metrics.ErrResponseTooLarge) {
+			s.problem(w, 413, "metric_response_too_large", "Metric query exceeds frozen response bounds")
+		} else {
+			s.problem(w, 400, "invalid_metric_query", "Metric query is invalid")
+		}
+		return
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		s.problem(w, 500, "metric_encode_failed", "Metric response failed")
+		return
+	}
+	if len(b) > 2*1024*1024 {
+		s.problem(w, 413, "metric_response_too_large", "Metric response exceeds 2 MiB")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(append(b, '\n'))
+}
+
+func (s *state) streamEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		s.problem(w, 500, "stream_unavailable", "Event stream unavailable")
+		return
+	}
+	last := int64(0)
+	if raw := r.Header.Get("Last-Event-ID"); raw != "" {
+		var err error
+		last, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || last < 0 {
+			s.problem(w, 400, "invalid_event_id", "Last event ID is invalid")
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Connection", "keep-alive")
+	heartbeat := time.NewTicker(10 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		events := s.events.after(last)
+		for _, event := range events {
+			b, _ := json.Marshal(event)
+			fmt.Fprintf(w, "id: %s\nevent: %s\ndata: %s\n\n", event["id"], event["event"], b)
+			last, _ = strconv.ParseInt(event["id"].(string), 10, 64)
+		}
+		if len(events) > 0 {
+			flusher.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-s.events.wake:
+		case <-heartbeat.C:
+			s.events.publish("heartbeat", map[string]any{"instanceId": s.meta.InstanceID})
+		}
+	}
 }
 
 func (s *state) sessions(w http.ResponseWriter, r *http.Request) {

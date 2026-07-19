@@ -16,6 +16,12 @@ timezone.
 | `latest_capacity_observation` | percent | latest source-recorded observation by observation time |
 | `capacity_drawdown` | percent | ordered source observations partitioned by limit/window and reset boundary |
 
+The catalog response is pinned to an applied index revision. It includes
+bounded project, model, reasoning-effort, and contribution-kind choices that
+exist at that revision. If the complete choice set exceeds the generated
+response bounds, the server returns `413` rather than presenting a silently
+truncated filter list.
+
 ## Usage normalization
 
 For each session, normalize cumulative snapshots in source order before
@@ -57,7 +63,11 @@ shown rather than silently redistributed.
   latest card also ignores the selected historical time range; the drawdown
   series respects it.
 
-Missing or partial fields produce coverage metadata, not zero values.
+Missing or partial fields produce coverage metadata, not zero values. In
+particular, if eligible completed turns exist but none has usable recorded
+usage, `recorded_tokens` is `null` with `unavailable` coverage. A known sum from
+only some eligible turns remains numeric with `derived` coverage and an
+explicit gap; it is never labeled exact.
 
 ## Golden example
 

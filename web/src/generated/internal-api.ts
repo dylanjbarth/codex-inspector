@@ -379,14 +379,38 @@ export interface components {
             /** @enum {unknown} */
             state: "queued" | "running" | "coalesced";
         };
+        MetricFilterChoice: {
+            value: components["schemas"]["OpaqueId"];
+            label: string;
+        };
+        ContributionFilterChoice: {
+            /** @enum {unknown} */
+            value: "user_root_direct" | "descendant" | "inspector_review" | "other_orphan";
+            label: string;
+        };
+        MetricFilterOptions: {
+            projects: components["schemas"]["MetricFilterChoice"][];
+            models: string[];
+            reasoningEfforts: string[];
+            contributionKinds: components["schemas"]["ContributionFilterChoice"][];
+        };
+        MetricDefinition: {
+            /** @enum {unknown} */
+            key: "recorded_tokens" | "recorded_tokens_by_kind" | "recorded_tokens_over_time" | "token_composition" | "top_root_sessions_by_tokens" | "latest_capacity_observation" | "capacity_drawdown";
+            /** @constant */
+            formulaVersion: 1;
+            /** @enum {unknown} */
+            unit: "tokens" | "percent";
+            dimensions: ("time" | "project" | "model" | "reasoning" | "contribution_kind")[];
+        };
         MetricCatalog: {
-            metrics: {
-                key: string;
-                /** @constant */
-                formulaVersion: 1;
-                unit: string;
-                dimensions?: string[];
-            }[];
+            /** @constant */
+            schemaVersion: 2;
+            datasetEpoch: components["schemas"]["OpaqueId"];
+            appliedRevision: number;
+            coverage: components["schemas"]["Coverage"];
+            metrics: components["schemas"]["MetricDefinition"][];
+            filterOptions: components["schemas"]["MetricFilterOptions"];
         };
         MetricQuery: {
             metricKeys: string[];
@@ -1152,7 +1176,9 @@ export interface operations {
     };
     listMetrics: {
         parameters: {
-            query?: never;
+            query?: {
+                requestedRevision?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1168,7 +1194,10 @@ export interface operations {
                     "application/json": components["schemas"]["MetricCatalog"];
                 };
             };
+            400: components["responses"]["ProblemResponse"];
             401: components["responses"]["ProblemResponse"];
+            409: components["responses"]["ProblemResponse"];
+            413: components["responses"]["ProblemResponse"];
         };
     };
     queryMetrics: {
