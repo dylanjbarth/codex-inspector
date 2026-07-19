@@ -271,6 +271,158 @@ func TestSSEBufferIsBoundedResumableAndContractValid(t *testing.T) {
 	}
 }
 
+func TestContextInspectorAPIEndToEnd(t *testing.T) {
+	root := t.TempDir()
+	layout := home.Layout{Root: filepath.Join(root, "inspector")}
+	layout.Reviews = filepath.Join(layout.Root, "reviews")
+	layout.Queue = filepath.Join(layout.Root, "queue")
+	layout.Run = filepath.Join(layout.Root, "run")
+	layout.Logs = filepath.Join(layout.Root, "logs")
+	layout.Cache = filepath.Join(layout.Root, "cache")
+	codexHome := filepath.Join(root, "codex")
+	sessionsDir := filepath.Join(codexHome, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, sourceFile, _, _ := runtime.Caller(0)
+	fixtureDir := filepath.Join(filepath.Dir(sourceFile), "..", "..", "fixtures", "synthetic")
+	for _, name := range []string{"root.jsonl", "descendant.jsonl", "truncated.jsonl"} {
+		data, err := os.ReadFile(filepath.Join(fixtureDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(sessionsDir, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ready := make(chan proc.Metadata, 1)
+	errs := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pv, pp := "0.1.0", 1
+	snapshot := compat.Snapshot{Checks: []compat.Check{{Name: "plugin", Status: "ok"}}, PluginVersion: &pv, PluginProtocol: &pp, CLICompatibility: "supported"}
+	go func() {
+		errs <- Run(ctx, Config{Layout: layout, CodexHome: codexHome, IdleTimeout: 20 * time.Second, Ready: ready, Compatibility: &snapshot, AutoSync: true})
+	}()
+	var meta proc.Metadata
+	select {
+	case meta = <-ready:
+	case err := <-errs:
+		t.Fatalf("server failed: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("server not ready")
+	}
+	headers := map[string]string{"Authorization": "Bearer " + meta.AccessToken}
+	var sessionBody []byte
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		response, body := req(t, meta, "GET", "/v1/sessions?pageSize=50&query=delegated%20check", nil, headers)
+		if response.StatusCode == 200 && bytes.Contains(body, []byte(`"descendant: message"`)) {
+			sessionBody = body
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if len(sessionBody) == 0 {
+		t.Fatal("session discovery never became available")
+	}
+	var sessions struct {
+		AppliedRevision int64 `json:"appliedRevision"`
+		Items           []struct {
+			SessionID        string   `json:"sessionId"`
+			MatchCategories  []string `json:"matchCategories"`
+			DirectTokens     *int64   `json:"directTokens"`
+			DescendantTokens *int64   `json:"descendantTokens"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(sessionBody, &sessions); err != nil || len(sessions.Items) != 1 {
+		t.Fatalf("bad discovery response: %s %v", sessionBody, err)
+	}
+	if len(sessions.Items[0].MatchCategories) != 1 || sessions.Items[0].MatchCategories[0] != "descendant: message" || sessions.Items[0].DirectTokens == nil || *sessions.Items[0].DirectTokens != 2000 || sessions.Items[0].DescendantTokens == nil || *sessions.Items[0].DescendantTokens != 500 {
+		t.Fatalf("discovery response is not explainable or metric-aligned: %#v", sessions.Items[0])
+	}
+	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate := func(schema string, body []byte) {
+		t.Helper()
+		var value any
+		if err := json.Unmarshal(body, &value); err != nil {
+			t.Fatal(err)
+		}
+		if err := doc.Components.Schemas[schema].Value.VisitJSON(value); err != nil {
+			t.Fatalf("%s response violates frozen contract: %v\n%s", schema, err, body)
+		}
+	}
+	validate("SessionPage", sessionBody)
+	rootID := sessions.Items[0].SessionID
+	mapPath := fmt.Sprintf("/v1/sessions/%s/map?revision=%d", rootID, sessions.AppliedRevision)
+	response, mapBody := req(t, meta, "GET", mapPath, nil, headers)
+	if response.StatusCode != 200 {
+		t.Fatalf("map status=%d: %s", response.StatusCode, mapBody)
+	}
+	validate("SessionMap", mapBody)
+	var sessionMap struct {
+		Nodes []struct {
+			Kind            string `json:"kind"`
+			DirectTokens    *int64 `json:"directTokens"`
+			InclusiveTokens *int64 `json:"inclusiveTokens"`
+		} `json:"nodes"`
+		RootTurns []struct {
+			TurnID string `json:"turnId"`
+		} `json:"rootTurns"`
+	}
+	if err = json.Unmarshal(mapBody, &sessionMap); err != nil || len(sessionMap.Nodes) != 2 || len(sessionMap.RootTurns) != 2 {
+		t.Fatalf("bad map: %s %v", mapBody, err)
+	}
+	turnID := sessionMap.RootTurns[0].TurnID
+	ledgerPath := fmt.Sprintf("/v1/sessions/%s/turns/%s/ledger?revision=%d&pageSize=200", rootID, turnID, sessions.AppliedRevision)
+	response, ledgerBody := req(t, meta, "GET", ledgerPath, nil, headers)
+	if response.StatusCode != 200 {
+		t.Fatalf("ledger status=%d: %s", response.StatusCode, ledgerBody)
+	}
+	validate("LedgerPage", ledgerBody)
+	var ledger struct {
+		Items []struct{ EventID, EvidenceID, Kind string } `json:"items"`
+	}
+	if err = json.Unmarshal(ledgerBody, &ledger); err != nil || len(ledger.Items) != 11 {
+		t.Fatalf("bad ledger: %s %v", ledgerBody, err)
+	}
+	messageEvidence, compactionEvidence := "", ""
+	for _, item := range ledger.Items {
+		if item.Kind == "message" {
+			messageEvidence = item.EvidenceID
+		}
+		if item.Kind == "compacted" {
+			compactionEvidence = item.EvidenceID
+		}
+	}
+	response, evidenceBody := req(t, meta, "GET", fmt.Sprintf("/v1/evidence/%s?revision=%d", messageEvidence, sessions.AppliedRevision), nil, headers)
+	if response.StatusCode != 200 || !bytes.Contains(evidenceBody, []byte("Create the fake widget.")) {
+		t.Fatalf("exact source evidence failed: status=%d body=%s", response.StatusCode, evidenceBody)
+	}
+	validate("EvidenceChunk", evidenceBody)
+	response, contextBody := req(t, meta, "GET", fmt.Sprintf("/v1/context/%s?revision=%d", messageEvidence, sessions.AppliedRevision), nil, headers)
+	if response.StatusCode != 200 || !bytes.Contains(contextBody, []byte(`"fidelity":"unavailable"`)) || !bytes.Contains(contextBody, []byte("Complete model input was not recorded")) {
+		t.Fatalf("unavailable context was not explicit: %s", contextBody)
+	}
+	validate("RecordedContext", contextBody)
+	response, compactBody := req(t, meta, "GET", fmt.Sprintf("/v1/context/%s?revision=%d", compactionEvidence, sessions.AppliedRevision), nil, headers)
+	if response.StatusCode != 200 || !bytes.Contains(compactBody, []byte(`"fidelity":"exact"`)) || !bytes.Contains(compactBody, []byte("before/after context is not reconstructed")) {
+		t.Fatalf("recorded compaction contract failed: %s", compactBody)
+	}
+	validate("RecordedContext", compactBody)
+	if err = os.Remove(filepath.Join(sessionsDir, "root.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	response, missingBody := req(t, meta, "GET", fmt.Sprintf("/v1/evidence/%s?revision=%d", messageEvidence, sessions.AppliedRevision), nil, headers)
+	if response.StatusCode != 200 || !bytes.Contains(missingBody, []byte(`"availability":"source_missing"`)) {
+		t.Fatalf("missing source was not honest: status=%d body=%s", response.StatusCode, missingBody)
+	}
+	validate("EvidenceChunk", missingBody)
+}
+
 func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 	root := t.TempDir()
 	layout := home.Layout{Root: filepath.Join(root, "inspector")}

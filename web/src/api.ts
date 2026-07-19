@@ -3,6 +3,11 @@ import type { components } from './generated/internal-api'
 export type Status = components['schemas']['Status']
 export type MetricResult = components['schemas']['MetricResult']
 export type FilterOptions = components['schemas']['MetricFilterOptions']
+export type SessionPage = components['schemas']['SessionPage']
+export type SessionMap = components['schemas']['SessionMap']
+export type LedgerPage = components['schemas']['LedgerPage']
+export type EvidenceChunk = components['schemas']['EvidenceChunk']
+export type RecordedContext = components['schemas']['RecordedContext']
 
 export type DashboardQuery = {
   metricKeys: string[]; timezone: string; grain: 'hour'|'day'|'week'|'month';
@@ -42,6 +47,17 @@ export async function queryMetrics(query: DashboardQuery): Promise<MetricResult>
   if (!response.ok) throw new Error('Token & Capacity metrics are unavailable')
   return response.json()
 }
+
+async function inspectorJSON<T>(path:string,message:string):Promise<T>{
+  const response=await fetch(path)
+  if(!response.ok){let detail='';try{const problem=await response.json() as {detail?:string;title?:string};detail=problem.detail||problem.title||''}catch{/* payload-free fallback */}throw new Error(detail||message)}
+  return response.json() as Promise<T>
+}
+export function fetchSessions(query:string,revision:number,cursor?:string):Promise<SessionPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'50'});if(query)params.set('query',query);if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions?${params}`,'Session discovery is unavailable')}
+export function fetchSessionMap(sessionId:string,revision:number):Promise<SessionMap>{return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/map?revision=${revision}`,'Session map is unavailable')}
+export function fetchLedger(sessionId:string,turnId:string,revision:number,cursor?:string):Promise<LedgerPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'200'});if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/ledger?${params}`,'Turn evidence is unavailable')}
+export function fetchEvidence(evidenceId:string,revision:number,offset=0):Promise<EvidenceChunk>{return inspectorJSON(`/v1/evidence/${encodeURIComponent(evidenceId)}?revision=${revision}&offset=${offset}&limit=65536`,'Exact evidence is unavailable')}
+export function fetchRecordedContext(evidenceId:string,revision:number):Promise<RecordedContext>{return inspectorJSON(`/v1/context/${encodeURIComponent(evidenceId)}?revision=${revision}`,'Recorded context state is unavailable')}
 
 type InspectorEvent={event:string;data:Record<string,unknown>}
 const testSubscribers=new Set<(event:InspectorEvent)=>void>()

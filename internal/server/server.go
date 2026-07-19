@@ -29,6 +29,7 @@ import (
 	"github.com/dylanjbarth/codex-inspector/internal/home"
 	"github.com/dylanjbarth/codex-inspector/internal/hook"
 	"github.com/dylanjbarth/codex-inspector/internal/indexer"
+	"github.com/dylanjbarth/codex-inspector/internal/inspector"
 	"github.com/dylanjbarth/codex-inspector/internal/metrics"
 	proc "github.com/dylanjbarth/codex-inspector/internal/process"
 	"github.com/dylanjbarth/codex-inspector/internal/storage"
@@ -244,7 +245,10 @@ func (s *state) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/events", s.auth(s.sameOrigin(s.streamEvents)))
 	m.HandleFunc("POST /v1/sync", s.auth(s.sameOrigin(s.sync)))
 	m.HandleFunc("GET /v1/sessions", s.auth(s.sessions))
+	m.HandleFunc("GET /v1/sessions/{sessionId}/map", s.auth(s.sessionMap))
+	m.HandleFunc("GET /v1/sessions/{sessionId}/turns/{turnId}/ledger", s.auth(s.turnLedger))
 	m.HandleFunc("GET /v1/evidence/{evidenceId}", s.auth(s.evidence))
+	m.HandleFunc("GET /v1/context/{evidenceId}", s.auth(s.recordedContext))
 }
 func (s *state) validHost(r *http.Request) bool { return r.Host == s.host }
 func (s *state) validOrigin(r *http.Request) bool {
@@ -592,7 +596,8 @@ func (s *state) sessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer store.Close()
-	epoch, applied, rows, err := store.SessionsPage(revision, query, projectID, offset, limit+1)
+	repository := inspector.Repository{Store: store}
+	page, err := repository.Sessions(r.Context(), revision, query, projectID, offset, limit)
 	if err != nil {
 		if err.Error() == "revision_unavailable" {
 			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
@@ -601,19 +606,167 @@ func (s *state) sessions(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	hasNext := len(rows) > limit
-	if hasNext {
-		rows = rows[:limit]
-	}
-	items := make([]map[string]any, 0, len(rows))
-	for _, x := range rows {
-		items = append(items, map[string]any{"sessionId": x.ID, "rootWorkUnitId": x.RootWorkUnitID, "purpose": x.Purpose, "title": x.Title, "matchCategories": []string{"metadata"}, "directTokens": nil, "descendantTokens": nil})
-	}
-	response := map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": applied, "coverage": map[string]any{"fidelity": "exact", "observed": len(items), "eligible": len(items)}, "items": items}
-	if hasNext {
-		response["nextCursor"] = strconv.Itoa(offset + limit)
+	response := map[string]any{"schemaVersion": page.SchemaVersion, "datasetEpoch": page.DatasetEpoch, "appliedRevision": page.AppliedRevision, "coverage": page.Coverage, "items": page.Items}
+	if page.NextCursor != "" {
+		response["nextCursor"] = page.NextCursor
 	}
 	s.write(w, response)
+}
+
+func (s *state) sessionMap(w http.ResponseWriter, r *http.Request) {
+	for key := range r.URL.Query() {
+		if key != "revision" {
+			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+			return
+		}
+	}
+	sessionID := r.PathValue("sessionId")
+	if !opaqueID.MatchString(sessionID) {
+		s.problem(w, 400, "invalid_session_id", "Session ID is invalid")
+		return
+	}
+	revision, err := storage.ParseRevision(r.URL.Query().Get("revision"))
+	if err != nil {
+		s.problem(w, 400, "invalid_revision", "Revision is invalid")
+		return
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	result, err := (inspector.Repository{Store: store}).Map(r.Context(), revision, sessionID)
+	if err != nil {
+		if err.Error() == "revision_unavailable" {
+			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
+		} else if errors.Is(err, sql.ErrNoRows) {
+			s.problem(w, 404, "session_not_found", "Session was not found at this revision")
+		} else {
+			s.problem(w, 500, "query_failed", "Session map query failed")
+		}
+		return
+	}
+	s.write(w, result)
+}
+
+func (s *state) turnLedger(w http.ResponseWriter, r *http.Request) {
+	allowed := map[string]bool{"revision": true, "pageSize": true, "cursor": true}
+	for key := range r.URL.Query() {
+		if !allowed[key] {
+			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+			return
+		}
+	}
+	sessionID, turnID := r.PathValue("sessionId"), r.PathValue("turnId")
+	if !opaqueID.MatchString(sessionID) || !opaqueID.MatchString(turnID) {
+		s.problem(w, 400, "invalid_inspector_id", "Session or turn ID is invalid")
+		return
+	}
+	revision, err := storage.ParseRevision(r.URL.Query().Get("revision"))
+	if err != nil {
+		s.problem(w, 400, "invalid_revision", "Revision is invalid")
+		return
+	}
+	limit := 50
+	if raw := r.URL.Query().Get("pageSize"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > 200 {
+			s.problem(w, 400, "invalid_page_size", "Page size is invalid")
+			return
+		}
+	}
+	offset := 0
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		if len(raw) > 512 {
+			s.problem(w, 400, "invalid_cursor", "Cursor is invalid")
+			return
+		}
+		offset, err = strconv.Atoi(raw)
+		if err != nil || offset < 0 {
+			s.problem(w, 400, "invalid_cursor", "Cursor is invalid")
+			return
+		}
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	page, err := (inspector.Repository{Store: store}).Ledger(r.Context(), revision, sessionID, turnID, offset, limit)
+	if err != nil {
+		if err.Error() == "revision_unavailable" {
+			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
+		} else if errors.Is(err, sql.ErrNoRows) {
+			s.problem(w, 404, "turn_not_found", "Turn was not found at this revision")
+		} else {
+			s.problem(w, 500, "query_failed", "Turn ledger query failed")
+		}
+		return
+	}
+	s.write(w, page)
+}
+
+func (s *state) recordedContext(w http.ResponseWriter, r *http.Request) {
+	for key := range r.URL.Query() {
+		if key != "revision" {
+			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+			return
+		}
+	}
+	id := r.PathValue("evidenceId")
+	if !opaqueID.MatchString(id) {
+		s.problem(w, 400, "invalid_evidence_id", "Evidence ID is invalid")
+		return
+	}
+	revision, err := storage.ParseRevision(r.URL.Query().Get("revision"))
+	if err != nil {
+		s.problem(w, 400, "invalid_revision", "Revision is invalid")
+		return
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	chunk, err := evidence.ResolveAt(r.Context(), store, s.codexHome, id, revision, 0, 1)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			s.problem(w, 404, "evidence_not_found", "Evidence not found")
+		} else if err.Error() == "revision_unavailable" {
+			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
+		} else {
+			s.problem(w, 400, "context_unavailable", "Recorded context request failed")
+		}
+		return
+	}
+	kind, err := (inspector.Repository{Store: store}).EvidenceKind(r.Context(), chunk.AppliedRevision, id)
+	if err != nil {
+		s.problem(w, 404, "evidence_not_found", "Evidence not found")
+		return
+	}
+	fidelity, reason := "unavailable", "Complete model input was not recorded by the supported source; unavailable in demo."
+	blockKind := "context_event"
+	if kind == "model_input" {
+		fidelity, reason, blockKind = "exact", "", "model_input"
+	} else if kind == "compacted" || kind == "context_compacted" {
+		fidelity, reason, blockKind = "exact", "Exact recorded compaction evidence; before/after context is not reconstructed.", "compaction"
+	}
+	if chunk.Availability != "available" {
+		fidelity = "unavailable"
+		reason = "The pinned source evidence is currently " + strings.ReplaceAll(chunk.Availability, "_", " ") + "."
+	}
+	block := map[string]any{"evidenceId": id, "kind": blockKind, "locator": chunk.Locator, "sourcePrefixSha256": chunk.SourcePrefixSHA256, "eventFingerprint": chunk.EventFingerprint, "availability": chunk.Availability, "availabilityObservedAt": chunk.AvailabilityObservedAt, "availabilityRevision": chunk.AvailabilityRevision}
+	if reason != "" {
+		block["reason"] = reason
+	}
+	coverage := map[string]any{"fidelity": fidelity, "observed": 0, "eligible": 1, "reason": reason}
+	if fidelity == "exact" {
+		coverage = map[string]any{"fidelity": "exact", "observed": 1, "eligible": 1}
+	}
+	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": chunk.DatasetEpoch, "appliedRevision": chunk.AppliedRevision, "coverage": coverage, "evidenceId": id, "fidelity": fidelity, "reason": reason, "blocks": []any{block}})
 }
 
 func (s *state) evidence(w http.ResponseWriter, r *http.Request) {
@@ -656,7 +809,7 @@ func (s *state) evidence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer store.Close()
-	chunk, err := evidence.Resolve(r.Context(), store, id, revision, offset, limit)
+	chunk, err := evidence.ResolveAt(r.Context(), store, s.codexHome, id, revision, offset, limit)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			s.problem(w, 404, "evidence_not_found", "Evidence not found")

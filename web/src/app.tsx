@@ -2,6 +2,7 @@
 import React from 'react'
 import {establishSession,fetchFilterOptions,fetchStatus,queryMetrics,subscribe,type DashboardQuery,type FilterOptions,type MetricResult,type Status} from './api'
 import {capacityCountdown} from './capacity'
+import {ContextInspector} from './context-inspector'
 
 const keys=['recorded_tokens','recorded_tokens_by_kind','recorded_tokens_over_time','token_composition','top_root_sessions_by_tokens','latest_capacity_observation','capacity_drawdown']
 const fallbackKinds:FilterOptions['contributionKinds']=[{value:'user_root_direct',label:'User root'},{value:'descendant',label:'Descendants'},{value:'inspector_review',label:'Inspector Review'},{value:'other_orphan',label:'Other / orphan'}]
@@ -29,6 +30,7 @@ export function App(){
   const setup=!status.process.pluginVersion||status.process.cliCompatibility==='unknown',incompatible=status.process.cliCompatibility==='unsupported',empty=status.index.state==='empty'&&!data,total=item(data,'recorded_tokens'),byKind=item(data,'recorded_tokens_by_kind'),composition=item(data,'token_composition'),overTime=item(data,'recorded_tokens_over_time'),roots=item(data,'top_root_sessions_by_tokens'),latest=item(data,'latest_capacity_observation'),drawdown=item(data,'capacity_drawdown')
   const partial=!!data&&(data.coverage.fidelity!=='exact'||data.coverage.observed<data.coverage.eligible||status.index.unsupportedSourceCount>0||status.index.failedCount>0||indexing)
   const capacity=latest?.value,capacityStale=capacity?now>=new Date(capacity.resetsAt).getTime():false,kinds=options.contributionKinds.length?options.contributionKinds:fallbackKinds
+  if(location.pathname.startsWith('/context')&&!setup&&!incompatible)return <ContextInspector revision={applied??status.appliedRevision} available={available} onApply={applyAvailable}/>
   return <main><header><div><span className="eyebrow">LOCAL OBSERVABILITY</span><h1>Token &amp; Capacity</h1></div><span className="pill">{indexing?'Indexing':status.index.state}</span></header>
     {available!=null&&available!==applied&&<button className="new-data" onClick={()=>void applyAvailable()}>New data available — apply</button>}
     {setup?<section className="error"><h2>Finish Inspector setup</h2><p>Install and enable the matching plugin, then review its seven hooks.</p></section>:incompatible?<section className="error"><h2>Inspector versions are incompatible</h2><p>The installed host, plugin, or source format is outside the supported demo contract.</p></section>:empty?<section className="empty"><h2>Ready for your first sync</h2><p>No recorded usage yet. Sync supported Codex rollouts to populate this view.</p><button onClick={()=>{setIndexing(true);void fetch('/v1/sync',{method:'POST',headers:{'content-type':'application/json'},body:'{"mode":"background"}'})}}>Start sync</button></section>:<>
@@ -41,7 +43,6 @@ export function App(){
       <article><h2>Top root sessions</h2><ol className="sessions">{(roots?.value||[]).slice(0,10).map((r:any)=><li key={r.rootSessionId}><a href={`/context/${encodeURIComponent(r.rootSessionId)}`}>{number(r.inclusiveTokens)} tokens</a><small>{number(r.directTokens)} direct · {number(r.descendantTokens)} descendant</small></li>)}</ol></article>
       <article className="wide"><h2>Recorded capacity drawdown</h2>{drawdown?.coverage.fidelity==='unavailable'?<p>Unavailable — {drawdown.coverage.reason}.</p>:(drawdown?.value||[]).length?<div className="capacity-series">{(drawdown?.value||[]).map((s:any)=><div key={`${s.limitId}-${s.resetBoundary}`}><strong>{s.limitId} · {s.windowMinutes} minute window</strong><p>{s.points.map((p:any)=>`${p.usedPercent}% at ${new Date(p.observedAt).toLocaleTimeString()}`).join(' → ')}</p></div>)}</div>:<p>No recorded observations in the selected time range.</p>}<small>Gaps are not interpolated and local token use is not claimed to cause plan utilization.</small></article></section>
     </>}
-    {location.pathname.startsWith('/context/')&&<section className="placeholder"><h2>Context Inspector arrives in Phase 4</h2><p>This stable root-session route is ready; the causal map is not implemented yet.</p></section>}
     <details><summary>Status &amp; diagnostics</summary><p>{status.index.processedCount} processed · {status.index.skippedCount} skipped · {status.index.failedCount} failed · revision {applied}</p><pre>{diagnostics(status)}</pre></details><aside>Sensitive-data notice: evidence views may display exact local payloads.</aside>
   </main>
 }

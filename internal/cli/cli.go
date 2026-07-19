@@ -230,14 +230,14 @@ func openCmd(args []string, s IO) error {
 		return err
 	}
 	if *current && *session == "" {
-		*route = "/?notice=current-session-unavailable"
+		*route = "/context?notice=current-session-unavailable"
 	}
 	if *session != "" {
 		validOpaque, _ := regexp.MatchString(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`, *session)
 		if !validOpaque {
 			return errors.New("session must be an opaque Inspector ID")
 		}
-		*route = "/sessions/" + *session
+		*route = "/context/" + *session
 	}
 	if *review {
 		*route = "/reviews/new"
