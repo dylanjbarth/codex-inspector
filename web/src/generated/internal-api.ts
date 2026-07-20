@@ -4,38 +4,6 @@
  */
 
 export interface paths {
-    "/v1/token/exchange": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["exchangeToken"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/startup-diagnostics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getStartupDiagnostics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -305,12 +273,6 @@ export interface components {
             /** @default false */
             retryable: boolean;
         };
-        TokenExchangeRequest: {
-            token: string;
-            instanceId: components["schemas"]["OpaqueId"];
-            /** @constant */
-            protocolVersion: 1;
-        };
         Health: {
             /** @constant */
             healthy: true;
@@ -328,10 +290,6 @@ export interface components {
         };
         InspectorHome: {
             path: string;
-        };
-        StartupDiagnostics: {
-            codexHome: components["schemas"]["SourceHome"];
-            inspectorHome: components["schemas"]["InspectorHome"];
         };
         ProcessStatus: {
             /** @enum {unknown} */
@@ -406,6 +364,7 @@ export interface components {
         };
         Status: components["schemas"]["Snapshot"] & {
             sourceHome: components["schemas"]["SourceHome"];
+            inspectorHome: components["schemas"]["InspectorHome"];
             process: components["schemas"]["ProcessStatus"];
             index: components["schemas"]["IndexStatus"];
             hook: components["schemas"]["HookStatus"];
@@ -1109,52 +1068,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    exchangeToken: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenExchangeRequest"];
-            };
-        };
-        responses: {
-            /** @description Token accepted; session cookie set */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["ProblemResponse"];
-            401: components["responses"]["ProblemResponse"];
-            409: components["responses"]["ProblemResponse"];
-        };
-    };
-    getStartupDiagnostics: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Effective local homes for diagnosing startup authentication failures */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StartupDiagnostics"];
-                };
-            };
-            403: components["responses"]["ProblemResponse"];
-        };
-    };
     getHealth: {
         parameters: {
             query?: never;
@@ -1164,7 +1077,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Authenticated process identity */
+            /** @description Loopback process identity */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1173,7 +1086,6 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
-            401: components["responses"]["ProblemResponse"];
         };
     };
     postHeartbeat: {

@@ -13,8 +13,7 @@ import (
 	proc "github.com/dylanjbarth/codex-inspector/internal/process"
 )
 
-// browserhandoff is a test-only one-shot redirect. It keeps the production
-// bootstrap fragment out of terminal output, command arguments, and artifacts.
+// browserhandoff is a test-only one-shot redirect to the direct loopback UI.
 func main() {
 	run := flag.String("run-dir", "", "Inspector run directory")
 	route := flag.String("route", "/", "safe dashboard route")
@@ -24,8 +23,8 @@ func main() {
 		os.Exit(2)
 	}
 	meta, err := proc.Read(*run)
-	if err != nil || meta.FragmentToken == "" || meta.FragmentExchanged {
-		fmt.Fprintln(os.Stderr, "unexchanged Inspector bootstrap unavailable")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Inspector server metadata unavailable")
 		os.Exit(1)
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
@@ -37,7 +36,7 @@ func main() {
 	mux := http.NewServeMux()
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 2 * time.Second}
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		target := fmt.Sprintf("http://127.0.0.1:%d%s#token=%s&instanceId=%s&protocolVersion=%d", meta.Port, *route, meta.FragmentToken, meta.InstanceID, meta.ProtocolVersion)
+		target := fmt.Sprintf("http://127.0.0.1:%d%s", meta.Port, *route)
 		w.Header().Set("Location", target)
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusFound)

@@ -9,17 +9,14 @@ import (
 )
 
 type Metadata struct {
-	InstanceID        string    `json:"instanceId"`
-	PID               int       `json:"pid"`
-	Port              int       `json:"port"`
-	ProtocolVersion   int       `json:"protocolVersion"`
-	AccessToken       string    `json:"accessToken"`
-	FragmentToken     string    `json:"fragmentToken,omitempty"`
-	FragmentExchanged bool      `json:"fragmentExchanged"`
-	StartupStage      string    `json:"startupStage,omitempty"`
-	CodexHome         string    `json:"codexHome"`
-	CodexHomeSource   string    `json:"codexHomeSource"`
-	StartedAt         time.Time `json:"startedAt"`
+	InstanceID      string    `json:"instanceId"`
+	PID             int       `json:"pid"`
+	Port            int       `json:"port"`
+	ProtocolVersion int       `json:"protocolVersion"`
+	StartupStage    string    `json:"startupStage,omitempty"`
+	CodexHome       string    `json:"codexHome"`
+	CodexHomeSource string    `json:"codexHomeSource"`
+	StartedAt       time.Time `json:"startedAt"`
 }
 
 func Path(run string) string { return filepath.Join(run, "server.json") }
@@ -30,7 +27,7 @@ func Read(run string) (Metadata, error) {
 		return Metadata{}, err
 	}
 	var m Metadata
-	if json.Unmarshal(b, &m) != nil || m.InstanceID == "" || m.PID < 1 || m.Port < 1 || m.Port > 65535 || m.ProtocolVersion < 1 || m.AccessToken == "" || m.CodexHome == "" || (m.CodexHomeSource != "environment" && m.CodexHomeSource != "default") {
+	if json.Unmarshal(b, &m) != nil || m.InstanceID == "" || m.PID < 1 || m.Port < 1 || m.Port > 65535 || m.ProtocolVersion < 1 || m.CodexHome == "" || (m.CodexHomeSource != "environment" && m.CodexHomeSource != "default") {
 		return Metadata{}, errors.New("invalid process metadata")
 	}
 	return m, nil

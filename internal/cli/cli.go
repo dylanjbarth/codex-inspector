@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -394,11 +393,7 @@ func openCmd(args []string, s IO) error {
 }
 
 func dashboardURL(m proc.Metadata, route string) string {
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", m.Port, safeRoute(route))
-	if m.FragmentToken != "" {
-		url += "#token=" + m.FragmentToken + "&instanceId=" + m.InstanceID + "&protocolVersion=" + strconv.Itoa(m.ProtocolVersion)
-	}
-	return url
+	return fmt.Sprintf("http://127.0.0.1:%d%s", m.Port, safeRoute(route))
 }
 
 func openDashboard(url string, noBrowser bool, w io.Writer, goos string, launch func(string) error) error {
@@ -522,7 +517,7 @@ func startupStageMessage(stage string) string {
 	case "review_store":
 		return "Open: preparing the local Review store..."
 	case "http_server":
-		return "Open: starting the authenticated dashboard endpoint..."
+		return "Open: starting the local dashboard endpoint..."
 	default:
 		return ""
 	}
@@ -569,7 +564,6 @@ func request(m proc.Metadata, method, path string, body []byte) ([]byte, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, method, fmt.Sprintf("http://127.0.0.1:%d%s", m.Port, path), bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+m.AccessToken)
 	if method != "GET" {
 		req.Header.Set("Origin", fmt.Sprintf("http://127.0.0.1:%d", m.Port))
 		req.Header.Set("Content-Type", "application/json")

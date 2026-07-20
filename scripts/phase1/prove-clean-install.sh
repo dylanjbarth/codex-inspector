@@ -59,7 +59,7 @@ printf '%s\n' 'stage=hook_marker_only'
 
 # Prove stale PID/metadata is not treated as a reusable process.
 mkdir -p "${inspector_home}/run"
-printf '%s' '{"instanceId":"stale-instance","pid":999999,"port":9,"protocolVersion":1,"accessToken":"fake-access-token","fragmentToken":"fake-fragment-token","fragmentExchanged":false,"startedAt":"2026-07-18T00:00:00Z"}' > "${inspector_home}/run/server.json"
+printf '%s' '{"instanceId":"stale-instance","pid":999999,"port":9,"protocolVersion":1,"codexHome":"/tmp/stale-codex","codexHomeSource":"environment","startedAt":"2026-07-18T00:00:00Z"}' > "${inspector_home}/run/server.json"
 chmod 600 "${inspector_home}/run/server.json"
 PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" CODEX_INSPECTOR_TEST_IDLE_TIMEOUT=2s codex-inspector open --no-browser >/dev/null
 first_instance=$(jq -r .instanceId "${inspector_home}/run/server.json")
@@ -69,20 +69,16 @@ PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="$
 test "$(jq -r .instanceId "${inspector_home}/run/server.json")" = "${first_instance}"
 printf '%s\n' 'stage=open_reused'
 port=$(jq -r .port "${inspector_home}/run/server.json")
-fragment=$(jq -r .fragmentToken "${inspector_home}/run/server.json")
-instance_id=$(jq -r .instanceId "${inspector_home}/run/server.json")
-protocol_version=$(jq -r .protocolVersion "${inspector_home}/run/server.json")
 origin="http://127.0.0.1:${port}"
-curl --fail --silent --show-error -c "${proof_root}/cookies" -H "Origin: ${origin}" -H 'Content-Type: application/json' --data "{\"token\":\"${fragment}\",\"instanceId\":\"${instance_id}\",\"protocolVersion\":${protocol_version}}" "${origin}/v1/token/exchange" >/dev/null
-curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/" | grep -q 'Codex Inspector'
-curl --fail --silent --show-error -b "${proof_root}/cookies" "${origin}/v1/status" > "${proof_root}/dashboard-status.json"
+curl --fail --silent --show-error "${origin}/" | grep -q 'Codex Inspector'
+curl --fail --silent --show-error "${origin}/v1/status" > "${proof_root}/dashboard-status.json"
 if ! jq -e '.process.state == "degraded" and .process.cliCompatibility == "unknown" and .index.state == "empty" and .hook.state == "idle" and (.hook.diagnostics | length) == 0' "${proof_root}/dashboard-status.json" >/dev/null; then
   jq '{process: .process, index: {state: .index.state}, hook: {state: .hook.state, diagnostics: .hook.diagnostics}}' "${proof_root}/dashboard-status.json" >&2
   exit 1
 fi
 PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" codex-inspector sync --background | grep -q '"state"'
-printf '%s\n' 'stage=dashboard_authenticated'
-curl --fail --silent --show-error -b "${proof_root}/cookies" -H "Origin: ${origin}" -X POST "${origin}/v1/heartbeat" >/dev/null
+printf '%s\n' 'stage=dashboard_accessible'
+curl --fail --silent --show-error -H "Origin: ${origin}" -X POST "${origin}/v1/heartbeat" >/dev/null
 sleep 3
 PATH="${install_bin}:${PATH}" CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" codex-inspector status --json | jq -e '.running == false' >/dev/null
 printf '%s\n' 'stage=idle_exit'

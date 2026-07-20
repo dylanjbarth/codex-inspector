@@ -61,11 +61,10 @@ Independent review findings were resolved as follows:
   revision, and the displayed reset countdown advances every second;
 - project, model, reasoning, and contribution filters are populated from real
   indexed choices and exact-filter tests prove their effects; and
-- browser bootstrap now finishes fragment exchange and authenticated status
-  before requesting the catalog. A real loopback cookie-jar test proves the
-  one-time exchange stores a SameSite cookie that authenticates the following
-  catalog request. An explicit UI regression test holds exchange pending and
-  proves no authenticated dashboard request races ahead of it;
+- browser startup now loads status directly from the loopback server without a
+  fragment exchange or session cookie. Regression tests prove refreshed pages,
+  new tabs, and nested SPA routes can load without credentials while Host and
+  same-origin mutation checks remain enforced;
 - production compatibility is obtained only from normal inspection or injected
   test configuration; there is no environment-variable compatibility bypass;
 - the generated metric catalog contract now carries bounded filter choices at
@@ -76,11 +75,5 @@ Independent review findings were resolved as follows:
   `unavailable` total and visible reason. Known partial sums remain numeric and
   visibly partial.
 
-The worker's first normal-browser automation attempt was inconclusive because
-the CLI reported the pre-cleanup fragment before the settled page could be
-observed safely. Its browser, server, and artifacts were removed without a
-workaround. Independent review subsequently performed the credential-safe
-normal-browser proof and closed that evidence gap. The four later corrections
-above affect injected test compatibility, catalog contracts/refetch, and
-missing-usage presentation; they do not change the reviewed browser bootstrap
-security flow, so the worker did not rerun it.
+The browser proof now uses the direct loopback URL. No browser bootstrap secret,
+cookie jar, or credential-bearing URL is created.

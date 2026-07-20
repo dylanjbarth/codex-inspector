@@ -536,7 +536,7 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	if doc.OpenAPI != "3.1.0" {
 		t.Fatalf("OpenAPI version = %q", doc.OpenAPI)
 	}
-	required := []string{"/v1/token/exchange", "/v1/health", "/v1/heartbeat", "/v1/status", "/v1/sync", "/v1/metrics/catalog", "/v1/metrics/query", "/v1/sessions", "/v1/sessions/{sessionId}/map", "/v1/sessions/{sessionId}/turns/{turnId}/ledger", "/v1/evidence/{evidenceId}", "/v1/context/{evidenceId}", "/v1/review-plans", "/v1/reviews", "/v1/reviews/{reviewId}", "/v1/events"}
+	required := []string{"/v1/health", "/v1/heartbeat", "/v1/status", "/v1/sync", "/v1/metrics/catalog", "/v1/metrics/query", "/v1/sessions", "/v1/sessions/{sessionId}/map", "/v1/sessions/{sessionId}/turns/{turnId}/ledger", "/v1/evidence/{evidenceId}", "/v1/context/{evidenceId}", "/v1/review-plans", "/v1/reviews", "/v1/reviews/{reviewId}", "/v1/events"}
 	for _, path := range required {
 		if _, ok := doc.Paths[path]; !ok {
 			t.Errorf("OpenAPI missing %s", path)

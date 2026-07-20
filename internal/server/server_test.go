@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -218,39 +217,13 @@ func req(t *testing.T, m proc.Metadata, method, path string, body []byte, header
 	n, _ := response.Body.Read(b)
 	return response, b[:n]
 }
-func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
-	m, layout, cancel, errs := startTestServer(t, 1500*time.Millisecond)
+func TestLoopbackStatusLoadsWithoutAuthenticationAndIdleShutdown(t *testing.T) {
+	m, _, cancel, errs := startTestServer(t, 1500*time.Millisecond)
 	defer cancel()
-	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
-	payload, _ := json.Marshal(map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": m.ProtocolVersion})
-	r, _ := req(t, m, "POST", "/v1/token/exchange", payload, map[string]string{"Origin": origin, "Content-Type": "application/json"})
-	if r.StatusCode != 204 {
-		t.Fatalf("exchange=%d", r.StatusCode)
-	}
+	r, statusBody := req(t, m, "GET", "/v1/status", nil, nil)
 	if !strings.Contains(r.Header.Get("Content-Security-Policy"), "default-src 'self'") {
 		t.Fatal("missing CSP")
 	}
-	var cookie *http.Cookie
-	for _, c := range r.Cookies() {
-		if c.Name == "codex_inspector_session" {
-			cookie = c
-		}
-	}
-	if cookie == nil || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode {
-		t.Fatalf("bad cookie: %+v", cookie)
-	}
-	r, _ = req(t, m, "POST", "/v1/token/exchange", payload, map[string]string{"Origin": origin})
-	if r.StatusCode != http.StatusNoContent {
-		t.Fatalf("browser reconnect=%d", r.StatusCode)
-	}
-	current, err := proc.Read(layout.Run)
-	if err != nil {
-		t.Fatalf("read metadata after reconnect: %v", err)
-	}
-	if current.FragmentToken != m.FragmentToken || !current.FragmentExchanged {
-		t.Fatalf("reconnect metadata did not retain the browser handoff: %+v", current)
-	}
-	r, statusBody := req(t, m, "GET", "/v1/status", nil, map[string]string{"Cookie": cookie.String()})
 	if r.StatusCode != 200 {
 		t.Fatalf("status=%d", r.StatusCode)
 	}
@@ -265,11 +238,11 @@ func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
 	if err = doc.Components.Schemas["Status"].Value.VisitJSON(statusJSON); err != nil {
 		t.Fatalf("status violates frozen OpenAPI schema: %v", err)
 	}
-	r, _ = req(t, m, "POST", "/v1/heartbeat", nil, map[string]string{"Cookie": cookie.String(), "Origin": "http://evil.invalid"})
+	r, _ = req(t, m, "POST", "/v1/heartbeat", nil, map[string]string{"Origin": "http://evil.invalid"})
 	if r.StatusCode != 403 {
 		t.Fatalf("evil origin=%d", r.StatusCode)
 	}
-	r, _ = req(t, m, "GET", "/v1/health", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken, "Host": "localhost"})
+	r, _ = req(t, m, "GET", "/v1/health", nil, map[string]string{"Host": "localhost"})
 	if r.StatusCode != 403 {
 		t.Fatalf("evil host=%d", r.StatusCode)
 	}
@@ -283,17 +256,13 @@ func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
 	}
 }
 
-func TestAuthenticatedShutdownStopsServerAndRejectsUnauthenticatedRequest(t *testing.T) {
+func TestSameOriginShutdownStopsServer(t *testing.T) {
 	m, layout, cancel, errs := startTestServer(t, time.Minute)
 	defer cancel()
 	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
 	r, _ := req(t, m, "POST", "/v1/shutdown", nil, map[string]string{"Origin": origin})
-	if r.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated shutdown=%d", r.StatusCode)
-	}
-	r, _ = req(t, m, "POST", "/v1/shutdown", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken, "Origin": origin})
 	if r.StatusCode != http.StatusAccepted {
-		t.Fatalf("authenticated shutdown=%d", r.StatusCode)
+		t.Fatalf("shutdown=%d", r.StatusCode)
 	}
 	select {
 	case err := <-errs:
@@ -301,75 +270,10 @@ func TestAuthenticatedShutdownStopsServerAndRejectsUnauthenticatedRequest(t *tes
 			t.Fatal(err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("authenticated shutdown did not stop server")
+		t.Fatal("shutdown did not stop server")
 	}
 	if _, err := proc.Read(layout.Run); !os.IsNotExist(err) {
 		t.Fatalf("server metadata remained after shutdown: %v", err)
-	}
-}
-
-func TestBrowserCookieJarExchangeAuthenticatesCatalog(t *testing.T) {
-	m, _, cancel, errs := startTestServer(t, time.Second)
-	defer func() { cancel(); <-errs }()
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := &http.Client{Jar: jar}
-	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
-	payload, _ := json.Marshal(map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": m.ProtocolVersion})
-	request, _ := http.NewRequest("POST", origin+"/v1/token/exchange", bytes.NewReader(payload))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Inspector-Origin", origin)
-	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	response, err := client.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response.Body.Close()
-	if response.StatusCode != http.StatusNoContent {
-		t.Fatalf("exchange=%d", response.StatusCode)
-	}
-	if got := len(jar.Cookies(request.URL)); got != 1 {
-		t.Fatalf("session cookie count=%d want=1", got)
-	}
-	response, err = client.Get(origin + "/v1/metrics/catalog")
-	if err != nil {
-		t.Fatal(err)
-	}
-	response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("catalog=%d", response.StatusCode)
-	}
-}
-
-func TestExchangeRejectsIncompleteMismatchedAndExtraBootstrap(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		body func(proc.Metadata) any
-		want int
-	}{
-		{"missing metadata", func(m proc.Metadata) any { return map[string]any{"token": m.FragmentToken} }, 400},
-		{"wrong instance", func(m proc.Metadata) any {
-			return map[string]any{"token": m.FragmentToken, "instanceId": "wrong", "protocolVersion": 1}
-		}, 409},
-		{"wrong protocol", func(m proc.Metadata) any {
-			return map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": 2}
-		}, 409},
-		{"extra field", func(m proc.Metadata) any {
-			return map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": 1, "payload": "secret"}
-		}, 400},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			m, _, cancel, errs := startTestServer(t, time.Second)
-			defer func() { cancel(); <-errs }()
-			b, _ := json.Marshal(tc.body(m))
-			origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
-			r, _ := req(t, m, "POST", "/v1/token/exchange", b, map[string]string{"Origin": origin, "Content-Type": "application/json"})
-			if r.StatusCode != tc.want {
-				t.Fatalf("status=%d want=%d", r.StatusCode, tc.want)
-			}
-		})
 	}
 }
 
@@ -385,7 +289,7 @@ func TestSyncRejectsUnknownTrailingAndMalformedRequests(t *testing.T) {
 			m, _, cancel, errs := startTestServer(t, time.Second)
 			defer func() { cancel(); <-errs }()
 			origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
-			r, _ := req(t, m, "POST", "/v1/sync", []byte(tc.body), map[string]string{"Authorization": "Bearer " + m.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+			r, _ := req(t, m, "POST", "/v1/sync", []byte(tc.body), map[string]string{"Authorization": "Bearer " + m.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 			if r.StatusCode != 400 {
 				t.Fatalf("status=%d", r.StatusCode)
 			}
@@ -394,7 +298,7 @@ func TestSyncRejectsUnknownTrailingAndMalformedRequests(t *testing.T) {
 	m, _, cancel, errs := startTestServer(t, time.Second)
 	defer func() { cancel(); <-errs }()
 	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
-	r, _ := req(t, m, "POST", "/v1/sync", []byte(`{"mode":"background"}`), map[string]string{"Authorization": "Bearer " + m.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	r, _ := req(t, m, "POST", "/v1/sync", []byte(`{"mode":"background"}`), map[string]string{"Authorization": "Bearer " + m.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 	if r.StatusCode != 202 {
 		t.Fatalf("valid status=%d", r.StatusCode)
 	}
@@ -406,7 +310,7 @@ func TestSchemaV2HealthAndSessionSnapshotContract(t *testing.T) {
 	// contract assertions instead of testing idle shutdown here.
 	m, _, cancel, errs := startTestServer(t, 10*time.Second)
 	defer func() { cancel(); <-errs }()
-	headers := map[string]string{"Authorization": "Bearer " + m.AccessToken}
+	headers := map[string]string{"Authorization": "Bearer " + m.InstanceID}
 	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -563,7 +467,7 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("server not ready")
 	}
-	headers := map[string]string{"Authorization": "Bearer " + meta.AccessToken}
+	headers := map[string]string{"Authorization": "Bearer " + meta.InstanceID}
 	var sessionBody []byte
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -610,7 +514,7 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	rootID := sessions.Items[0].SessionID
 	origin := fmt.Sprintf("http://127.0.0.1:%d", meta.Port)
 	metricRequest := []byte(`{"metricKeys":["recorded_tokens","recorded_tokens_by_kind","top_root_sessions_by_tokens"],"timezone":"UTC","grain":"day"}`)
-	response, metricBody := req(t, meta, "POST", "/v1/metrics/query", metricRequest, map[string]string{"Authorization": "Bearer " + meta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	response, metricBody := req(t, meta, "POST", "/v1/metrics/query", metricRequest, map[string]string{"Authorization": "Bearer " + meta.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 	if response.StatusCode != 200 || !bytes.Contains(metricBody, []byte(`"value":2500`)) || !bytes.Contains(metricBody, []byte(rootID)) {
 		t.Fatalf("metric path failed: status=%d body=%s", response.StatusCode, metricBody)
 	}
@@ -677,7 +581,7 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 		"reasoningEffort":   "high",
 		"requestedRevision": sessions.AppliedRevision,
 	})
-	response, planBody := req(t, meta, "POST", "/v1/review-plans", planRequest, map[string]string{"Authorization": "Bearer " + meta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	response, planBody := req(t, meta, "POST", "/v1/review-plans", planRequest, map[string]string{"Authorization": "Bearer " + meta.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 	if response.StatusCode != 200 {
 		t.Fatalf("review plan status=%d body=%s", response.StatusCode, planBody)
 	}
@@ -692,7 +596,7 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 		t.Fatalf("invalid review plan: %s", planBody)
 	}
 	launchRequest, _ := json.Marshal(map[string]any{"planId": reviewPlan.PlanID, "confirmed": true})
-	response, launchBody := req(t, meta, "POST", "/v1/reviews", launchRequest, map[string]string{"Authorization": "Bearer " + meta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+	response, launchBody := req(t, meta, "POST", "/v1/reviews", launchRequest, map[string]string{"Authorization": "Bearer " + meta.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 	if response.StatusCode != 202 {
 		t.Fatalf("review launch status=%d body=%s", response.StatusCode, launchBody)
 	}
@@ -779,7 +683,7 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 	streamEvents := make(chan string, 32)
 	go func() {
 		request, _ := http.NewRequestWithContext(streamCtx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/events", serverMeta.Port), nil)
-		request.Header.Set("Authorization", "Bearer "+serverMeta.AccessToken)
+		request.Header.Set("Authorization", "Bearer "+serverMeta.InstanceID)
 		request.Header.Set("Origin", fmt.Sprintf("http://127.0.0.1:%d", serverMeta.Port))
 		response, requestErr := http.DefaultClient.Do(request)
 		if requestErr != nil {
@@ -805,7 +709,7 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 			if _, statErr = os.Stat(filepath.Join(layout.Root, "active-index")); statErr == nil {
 				origin := fmt.Sprintf("http://127.0.0.1:%d", serverMeta.Port)
 				body := []byte(`{"metricKeys":["recorded_tokens","latest_capacity_observation"],"timezone":"UTC","grain":"day"}`)
-				response, resultBody := req(t, serverMeta, "POST", "/v1/metrics/query", body, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+				response, resultBody := req(t, serverMeta, "POST", "/v1/metrics/query", body, map[string]string{"Authorization": "Bearer " + serverMeta.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 				if response.StatusCode != 200 {
 					t.Fatalf("metric query=%d %s", response.StatusCode, resultBody)
 				}
@@ -822,7 +726,7 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 				}
 				appliedRevision := int64(resultJSON.(map[string]any)["appliedRevision"].(float64))
 				catalogPath := fmt.Sprintf("/v1/metrics/catalog?requestedRevision=%d", appliedRevision)
-				catalogResponse, catalogBody := req(t, serverMeta, "GET", catalogPath, nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				catalogResponse, catalogBody := req(t, serverMeta, "GET", catalogPath, nil, map[string]string{"Authorization": "Bearer " + serverMeta.InstanceID})
 				if catalogResponse.StatusCode != 200 {
 					t.Fatalf("catalog=%d", catalogResponse.StatusCode)
 				}
@@ -839,7 +743,7 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 				if _, permissiveNestedOptions := firstMetric["filterOptions"]; permissiveNestedOptions {
 					t.Fatal("filter options escaped the generated top-level contract")
 				}
-				oldResponse, oldBody := req(t, serverMeta, "GET", "/v1/metrics/catalog?requestedRevision=1", nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				oldResponse, oldBody := req(t, serverMeta, "GET", "/v1/metrics/catalog?requestedRevision=1", nil, map[string]string{"Authorization": "Bearer " + serverMeta.InstanceID})
 				if oldResponse.StatusCode != 200 {
 					t.Fatalf("old catalog=%d", oldResponse.StatusCode)
 				}
@@ -849,16 +753,16 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 				if oldCatalog["appliedRevision"].(float64) != 1 || len(oldOptions["projects"].([]any)) != 0 || len(oldOptions["models"].([]any)) != 0 {
 					t.Fatalf("revision-one catalog=%v", oldCatalog)
 				}
-				invalidCatalog, _ := req(t, serverMeta, "GET", "/v1/metrics/catalog?unknown=1", nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				invalidCatalog, _ := req(t, serverMeta, "GET", "/v1/metrics/catalog?unknown=1", nil, map[string]string{"Authorization": "Bearer " + serverMeta.InstanceID})
 				if invalidCatalog.StatusCode != 400 {
 					t.Fatalf("invalid catalog query=%d", invalidCatalog.StatusCode)
 				}
-				unavailableCatalog, _ := req(t, serverMeta, "GET", fmt.Sprintf("/v1/metrics/catalog?requestedRevision=%d", appliedRevision+1000), nil, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken})
+				unavailableCatalog, _ := req(t, serverMeta, "GET", fmt.Sprintf("/v1/metrics/catalog?requestedRevision=%d", appliedRevision+1000), nil, map[string]string{"Authorization": "Bearer " + serverMeta.InstanceID})
 				if unavailableCatalog.StatusCode != 409 {
 					t.Fatalf("unavailable catalog revision=%d", unavailableCatalog.StatusCode)
 				}
 				oversized := []byte(`{"metricKeys":["recorded_tokens_over_time"],"timezone":"UTC","grain":"hour","start":"2026-01-01T00:00:00Z","end":"2026-04-01T00:00:00Z"}`)
-				bounded, _ := req(t, serverMeta, "POST", "/v1/metrics/query", oversized, map[string]string{"Authorization": "Bearer " + serverMeta.AccessToken, "Origin": origin, "Content-Type": "application/json"})
+				bounded, _ := req(t, serverMeta, "POST", "/v1/metrics/query", oversized, map[string]string{"Authorization": "Bearer " + serverMeta.InstanceID, "Origin": origin, "Content-Type": "application/json"})
 				if bounded.StatusCode != 413 {
 					t.Fatalf("oversized metric=%d", bounded.StatusCode)
 				}
@@ -887,17 +791,14 @@ func TestWatcherIndexesAndConsumesMarkerCreatedAfterStartup(t *testing.T) {
 	<-errs
 	t.Fatal("watcher did not consume the post-start marker after a successful index")
 }
-func TestUnauthenticatedAPIRejectedAndNoSecretsInResponses(t *testing.T) {
+func TestLoopbackAPIAndNestedPageLoadWithoutCredentials(t *testing.T) {
 	m, _, cancel, errs := startTestServer(t, time.Second)
 	defer func() { cancel(); <-errs }()
-	r, b := req(t, m, "GET", "/v1/status", nil, nil)
-	if r.StatusCode != 401 {
+	r, _ := req(t, m, "GET", "/v1/status", nil, nil)
+	if r.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d", r.StatusCode)
 	}
-	if bytes.Contains(b, []byte(m.AccessToken)) || bytes.Contains(b, []byte(m.FragmentToken)) {
-		t.Fatal("secret leaked")
-	}
-	r, _ = req(t, m, "GET", "/", nil, nil)
+	r, _ = req(t, m, "GET", "/context/example", nil, nil)
 	if r.StatusCode != 200 {
 		t.Fatalf("shell=%d", r.StatusCode)
 	}
@@ -920,7 +821,7 @@ func TestStatusExcludesInvalidPersistedMarkerAndReportsDiagnostic(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	r, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken})
+	r, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.InstanceID})
 	if r.StatusCode != 200 {
 		t.Fatalf("status=%d", r.StatusCode)
 	}
@@ -961,7 +862,7 @@ func TestStatusSurfacesPluginDataDiagnostics(t *testing.T) {
 	snapshot := compat.Snapshot{Checks: []compat.Check{{Name: "hook_missing_cli", Status: "error"}}, PluginVersion: &pv, PluginProtocol: &pp, CLICompatibility: "unknown", HookDiagnostics: []compat.Diagnostic{{Code: "missing_cli", Severity: "warning", Count: 1, LastObservedAt: "2026-07-18T00:00:00Z"}}}
 	m, _, cancel, errs := startTestServerWith(t, time.Second, &snapshot)
 	defer func() { cancel(); <-errs }()
-	r, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken})
+	r, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.InstanceID})
 	if r.StatusCode != 200 {
 		t.Fatalf("status=%d", r.StatusCode)
 	}
@@ -995,7 +896,7 @@ func TestStatusReportsPayloadSafeDiagnosticQueryFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken})
+	response, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.InstanceID})
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.StatusCode, body)
 	}

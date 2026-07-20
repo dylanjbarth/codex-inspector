@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"database/sql"
 	"embed"
 	"encoding/base64"
@@ -55,7 +54,6 @@ type state struct {
 	ctx             context.Context
 	indexWG         sync.WaitGroup
 	meta            proc.Metadata
-	cookie          string
 	lastActive      time.Time
 	host, origin    string
 	layout          home.Layout
@@ -165,19 +163,7 @@ func Run(ctx context.Context, c Config) error {
 	// Base64url can begin with '-' or '_', while public opaque identifiers must
 	// begin with an alphanumeric character.
 	id = "i_" + id
-	access, err := token(32)
-	if err != nil {
-		return err
-	}
-	fragment, err := token(32)
-	if err != nil {
-		return err
-	}
-	cookie, err := token(32)
-	if err != nil {
-		return err
-	}
-	m := proc.Metadata{InstanceID: id, PID: os.Getpid(), Port: addr.Port, ProtocolVersion: version.Protocol, AccessToken: access, FragmentToken: fragment, StartupStage: "codex_host", CodexHome: c.CodexHome, CodexHomeSource: c.CodexHomeSource, StartedAt: time.Now().UTC()}
+	m := proc.Metadata{InstanceID: id, PID: os.Getpid(), Port: addr.Port, ProtocolVersion: version.Protocol, StartupStage: "codex_host", CodexHome: c.CodexHome, CodexHomeSource: c.CodexHomeSource, StartedAt: time.Now().UTC()}
 	if err = proc.Write(c.Layout.Run, m); err != nil {
 		return err
 	}
@@ -193,7 +179,7 @@ func Run(ctx context.Context, c Config) error {
 	}
 	m.StartupStage = "review_store"
 	_ = proc.Write(c.Layout.Run, m)
-	s := &state{ctx: runCtx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, codexHomeSource: c.CodexHomeSource, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer(), shutdown: make(chan struct{})}
+	s := &state{ctx: runCtx, meta: m, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, codexHomeSource: c.CodexHomeSource, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer(), shutdown: make(chan struct{})}
 	s.reviewManager, err = reviews.New(c.Layout, c.CodexExecutable, c.CodexHome, func(id, status string) {
 		s.mu.Lock()
 		s.lastActive = time.Now()
@@ -292,25 +278,23 @@ func (s *state) routes(m *http.ServeMux) {
 		w.Header().Set("Content-Type", mime.TypeByExtension(filepath.Ext(name)))
 		w.Write(b)
 	})
-	m.HandleFunc("POST /v1/token/exchange", s.exchange)
-	m.HandleFunc("GET /v1/startup-diagnostics", s.startupDiagnostics)
-	m.HandleFunc("GET /v1/health", s.auth(s.health))
-	m.HandleFunc("POST /v1/heartbeat", s.auth(s.sameOrigin(s.heartbeat)))
-	m.HandleFunc("POST /v1/shutdown", s.auth(s.sameOrigin(s.shutdownServer)))
-	m.HandleFunc("GET /v1/status", s.auth(s.status))
-	m.HandleFunc("GET /v1/metrics/catalog", s.auth(s.metricCatalog))
-	m.HandleFunc("POST /v1/metrics/query", s.auth(s.sameOrigin(s.metricQuery)))
-	m.HandleFunc("GET /v1/events", s.auth(s.sameOrigin(s.streamEvents)))
-	m.HandleFunc("POST /v1/sync", s.auth(s.sameOrigin(s.sync)))
-	m.HandleFunc("GET /v1/sessions", s.auth(s.sessions))
-	m.HandleFunc("GET /v1/sessions/{sessionId}/map", s.auth(s.sessionMap))
-	m.HandleFunc("GET /v1/sessions/{sessionId}/turns/{turnId}/ledger", s.auth(s.turnLedger))
-	m.HandleFunc("GET /v1/evidence/{evidenceId}", s.auth(s.evidence))
-	m.HandleFunc("GET /v1/context/{evidenceId}", s.auth(s.recordedContext))
-	m.HandleFunc("POST /v1/review-plans", s.auth(s.sameOrigin(s.reviewPlan)))
-	m.HandleFunc("GET /v1/reviews", s.auth(s.reviews))
-	m.HandleFunc("POST /v1/reviews", s.auth(s.sameOrigin(s.launchReview)))
-	m.HandleFunc("GET /v1/reviews/{reviewId}", s.auth(s.reviewDetail))
+	m.HandleFunc("GET /v1/health", s.loopback(s.health))
+	m.HandleFunc("POST /v1/heartbeat", s.loopback(s.sameOrigin(s.heartbeat)))
+	m.HandleFunc("POST /v1/shutdown", s.loopback(s.sameOrigin(s.shutdownServer)))
+	m.HandleFunc("GET /v1/status", s.loopback(s.status))
+	m.HandleFunc("GET /v1/metrics/catalog", s.loopback(s.metricCatalog))
+	m.HandleFunc("POST /v1/metrics/query", s.loopback(s.sameOrigin(s.metricQuery)))
+	m.HandleFunc("GET /v1/events", s.loopback(s.sameOrigin(s.streamEvents)))
+	m.HandleFunc("POST /v1/sync", s.loopback(s.sameOrigin(s.sync)))
+	m.HandleFunc("GET /v1/sessions", s.loopback(s.sessions))
+	m.HandleFunc("GET /v1/sessions/{sessionId}/map", s.loopback(s.sessionMap))
+	m.HandleFunc("GET /v1/sessions/{sessionId}/turns/{turnId}/ledger", s.loopback(s.turnLedger))
+	m.HandleFunc("GET /v1/evidence/{evidenceId}", s.loopback(s.evidence))
+	m.HandleFunc("GET /v1/context/{evidenceId}", s.loopback(s.recordedContext))
+	m.HandleFunc("POST /v1/review-plans", s.loopback(s.sameOrigin(s.reviewPlan)))
+	m.HandleFunc("GET /v1/reviews", s.loopback(s.reviews))
+	m.HandleFunc("POST /v1/reviews", s.loopback(s.sameOrigin(s.launchReview)))
+	m.HandleFunc("GET /v1/reviews/{reviewId}", s.loopback(s.reviewDetail))
 }
 func (s *state) validHost(r *http.Request) bool { return r.Host == s.host }
 func (s *state) validOrigin(r *http.Request) bool {
@@ -328,86 +312,17 @@ func (s *state) sameOrigin(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
-func (s *state) auth(next http.HandlerFunc) http.HandlerFunc {
+func (s *state) loopback(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.validHost(r) {
 			s.problem(w, 403, "host_rejected", "Request host rejected")
 			return
 		}
-		ok := false
-		if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
-			v := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			ok = subtle.ConstantTimeCompare([]byte(v), []byte(s.meta.AccessToken)) == 1
-		} else if c, e := r.Cookie("codex_inspector_session"); e == nil {
-			ok = subtle.ConstantTimeCompare([]byte(c.Value), []byte(s.cookie)) == 1
-		}
-		if !ok {
-			s.problem(w, 401, "unauthorized", "Authentication required")
-			return
-		}
 		next(w, r)
 	}
 }
-func (s *state) exchange(w http.ResponseWriter, r *http.Request) {
-	if !s.validHost(r) || !s.validOrigin(r) {
-		s.problem(w, 403, "origin_rejected", "Request origin rejected")
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	var in struct {
-		Token           string `json:"token"`
-		InstanceID      string `json:"instanceId"`
-		ProtocolVersion int    `json:"protocolVersion"`
-	}
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&in) != nil || len(in.Token) < 32 || len(in.Token) > 256 || !opaqueID.MatchString(in.InstanceID) {
-		s.problem(w, 400, "invalid_request", "Invalid token request")
-		return
-	}
-	var extra any
-	if decoder.Decode(&extra) != io.EOF {
-		s.problem(w, 400, "invalid_request", "Invalid token request")
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if in.InstanceID != s.meta.InstanceID || in.ProtocolVersion != s.meta.ProtocolVersion {
-		s.problem(w, 409, "bootstrap_mismatch", "Startup metadata does not match this process")
-		return
-	}
-	if subtle.ConstantTimeCompare([]byte(in.Token), []byte(s.meta.FragmentToken)) != 1 {
-		s.problem(w, 401, "invalid_token", "Startup token rejected")
-		return
-	}
-	nextMeta := s.meta
-	nextMeta.FragmentExchanged = true
-	if err := proc.Write(s.layout.Run, nextMeta); err != nil {
-		s.problem(w, 500, "metadata_write_failed", "Secure session metadata could not be updated")
-		return
-	}
-	s.meta = nextMeta
-	s.lastActive = time.Now()
-	http.SetCookie(w, &http.Cookie{Name: "codex_inspector_session", Value: s.cookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 3600})
-	w.WriteHeader(204)
-}
 func (s *state) health(w http.ResponseWriter, r *http.Request) {
 	s.write(w, map[string]any{"healthy": true, "instanceId": s.meta.InstanceID, "protocolVersion": version.Protocol, "cliVersion": version.CLI, "indexSchemaVersion": version.IndexSchema})
-}
-func (s *state) startupDiagnostics(w http.ResponseWriter, r *http.Request) {
-	if !s.validHost(r) {
-		s.problem(w, 403, "host_rejected", "Request host rejected")
-		return
-	}
-	s.write(w, map[string]any{
-		"codexHome": map[string]any{
-			"path":       s.codexHome,
-			"resolution": s.codexHomeSource,
-		},
-		"inspectorHome": map[string]any{
-			"path": s.layout.Root,
-		},
-	})
 }
 func (s *state) heartbeat(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
@@ -1167,7 +1082,7 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 	if dbStatus.Supported > 0 {
 		coverage = map[string]any{"fidelity": "exact", "observed": dbStatus.Processed, "eligible": dbStatus.Sources}
 	}
-	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "coverage": coverage, "sourceHome": map[string]any{"path": s.codexHome, "resolution": s.codexHomeSource}, "process": map[string]any{"state": processState, "inspectorVersion": version.CLI, "cliVersion": version.CLI, "cliCompatibility": s.compat.CLICompatibility, "pluginVersion": s.compat.PluginVersion, "pluginProtocolVersion": s.compat.PluginProtocol, "pid": os.Getpid(), "startedAt": s.meta.StartedAt.Format(time.RFC3339Nano)}, "index": index, "hook": map[string]any{"state": hookState, "registeredEvents": []string{"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"}, "lastMarker": lastMarker, "diagnostics": diagnostics}})
+	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "coverage": coverage, "sourceHome": map[string]any{"path": s.codexHome, "resolution": s.codexHomeSource}, "inspectorHome": map[string]any{"path": s.layout.Root}, "process": map[string]any{"state": processState, "inspectorVersion": version.CLI, "cliVersion": version.CLI, "cliCompatibility": s.compat.CLICompatibility, "pluginVersion": s.compat.PluginVersion, "pluginProtocolVersion": s.compat.PluginProtocol, "pid": os.Getpid(), "startedAt": s.meta.StartedAt.Format(time.RFC3339Nano)}, "index": index, "hook": map[string]any{"state": hookState, "registeredEvents": []string{"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"}, "lastMarker": lastMarker, "diagnostics": diagnostics}})
 }
 func sourceRemediation(state, reason string) string {
 	switch reason {

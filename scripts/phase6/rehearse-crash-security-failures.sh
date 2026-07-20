@@ -10,9 +10,9 @@ go test -count=1 ./internal/indexer -run 'TestAppendChangesOnlyNewTurnAndPinnedR
 go test -count=1 ./internal/storage -run 'TestCanceledNormalizationTransactionLeavesNoPartialRevision|TestDatasetEpochAtomicReplacementAndFailedBuildIsolation|TestCandidateCorruptionCannotReplaceActiveCatalog'
 go test -count=1 ./internal/reviews -run 'TestLaunchRequiresConfirmationCapturesThreadAndAcceptsFirstValidReport|TestInvalidMissingCitationAndProcessFailureRemainDiagnosable|TestPlanCoverageUsesPinnedSourceInventoryStates'
 
-# Loopback bootstrap/authentication/origin/host, payload-free diagnostics,
+# Loopback direct access/origin/host, payload-free diagnostics,
 # evidence escaping/chunking/missing sources, prompt scope, and path handling.
-go test -count=1 ./internal/server -run 'TestSecurityExchangeStatusAndIdleShutdown|TestExchangeRejectsIncompleteMismatchedAndExtraBootstrap|TestUnauthenticatedAPIRejectedAndNoSecretsInResponses|TestStatusExcludesInvalidPersistedMarkerAndReportsDiagnostic|TestPhase6AutomatedDemoBoundarySmoke'
+go test -count=1 ./internal/server -run 'TestLoopbackStatusLoadsWithoutAuthenticationAndIdleShutdown|TestSameOriginShutdownStopsServer|TestLoopbackAPIAndNestedPageLoadWithoutCredentials|TestStatusExcludesInvalidPersistedMarkerAndReportsDiagnostic|TestPhase6AutomatedDemoBoundarySmoke'
 go test -count=1 ./internal/evidence -run 'TestFingerprintMoveMissingAndBoundedResolution|TestEscapesUnsafeOrSplitBytes'
 go test -count=1 ./internal/reviews -run 'TestPlanFreezesCompleteSingleAndTimeScopes'
 go test -count=1 ./internal/home ./internal/sources ./internal/hook

@@ -23,7 +23,6 @@ func Healthy(m Metadata) bool {
 
 func HealthyContext(ctx context.Context, m Metadata) bool {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/health", m.Port), nil)
-	req.Header.Set("Authorization", "Bearer "+m.AccessToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false

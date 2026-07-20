@@ -9,14 +9,10 @@ is generated at `web/src/generated/internal-api.ts` by pinned
 ## Boundary rules
 
 - bind only to `127.0.0.1` on an ephemeral port;
-- all `/v1/*` routes except token exchange and startup diagnostics require the SameSite session cookie;
-- token exchange accepts the per-process fragment token whenever the CLI opens
-  a browser, establishes an HttpOnly `SameSite=Strict` cookie, and removes the
-  fragment from browser history; the token remains only in user-readable
-  process metadata so a cleared or expired browser session can reconnect;
-- startup diagnostics is a read-only loopback endpoint that validates `Host`
-  and returns only the effective `CODEX_HOME` and `CODEX_INSPECTOR_HOME` paths
-  needed to diagnose a failed browser bootstrap;
+- all `/v1/*` routes are directly accessible on the loopback server without
+  authentication, tokens, or cookies;
+- every API request validates the exact loopback `Host`; state-changing and
+  streaming requests additionally validate the local `Origin`;
 - state-changing and streaming requests validate `Host` and `Origin`;
 - paths from browser input are never accepted;
 - evidence is addressed only by opaque `evidenceId` and byte/chunk bounds;
@@ -24,9 +20,9 @@ is generated at `web/src/generated/internal-api.ts` by pinned
   when it represents indexed facts;
 - every indexed snapshot carries `schemaVersion: 2`; a v1 database is a
   rebuild input, never an API snapshot;
-- status identifies the one canonical effective Codex home and whether it was
-  resolved from `CODEX_HOME` or the default; processes and dataset catalogs are
-  bound to that identity and cannot be reused across homes;
+- status identifies both the canonical effective Codex home (including whether
+  it came from `CODEX_HOME` or the default) and `CODEX_INSPECTOR_HOME`; processes
+  and dataset catalogs are bound to that identity and cannot be reused across homes;
 - list endpoints use cursor pagination with maximum page size 200;
 - errors use the shared `Problem` schema and never include raw source payloads.
 

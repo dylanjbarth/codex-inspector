@@ -1,7 +1,6 @@
 import type { components } from './generated/internal-api'
 
 export type Status = components['schemas']['Status']
-export type StartupDiagnostics = components['schemas']['StartupDiagnostics']
 export type MetricResult = components['schemas']['MetricResult']
 export type FilterOptions = components['schemas']['MetricFilterOptions']
 export type SessionPage = components['schemas']['SessionPage']
@@ -21,32 +20,12 @@ export type DashboardQuery = {
   reasoningEfforts?: string[]; contributionKinds?: string[]; requestedRevision?: number;
 }
 export async function establishSession(): Promise<Status> {
-  const bootstrap = new URLSearchParams(location.hash.replace(/^#/, ''))
-  const token = bootstrap.get('token') ?? ''
-  if (token) {
-	const instanceId = bootstrap.get('instanceId') ?? ''
-	const protocolVersion = Number(bootstrap.get('protocolVersion'))
-	if (!instanceId || protocolVersion !== 1) throw new Error('Secure startup metadata is incomplete')
-    const exchange = await fetch('/v1/token/exchange', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'X-Inspector-Origin': location.origin },
-      body: JSON.stringify({ token, instanceId, protocolVersion }),
-    })
-    if (!exchange.ok) throw new Error('Secure token exchange failed')
-    history.replaceState(null, '', location.pathname + location.search)
-  }
   return fetchStatus()
 }
 
 export async function fetchStatus(): Promise<Status> {
   const response = await fetch('/v1/status')
-  if (!response.ok) throw new Error('This browser is not connected to the running Inspector server')
-  return response.json()
-}
-
-export async function fetchStartupDiagnostics(): Promise<StartupDiagnostics> {
-  const response = await fetch('/v1/startup-diagnostics')
-  if (!response.ok) throw new Error('Startup diagnostics are unavailable')
+  if (!response.ok) throw new Error('The local Inspector server is unavailable')
   return response.json()
 }
 

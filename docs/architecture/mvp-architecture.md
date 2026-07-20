@@ -98,19 +98,17 @@ A browser cannot safely open arbitrary local rollout files or the Inspector SQLi
 
 1. reuses an existing healthy Inspector process when one exists;
 2. otherwise starts a detached short-lived server and returns;
-3. records its PID, port, protocol version, and access token;
+3. records its PID, port, protocol version, instance ID, and effective Codex home;
 4. remains alive while indexing is active or a dashboard heartbeat is present;
 5. exits after an idle interval with no clients and no queued work;
 6. recovers from stale process metadata on the next invocation.
 
-Process metadata is written atomically with user-only permissions after the server has bound its port. It contains a random instance ID in addition to PID, port, protocol, and token metadata. Reuse requires an authenticated health response with the expected instance ID and protocol; PID existence alone is never considered healthy, which prevents PID-reuse mistakes. A user-scoped process lock serializes competing `open`, `_serve`, and writer starts.
+Process metadata is written atomically with user-only permissions after the server has bound its port. It contains a random instance ID in addition to PID, port, protocol, and home metadata. Reuse requires a loopback health response with the expected instance ID and protocol; PID existence alone is never considered healthy, which prevents PID-reuse mistakes. A user-scoped process lock serializes competing `open`, `_serve`, and writer starts.
 
 The demo loopback security contract is:
 
 - bind only to `127.0.0.1` on an ephemeral port;
-- generate a cryptographically random per-process access token;
-- place the token only in the fragment of the initial browser URL;
-- exchange the fragment token for a SameSite session cookie whenever `codex-inspector open` connects a browser, and remove the fragment from browser history;
+- allow direct access from refreshed pages and new tabs without authentication or cookies;
 - validate `Host` and `Origin` on state-changing and streaming requests;
 - serve no remote scripts, fonts, images, or other assets;
 - set a restrictive Content Security Policy;
@@ -895,7 +893,7 @@ The developer's real local supported-format corpus is the integration and demo c
 - **Evidence tests:** raw locator resolution, archive/move rediscovery, and unavailable-source behavior.
 - **Inspector tests:** map/ledger ordering, focus state, exact payload resolution, compaction evidence, and unavailable-context states.
 - **Review tests:** scope manifests, `codex exec` event parsing, run discovery, strict report schema, first-valid acceptance, missing citations, and partial directories.
-- **Server security tests:** loopback binding, fragment-token exchange, cookie/origin/host checks, CSP, opaque evidence IDs, process reuse, revision notifications, and idle shutdown.
+- **Server security tests:** loopback binding, direct refresh/new-tab access, origin/host checks, CSP, opaque evidence IDs, process reuse, revision notifications, and idle shutdown.
 - **Adversarial display tests:** HTML, Markdown, ANSI/control characters, malformed UTF-8, huge payload chunking, and path-traversal attempts.
 - **UI tests:** partial coverage, status tray, New data available behavior, preserved state, deep links, and review return paths.
 - **Plugin smoke tests:** marketplace discovery, hook trust, missing/incompatible CLI guidance, bootstrap, and skill routes.

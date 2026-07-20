@@ -8,7 +8,7 @@ import (
 
 func TestMetadataAtomicUserOnlyRoundTrip(t *testing.T) {
 	run := t.TempDir()
-	want := Metadata{InstanceID: "fake-instance", PID: 123, Port: 4567, ProtocolVersion: 1, AccessToken: "secret", FragmentToken: "fragment", StartupStage: "source_format", CodexHome: "/tmp/codex", CodexHomeSource: "environment", StartedAt: time.Unix(1, 0).UTC()}
+	want := Metadata{InstanceID: "fake-instance", PID: 123, Port: 4567, ProtocolVersion: 1, StartupStage: "source_format", CodexHome: "/tmp/codex", CodexHomeSource: "environment", StartedAt: time.Unix(1, 0).UTC()}
 	if err := Write(run, want); err != nil {
 		t.Fatal(err)
 	}
@@ -16,7 +16,7 @@ func TestMetadataAtomicUserOnlyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.InstanceID != want.InstanceID || got.AccessToken != want.AccessToken || got.StartupStage != want.StartupStage {
+	if got.InstanceID != want.InstanceID || got.StartupStage != want.StartupStage {
 		t.Fatalf("got %+v", got)
 	}
 	info, _ := os.Stat(Path(run))

@@ -335,7 +335,7 @@ func InspectWithProgress(l home.Layout, includeServer bool, progress func(string
 		report("server")
 		m, e := proc.Read(l.Run)
 		if e == nil && proc.Healthy(m) {
-			checks = append(checks, Check{"server", "ok", "authenticated loopback server is healthy"})
+			checks = append(checks, Check{"server", "ok", "local loopback server is healthy"})
 		} else if os.IsNotExist(e) {
 			checks = append(checks, Check{"server", "ok", "server is stopped and ready to start on an ephemeral loopback port"})
 		} else {

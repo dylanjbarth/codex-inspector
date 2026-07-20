@@ -179,7 +179,7 @@ func TestOpenReuseNoBrowserAndBackgroundSyncStagesPreserveStdout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := proc.Metadata{InstanceID: "test-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, AccessToken: token, FragmentToken: "private-fragment", CodexHome: effective.Path, CodexHomeSource: effective.Resolution, StartedAt: time.Now()}
+	m := proc.Metadata{InstanceID: "test-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, CodexHome: effective.Path, CodexHomeSource: effective.Resolution, StartedAt: time.Now()}
 	if err = proc.Write(l.Run, m); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,6 @@ func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
 	if err = home.Ensure(l); err != nil {
 		t.Fatal(err)
 	}
-	const accessToken = "private-stop-token"
 	var port int
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -230,7 +229,7 @@ func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
 		case "/v1/status":
 			fmt.Fprint(w, `{"process":{"state":"ready","cliVersion":"0.1.0"},"index":{"state":"current","queuedSessionChanges":0},"hook":{"state":"healthy"}}`)
 		case "/v1/shutdown":
-			if r.Header.Get("Authorization") != "Bearer "+accessToken || r.Header.Get("Origin") != fmt.Sprintf("http://127.0.0.1:%d", port) {
+			if r.Header.Get("Authorization") != "" || r.Header.Get("Origin") != fmt.Sprintf("http://127.0.0.1:%d", port) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -244,7 +243,7 @@ func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
 	defer ts.Close()
 	u, _ := url.Parse(ts.URL)
 	port, _ = strconv.Atoi(u.Port())
-	m := proc.Metadata{InstanceID: "stop-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, AccessToken: accessToken, CodexHome: codexHome, CodexHomeSource: "environment", StartedAt: time.Now()}
+	m := proc.Metadata{InstanceID: "stop-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, CodexHome: codexHome, CodexHomeSource: "environment", StartedAt: time.Now()}
 	if err = proc.Write(l.Run, m); err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +275,7 @@ func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
 }
 
 func TestAwaitServerAllowsSlowReadinessAndSanitizesFailures(t *testing.T) {
-	want := proc.Metadata{InstanceID: "ready", Port: 1234, ProtocolVersion: 1, AccessToken: "secret"}
+	want := proc.Metadata{InstanceID: "ready", Port: 1234, ProtocolVersion: 1}
 	reads := 0
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -336,7 +335,7 @@ func TestAwaitServerReportsOnlyKnownSanitizedStartupStages(t *testing.T) {
 		t.Fatalf("await server failed: childExited=%t err=%v", childExited, err)
 	}
 	got := strings.Join(stages, "\n")
-	if strings.Count(got, "recorded source format") != 1 || !strings.Contains(got, "authenticated dashboard endpoint") || strings.Contains(got, "raw-secret") || strings.Contains(got, "/private/path") {
+	if strings.Count(got, "recorded source format") != 1 || !strings.Contains(got, "local dashboard endpoint") || strings.Contains(got, "raw-secret") || strings.Contains(got, "/private/path") {
 		t.Fatalf("unexpected startup stages: %q", got)
 	}
 }
@@ -445,10 +444,10 @@ func TestOpenDashboardReportsBrowserAndSuppressedVariants(t *testing.T) {
 	}
 }
 
-func TestDashboardURLReconnectsAfterPriorFragmentExchange(t *testing.T) {
-	m := proc.Metadata{Port: 52557, InstanceID: "instance-1", ProtocolVersion: 1, FragmentToken: "private-fragment", FragmentExchanged: true}
+func TestDashboardURLUsesDirectLoopbackRoute(t *testing.T) {
+	m := proc.Metadata{Port: 52557, InstanceID: "instance-1", ProtocolVersion: 1}
 	got := dashboardURL(m, "/context")
-	want := "http://127.0.0.1:52557/context#token=private-fragment&instanceId=instance-1&protocolVersion=1"
+	want := "http://127.0.0.1:52557/context"
 	if got != want {
 		t.Fatalf("dashboard URL=%q want=%q", got, want)
 	}
