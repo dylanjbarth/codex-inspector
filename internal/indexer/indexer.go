@@ -100,6 +100,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 			}
 			store.Close()
+			notify(cfg, p)
 			return p, nil
 		}
 	}
@@ -112,17 +113,20 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			batch, e := sources.ParseSessionIndex(c)
 			if e != nil {
 				p.Failed++
+				notify(cfg, p)
 				continue
 			}
 			checkpoint, e := store.Checkpoint(batch.Source.ID)
 			if e == nil && batch.Source.Size == checkpoint.Size && batch.Source.PrefixSHA256 == checkpoint.Prefix && checkpoint.Path == c.Path {
 				p.Skipped++
+				notify(cfg, p)
 				continue
 			}
 			if e == nil && (batch.Source.Size < checkpoint.Offset || !prefixMatches(c.Path, checkpoint.Offset, checkpoint.Prefix)) {
 				_ = store.MarkRequiresRebuild(batch.Source.ID, "indexed_prefix_changed_or_shrank")
 				p.RequiresRebuild++
 				rebuildRequested = true
+				notify(cfg, p)
 				continue
 			}
 			chunks, splitErr := splitBatches(batch)
@@ -139,6 +143,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			} else {
 				p.Processed++
 			}
+			notify(cfg, p)
 		}
 	}
 	rollouts := make([]sources.Candidate, 0, len(candidates))
@@ -200,6 +205,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 				_ = storeFailed(ctx, store, candidate, "parse_failed")
 				p.Failed++
+				notify(cfg, p)
 				continue
 			}
 			if candidate.MTimeNS > 0 {
@@ -221,6 +227,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 			} else if !errors.Is(e, sql.ErrNoRows) {
 				p.Failed++
+				notify(cfg, p)
 				continue
 			}
 			if item.batch.Session != nil {
@@ -246,6 +253,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 				_ = storeFailed(ctx, store, candidate, "normalization_failed")
 				p.Failed++
+				notify(cfg, p)
 				continue
 			}
 			p.Processed++
@@ -278,8 +286,10 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		}
 	}
 	if p.Failed > 0 {
+		notify(cfg, p)
 		return p, fmt.Errorf("%d sources failed: %v", p.Failed, firstFailure)
 	}
+	notify(cfg, p)
 	return p, nil
 }
 

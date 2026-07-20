@@ -115,7 +115,11 @@ In the printed disposable environment:
 2. Select **Review hooks**, verify that all seven definitions invoke the
    plugin-owned `inspector-hook.sh`, then choose **Trust all and continue**.
 3. Run `codex-inspector doctor`; every check must be `ok`.
-4. Run `codex-inspector open` and then `codex-inspector sync --wait`.
+4. Run `codex-inspector open`. A new server automatically starts indexing in
+   the background. For this acceptance proof, deliberately run
+   `codex-inspector sync --wait` afterward so the finite pass and its final
+   counts are captured before continuing; this blocking command is not needed
+   in normal interactive use.
 5. Confirm the dashboard reports the entire supported inventory with explicit
    unsupported, partial, or failed counts.
 6. Complete the user flow below.

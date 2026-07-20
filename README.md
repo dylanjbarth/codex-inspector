@@ -59,15 +59,25 @@ codex plugin add codex-inspector@codex-inspector-development
 Start Codex, choose **Review hooks**, confirm that all seven Inspector hooks
 invoke `inspector-hook.sh`, and choose **Trust all and continue**.
 
-Finish setup and start the initial index:
+Finish setup and open the dashboard:
 
 ```sh
 codex-inspector doctor
 codex-inspector open
-codex-inspector sync --wait
 ```
 
-`doctor` should report every check as `ok`. `open` launches the local dashboard.
+`doctor` should report every check as `ok`. `open` starts or reuses the local
+server, launches the dashboard, and automatically starts indexing in the
+background when the server is new. Check that work with:
+
+```sh
+codex-inspector status
+```
+
+To explicitly block until a finite indexing pass completes and receive its
+final JSON counts, run `codex-inspector sync --wait`. To queue another pass on
+an already-running server without blocking, run `codex-inspector sync
+--background`.
 
 ### Manual CLI install
 
@@ -119,7 +129,8 @@ mutation visible and requires confirmation:
 > `codex-inspector@codex-inspector-development`. Do not copy credentials or
 > inspect my Codex history. Tell me how to review and trust the seven plugin
 > hooks myself. Finally run `codex-inspector doctor`; if healthy, run
-> `codex-inspector open` and `codex-inspector sync --wait`. Stop on any checksum,
+> `codex-inspector open`, which starts indexing in the background, and then run
+> `codex-inspector status`. Stop on any checksum,
 > platform, compatibility, or trust failure and report it without bypassing it.
 
 ## Try the demo

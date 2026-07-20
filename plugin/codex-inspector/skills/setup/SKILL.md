@@ -24,4 +24,7 @@ codex plugin add codex-inspector@codex-inspector-development
 Tell the user to review and manually trust all seven Inspector hooks in Codex.
 Then run `codex-inspector doctor`; stop and report any platform, checksum,
 compatibility, or trust failure rather than bypassing it. Once healthy, run
-`codex-inspector open` and `codex-inspector sync --wait`.
+`codex-inspector open`; a new server starts indexing in the background. Run
+`codex-inspector status` to check that work. Use `codex-inspector sync --wait`
+only when the user explicitly wants to block for a finite pass and its final
+JSON counts.

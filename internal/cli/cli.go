@@ -89,9 +89,15 @@ func doctorCmd(args []string, s IO) error {
 	if err := f.Parse(args); err != nil {
 		return err
 	}
+	if !*asJSON {
+		fmt.Fprintln(s.Err, "Doctor: checking Codex, plugin hooks, data home, and local server...")
+	}
 	l, err := home.Resolve()
 	if err != nil {
-		return err
+		if !*asJSON {
+			fmt.Fprintln(s.Err, "Doctor: checks could not be completed.")
+		}
+		return errors.New("Inspector home could not be resolved; check CODEX_INSPECTOR_HOME and retry")
 	}
 	snapshot := compat.Inspect(l, true)
 	checks := snapshot.Checks
@@ -115,8 +121,10 @@ func doctorCmd(args []string, s IO) error {
 		fmt.Fprintf(s.Out, "%-15s %-12s %s\n", c.Name, c.Status, c.Detail)
 	}
 	if !healthy {
+		fmt.Fprintln(s.Err, "Doctor: checks complete; one or more require attention.")
 		return errors.New("one or more checks require attention")
 	}
+	fmt.Fprintln(s.Err, "Doctor: all checks complete.")
 	return nil
 }
 
@@ -129,7 +137,7 @@ func statusCmd(args []string, s IO) error {
 	}
 	l, e := home.Resolve()
 	if e != nil {
-		return e
+		return errors.New("Inspector home could not be resolved; check CODEX_INSPECTOR_HOME and retry")
 	}
 	m, e := proc.Read(l.Run)
 	if e != nil || !proc.Healthy(m) {
@@ -141,7 +149,7 @@ func statusCmd(args []string, s IO) error {
 	}
 	body, e := request(m, http.MethodGet, "/v1/status", nil)
 	if e != nil {
-		return e
+		return errors.New("Inspector server did not answer; run codex-inspector open")
 	}
 	if *asJSON {
 		_, e = s.Out.Write(body)
@@ -161,7 +169,7 @@ func statusCmd(args []string, s IO) error {
 		} `json:"hook"`
 	}
 	if json.Unmarshal(body, &v) != nil {
-		return errors.New("invalid status response")
+		return errors.New("Inspector server returned an invalid status; run codex-inspector open")
 	}
 	fmt.Fprintf(s.Out, "process=%s cli=%s index=%s hook=%s queued_markers=%d\n", v.Process.State, v.Process.CLIVersion, v.Index.State, v.Hook.State, v.Index.Queued)
 	return nil
@@ -181,26 +189,37 @@ func syncCmd(args []string, s IO) error {
 	if *bg {
 		mode = "background"
 	}
+	if mode == "wait" {
+		fmt.Fprintln(s.Err, "Sync: discovering supported Codex sources...")
+	} else {
+		fmt.Fprintln(s.Err, "Sync: asking the local server to queue background indexing...")
+	}
 	l, e := home.Resolve()
 	if e != nil {
-		return e
+		return errors.New("Inspector home could not be resolved; check CODEX_INSPECTOR_HOME and retry")
 	}
 	if mode == "wait" {
-		progress, runErr := indexer.Run(context.Background(), indexer.Config{Layout: l})
+		reporter := newSyncProgressReporter(s.Err)
+		progress, runErr := indexer.Run(context.Background(), indexer.Config{Layout: l, OnCommit: reporter.Report})
 		if runErr != nil {
-			return runErr
+			reporter.Failed(progress)
+			return errors.New("sync did not complete; run codex-inspector doctor for compatibility and setup checks")
 		}
+		reporter.Complete(progress)
 		return json.NewEncoder(s.Out).Encode(map[string]any{"state": "complete", "inventoried": progress.Inventoried, "processed": progress.Processed, "skipped": progress.Skipped, "failed": progress.Failed, "requiresRebuild": progress.RequiresRebuild, "queueConsumed": progress.QueueConsumed, "reverseScanBoundary": progress.Boundary})
 	}
 	m, e := proc.Read(l.Run)
 	if e != nil || !proc.Healthy(m) {
+		fmt.Fprintln(s.Err, "Sync: background indexing was not queued.")
 		return errors.New("Inspector server is not running; run codex-inspector open")
 	}
 	b, _ := json.Marshal(map[string]string{"mode": mode})
 	out, e := request(m, http.MethodPost, "/v1/sync", b)
 	if e != nil {
-		return e
+		fmt.Fprintln(s.Err, "Sync: background indexing was not queued.")
+		return errors.New("Inspector server did not queue background indexing; run codex-inspector status")
 	}
+	fmt.Fprintln(s.Err, "Sync: background indexing queued; run codex-inspector status to check it.")
 	fmt.Fprintf(s.Out, "%s", out)
 	return nil
 }
@@ -242,38 +261,41 @@ func openCmd(args []string, s IO) error {
 	if *review {
 		*route = "/reviews/new"
 	}
+	fmt.Fprintln(s.Err, "Open: preparing the local dashboard...")
 	l, e := home.Resolve()
 	if e != nil {
-		return e
+		return errors.New("Inspector home could not be resolved; run codex-inspector doctor")
 	}
 	if e = home.Ensure(l); e != nil {
-		return e
+		return errors.New("Inspector data home could not be prepared; run codex-inspector doctor")
 	}
 	lock, e := proc.Acquire(filepath.Join(l.Run, "open.lock"), false)
 	if e != nil {
-		return e
+		return errors.New("Inspector could not coordinate local server startup; run codex-inspector doctor")
 	}
 	defer lock.Close()
+	fmt.Fprintln(s.Err, "Open: checking for a healthy local Inspector server...")
 	m, e := proc.Read(l.Run)
 	reused := e == nil && proc.Healthy(m)
 	if !reused {
+		fmt.Fprintln(s.Err, "Open: starting the local server; initial indexing will continue in the background...")
 		_ = os.Remove(proc.Path(l.Run))
 		m, e = startServer(l)
 		if e != nil {
+			fmt.Fprintln(s.Err, "Open: the local server did not become ready.")
 			return e
 		}
+	} else {
+		fmt.Fprintln(s.Err, "Open: reusing the healthy local server.")
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", m.Port, safeRoute(*route))
 	if !m.FragmentExchanged && m.FragmentToken != "" {
 		url += "#token=" + m.FragmentToken + "&instanceId=" + m.InstanceID + "&protocolVersion=" + strconv.Itoa(m.ProtocolVersion)
 	}
-	if !*noBrowser {
-		if runtime.GOOS != "darwin" {
-			return errors.New("Phase 1 supports macOS only")
-		}
-		if e = exec.Command("/usr/bin/open", url).Run(); e != nil {
-			return fmt.Errorf("open browser: %w", e)
-		}
+	if e = openDashboard(url, *noBrowser, s.Err, runtime.GOOS, func(target string) error {
+		return exec.Command("/usr/bin/open", target).Run()
+	}); e != nil {
+		return e
 	}
 	kind := "started"
 	if reused {
@@ -282,16 +304,37 @@ func openCmd(args []string, s IO) error {
 	fmt.Fprintf(s.Out, "Inspector %s at %s\n", kind, strings.Split(url, "#")[0])
 	return nil
 }
+
+func openDashboard(url string, noBrowser bool, w io.Writer, goos string, launch func(string) error) error {
+	if noBrowser {
+		fmt.Fprintln(w, "Open: browser launch suppressed (--no-browser).")
+		return nil
+	}
+	if goos != "darwin" {
+		return errors.New("Phase 1 supports macOS only")
+	}
+	fmt.Fprintln(w, "Open: opening the dashboard in the default browser...")
+	if err := launch(url); err != nil {
+		fmt.Fprintln(w, "Open: the browser could not be opened.")
+		return errors.New("default browser could not be opened; retry with codex-inspector open --no-browser")
+	}
+	fmt.Fprintln(w, "Open: dashboard opened in the browser.")
+	return nil
+}
+
 func safeRoute(route string) string {
 	if route == "" || route[0] != '/' || strings.Contains(route, "\\") || strings.Contains(route, "..") || strings.ContainsAny(route, "\r\n") {
 		return "/"
 	}
 	return route
 }
+
+const serverStartupTimeout = 15 * time.Second
+
 func startServer(l home.Layout) (proc.Metadata, error) {
 	exe, e := os.Executable()
 	if e != nil {
-		return proc.Metadata{}, e
+		return proc.Metadata{}, errors.New("Inspector server executable could not be located; run codex-inspector doctor")
 	}
 	serveArgs := []string{"_serve"}
 	if testIdle := os.Getenv("CODEX_INSPECTOR_TEST_IDLE_TIMEOUT"); testIdle != "" {
@@ -301,25 +344,70 @@ func startServer(l home.Layout) (proc.Metadata, error) {
 	cmd.Stdin = nil
 	null, e := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if e != nil {
-		return proc.Metadata{}, e
+		return proc.Metadata{}, errors.New("Inspector server output could not be isolated; run codex-inspector doctor")
 	}
 	defer null.Close()
 	cmd.Stdout = null
 	cmd.Stderr = null
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if e = cmd.Start(); e != nil {
-		return proc.Metadata{}, e
+		return proc.Metadata{}, errors.New("Inspector server could not be started; run codex-inspector doctor")
 	}
-	_ = cmd.Process.Release()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		m, e := proc.Read(l.Run)
-		if e == nil && proc.Healthy(m) {
-			return m, nil
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	startupCtx, cancel := context.WithTimeout(context.Background(), serverStartupTimeout)
+	defer cancel()
+	m, childExited, waitErr := awaitServer(startupCtx, l.Run, exited, serverStartupTimeout, func(ctx context.Context) bool {
+		timer := time.NewTimer(25 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			return true
+		case <-ctx.Done():
+			return false
 		}
-		time.Sleep(25 * time.Millisecond)
+	}, proc.Read, proc.HealthyContext)
+	if waitErr != nil {
+		terminateServerStart(cmd.Process, exited, childExited, l.Run)
+		return proc.Metadata{}, waitErr
 	}
-	return proc.Metadata{}, errors.New("Inspector server did not become healthy")
+	return m, nil
+}
+
+func awaitServer(ctx context.Context, run string, exited <-chan error, timeout time.Duration, pause func(context.Context) bool, read func(string) (proc.Metadata, error), healthy func(context.Context, proc.Metadata) bool) (proc.Metadata, bool, error) {
+	for {
+		select {
+		case <-exited:
+			return proc.Metadata{}, true, errors.New("Inspector server exited before becoming healthy; run codex-inspector doctor")
+		case <-ctx.Done():
+			return proc.Metadata{}, false, fmt.Errorf("Inspector server was still starting after %s; run codex-inspector doctor", timeout)
+		default:
+		}
+		m, err := read(run)
+		if err == nil && healthy(ctx, m) {
+			return m, false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return proc.Metadata{}, false, fmt.Errorf("Inspector server was still starting after %s; run codex-inspector doctor", timeout)
+		default:
+		}
+		if !pause(ctx) {
+			return proc.Metadata{}, false, fmt.Errorf("Inspector server was still starting after %s; run codex-inspector doctor", timeout)
+		}
+	}
+}
+
+type processKiller interface {
+	Kill() error
+}
+
+func terminateServerStart(process processKiller, exited <-chan error, childExited bool, run string) {
+	if !childExited {
+		_ = process.Kill()
+		<-exited
+	}
+	_ = os.Remove(proc.Path(run))
 }
 func hookCmd(args []string, s IO) error {
 	f := flag.NewFlagSet("_hook", flag.ContinueOnError)
