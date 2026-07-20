@@ -5,7 +5,7 @@ async page => {
   await page.getByText('User root: 2,000', { exact: true }).waitFor();
   await page.getByText('Descendants: 500', { exact: true }).waitFor();
   await page.getByText('Stale recorded observation', { exact: true }).waitFor();
-  await page.getByRole('link', { name: '2,500 tokens' }).click();
+  await page.getByRole('link', { name: /Fake widget work/ }).click();
   await page.getByRole('heading', { name: 'Context Inspector' }).waitFor();
   await page.getByText('Causal session map', { exact: true }).waitFor();
   await page.getByText('2,000', { exact: true }).first().waitFor();
