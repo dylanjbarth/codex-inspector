@@ -107,6 +107,13 @@ Arguments are forwarded to `codex-inspector open`; for example, rebuild and
 restart without launching a browser with
 `scripts/dev-rebuild-restart.sh --no-browser`. Run `pnpm install
 --frozen-lockfile` first when frontend dependencies are not installed.
+`CODEX_HOME` and `CODEX_INSPECTOR_HOME` are resolved once and passed explicitly
+to the stop, open, and verification commands, so an isolated development server
+can be rebuilt and restarted in one line:
+
+```sh
+CODEX_HOME="$PWD/../.codex" CODEX_INSPECTOR_HOME="$HOME/.codex-inspector-dev" scripts/dev-rebuild-restart.sh --no-browser
+```
 
 ### Manual CLI install
 

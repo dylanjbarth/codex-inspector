@@ -63,6 +63,9 @@ type state struct {
 	indexing        bool
 	indexProgress   indexer.Progress
 	indexError      string
+	autoSuppressed  bool
+	failedRuns      int
+	rebuiltRuns     int
 	metricEngine    *metrics.Engine
 	reviewManager   *reviews.Manager
 	events          *eventBuffer
@@ -194,7 +197,7 @@ func Run(ctx context.Context, c Config) error {
 	_ = proc.Write(c.Layout.Run, m)
 	defer s.indexWG.Wait()
 	if c.AutoSync {
-		s.startIndex()
+		s.startIndex(true)
 	}
 	mux := http.NewServeMux()
 	s.routes(mux)
@@ -231,7 +234,7 @@ func Run(ctx context.Context, c Config) error {
 			if entries, readErr := os.ReadDir(c.Layout.Queue); readErr == nil {
 				for _, entry := range entries {
 					if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-						s.startIndex()
+						s.startIndex(false)
 						break
 					}
 				}
@@ -353,17 +356,28 @@ func (s *state) sync(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, 400, "invalid_sync", "request must contain exactly one sync value")
 		return
 	}
-	state := s.startIndex()
+	state := s.startIndex(true)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
 	json.NewEncoder(w).Encode(map[string]any{"syncId": "index-sync", "state": state})
 }
 
-func (s *state) startIndex() string {
+const maxAutomaticIndexRetries = 3
+
+func (s *state) startIndex(force bool) string {
 	s.mu.Lock()
 	if s.indexing {
 		s.mu.Unlock()
 		return "coalesced"
+	}
+	if s.autoSuppressed && !force {
+		s.mu.Unlock()
+		return "suppressed"
+	}
+	if force {
+		s.autoSuppressed = false
+		s.failedRuns = 0
+		s.rebuiltRuns = 0
 	}
 	s.indexing = true
 	s.indexError = ""
@@ -397,13 +411,12 @@ func (s *state) startIndex() string {
 		s.mu.Lock()
 		s.indexProgress = p
 		s.indexing = false
-		if err != nil {
-			s.indexError = "index_failed"
-		}
+		s.recordIndexResult(p, err)
+		resultFailed := s.indexError != ""
 		s.lastActive = time.Now()
 		s.mu.Unlock()
 		stateName := "idle"
-		if err != nil {
+		if resultFailed {
 			stateName = "failed"
 		}
 		s.events.publish("status.changed", map[string]any{"state": stateName, "queuedChanges": 0})
@@ -416,6 +429,30 @@ func (s *state) startIndex() string {
 		}
 	}()
 	return "running"
+}
+
+// recordIndexResult is called with s.mu held. It prevents a poisoned queue or
+// an unforeseen rebuild trigger from keeping the process busy indefinitely.
+func (s *state) recordIndexResult(p indexer.Progress, err error) {
+	if err != nil {
+		s.indexError = "index_failed"
+		s.failedRuns++
+		if s.failedRuns >= maxAutomaticIndexRetries {
+			s.autoSuppressed = true
+			s.indexError = "index_retry_suppressed"
+		}
+		return
+	}
+	s.failedRuns = 0
+	if p.Rebuilt {
+		s.rebuiltRuns++
+		if s.rebuiltRuns >= maxAutomaticIndexRetries {
+			s.autoSuppressed = true
+			s.indexError = "index_retry_suppressed"
+		}
+		return
+	}
+	s.rebuiltRuns = 0
 }
 
 func (s *state) metricCatalog(w http.ResponseWriter, r *http.Request) {

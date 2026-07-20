@@ -28,6 +28,7 @@ type Progress struct {
 	Inventoried, Processed, Skipped, Failed, RequiresRebuild, QueueConsumed int
 	Boundary                                                                string
 	FailureReasons                                                          map[string]int
+	Rebuilt                                                                 bool
 }
 
 type Config struct {
@@ -78,6 +79,10 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		return Progress{}, errors.New("another Inspector writer is active")
 	}
 	defer lock.Close()
+	indexPath := filepath.Join(cfg.Layout.Root, "inspector.db")
+	if err := storage.PruneSnapshots(indexPath); err != nil {
+		return Progress{}, err
+	}
 	candidates, err := sources.Discover(cfg.CodexHome, cfg.Layout.Root)
 	if err != nil {
 		return Progress{}, err
@@ -89,7 +94,6 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	var firstFailure error
 	rebuildRequested := false
 	processedSessions := map[string]string{}
-	indexPath := filepath.Join(cfg.Layout.Root, "inspector.db")
 	store, err := storage.Open(indexPath)
 	if errors.Is(err, storage.ErrSchemaV1RequiresRebuild) {
 		labels := sessionLabels(inventory)
@@ -124,7 +128,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	work := make([]sources.Candidate, 0, len(inventory))
 	for _, candidate := range inventory {
 		checkpoint, found := checkpoints[candidate.Path]
-		if found && unchangedCandidate(candidate, checkpoint) && !checkpointTargeted(candidate, checkpoint, markers, terminalProofs, spawningProofs) {
+		if found && unchangedCandidate(candidate, checkpoint) && !checkpointTargeted(checkpoint, terminalProofs, spawningProofs) {
 			p.Skipped++
 			continue
 		}
@@ -248,6 +252,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				p.Boundary = time.Unix(0, candidate.MTimeNS).UTC().Format(time.RFC3339Nano)
 			}
 			checkpoint, e := store.Checkpoint(item.batch.Source.ID)
+			checkpointExists := e == nil
 			if e == nil {
 				if item.batch.Source.Size < checkpoint.Offset || !prefixMatches(candidate.Path, checkpoint.Offset, checkpoint.Prefix) {
 					_ = store.MarkRequiresRebuild(item.batch.Source.ID, "indexed_prefix_changed_or_shrank")
@@ -256,7 +261,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 					notify(cfg, p)
 					continue
 				}
-				if item.batch.Source.Size == checkpoint.Size && item.batch.Source.PrefixSHA256 == checkpoint.Prefix && checkpoint.Path == candidate.Path && checkpoint.State != "requires_rebuild" && !checkpointTargeted(candidate, checkpoint, markers, terminalProofs, spawningProofs) {
+				if unchangedCandidate(candidate, checkpoint) && item.batch.Source.PrefixSHA256 == checkpoint.Prefix && !checkpointTargeted(checkpoint, terminalProofs, spawningProofs) {
 					p.Skipped++
 					notify(cfg, p)
 					continue
@@ -266,7 +271,12 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				notify(cfg, p)
 				continue
 			}
-			if item.batch.Session != nil {
+			// A newly discovered second segment needs a one-time rebuild so
+			// cross-segment cumulative usage can establish its baseline. An
+			// append or marker reconciliation for a segment already represented
+			// in the active epoch is safe to apply incrementally; rebuilding it
+			// on every hook marker creates an unbounded epoch-rotation loop.
+			if item.batch.Session != nil && !checkpointExists {
 				sessionKey := item.batch.Session.SourceSessionID
 				if priorSource := processedSessions[sessionKey]; (priorSource != "" && priorSource != item.batch.Source.ID) || store.HasOtherSessionSegment(sessionKey, item.batch.Source.ID) {
 					rebuildRequested = true
@@ -307,6 +317,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			p.Processed = p.Inventoried
 			p.Skipped = 0
 			p.RequiresRebuild = 0
+			p.Rebuilt = true
 		}
 	} else if err := store.ReconcileLineage(ctx); err != nil {
 		p.Failed++
@@ -689,17 +700,12 @@ func unchangedCandidate(candidate sources.Candidate, checkpoint storage.Checkpoi
 		checkpoint.State != "requires_rebuild"
 }
 
-func checkpointTargeted(candidate sources.Candidate, checkpoint storage.Checkpoint, markers map[string]bool, terminalProofs map[string]map[string]sources.TerminalProof, spawningProofs map[string]spawningProof) bool {
+func checkpointTargeted(checkpoint storage.Checkpoint, terminalProofs map[string]map[string]sources.TerminalProof, spawningProofs map[string]spawningProof) bool {
 	if terminalProofs[checkpoint.SourceSessionID] != nil {
 		return true
 	}
 	if _, ok := spawningProofs[checkpoint.SourceSessionID]; ok {
 		return true
-	}
-	for id := range markers {
-		if id == checkpoint.SourceSessionID || filepath.Clean(id) == candidate.Path || strings.Contains(filepath.Base(candidate.Path), id) {
-			return true
-		}
 	}
 	return false
 }

@@ -43,6 +43,16 @@ if [ ! -w "${install_dir}" ]; then
 fi
 
 installed_cli=${install_dir}/codex-inspector
+codex_home=${CODEX_HOME:-${HOME}/.codex}
+inspector_home=${CODEX_INSPECTOR_HOME:-${HOME}/.codex-inspector}
+
+run_inspector() {
+  CODEX_HOME="${codex_home}" CODEX_INSPECTOR_HOME="${inspector_home}" \
+    "${installed_cli}" "$@"
+}
+
+printf 'Codex Inspector dev: CODEX_HOME=%s\n' "${codex_home}"
+printf 'Codex Inspector dev: CODEX_INSPECTOR_HOME=%s\n' "${inspector_home}"
 
 printf 'Codex Inspector dev: building and embedding web assets...\n'
 ./scripts/phase1/build-web.sh
@@ -51,7 +61,10 @@ printf 'Codex Inspector dev: installing CLI at %s...\n' "${installed_cli}"
 GOBIN="${install_dir}" go install ./cmd/codex-inspector
 
 printf 'Codex Inspector dev: stopping the current local server...\n'
-"${installed_cli}" stop
+run_inspector stop
 
 printf 'Codex Inspector dev: starting the rebuilt local server...\n'
-"${installed_cli}" open "$@"
+run_inspector open "$@"
+
+printf 'Codex Inspector dev: verifying the rebuilt local server...\n'
+run_inspector status

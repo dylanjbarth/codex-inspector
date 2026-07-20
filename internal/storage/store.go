@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,10 @@ type Store struct {
 
 var ErrSchemaV1RequiresRebuild = errors.New("schema v1 requires separate-file rebuild")
 var validationTestHook func(*sql.DB)
+
+const retainedPreviousSnapshots = 2
+
+var immutableSnapshotName = regexp.MustCompile(`^index-v2-[0-9a-f]{24}\.sqlite$`)
 
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -200,6 +205,66 @@ func resolveCatalog(catalog string) (string, error) {
 func immutablePath(requested string) string {
 	stamp := fmt.Sprintf("%d", time.Now().UnixNano())
 	return filepath.Join(filepath.Dir(requested), "index-v2-"+hash([]byte(requested + ":" + stamp))[:24]+".sqlite")
+}
+
+// PruneSnapshots bounds derived index storage while retaining two previous
+// epochs for readers that were open across a recent catalog swap. Callers must
+// hold the Inspector writer lock so an in-progress candidate cannot be removed.
+func PruneSnapshots(requested string) error {
+	dir := filepath.Dir(requested)
+	active, err := resolveCatalog(filepath.Join(dir, "active-index"))
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	type snapshot struct {
+		path    string
+		modTime time.Time
+	}
+	var stale []snapshot
+	for _, entry := range entries {
+		if entry.IsDir() || !immutableSnapshotName.MatchString(entry.Name()) {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		if path == active {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		stale = append(stale, snapshot{path: path, modTime: info.ModTime()})
+	}
+	sort.Slice(stale, func(i, j int) bool { return stale[i].modTime.After(stale[j].modTime) })
+	for _, candidate := range stale[retainedCount(len(stale)):] {
+		if err = removeSQLiteFamily(candidate.path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func retainedCount(count int) int {
+	if count < retainedPreviousSnapshots {
+		return count
+	}
+	return retainedPreviousSnapshots
+}
+
+func removeSQLiteFamily(path string) error {
+	for _, suffix := range []string{"-wal", "-shm", ""} {
+		if err := os.Remove(path + suffix); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func activateCatalog(catalog, databaseName string) error {
@@ -1388,7 +1453,13 @@ func (s *Store) Rebuild(ctx context.Context, batches []facts.Batch) error {
 	if err != nil {
 		return err
 	}
-	defer replacement.Close()
+	keepCandidate := false
+	defer func() {
+		_ = replacement.Close()
+		if !keepCandidate {
+			_ = removeSQLiteFamily(candidatePath)
+		}
+	}()
 	for _, batch := range batches {
 		if _, err = replacement.Apply(ctx, batch, "rebuild_source"); err != nil {
 			_, _ = replacement.db.ExecContext(ctx, `UPDATE dataset_epochs SET state='failed' WHERE state='building'`)
@@ -1414,11 +1485,12 @@ func (s *Store) Rebuild(ctx context.Context, batches []facts.Batch) error {
 	if err = activateCatalog(s.catalog, filepath.Base(candidatePath)); err != nil {
 		return err
 	}
+	keepCandidate = true
 	// This transition happens only after the durable pointer swap. Existing
 	// read transactions retain their SQLite snapshot while new opens resolve
 	// the immutable replacement filename through active-index.
 	_, _ = s.db.ExecContext(ctx, `UPDATE dataset_epochs SET state='superseded' WHERE id=? AND state='active'`, oldEpoch)
-	return nil
+	return PruneSnapshots(s.requested)
 }
 
 func BuildAndActivate(ctx context.Context, requested string, batches []facts.Batch) error {
@@ -1428,7 +1500,13 @@ func BuildAndActivate(ctx context.Context, requested string, batches []facts.Bat
 	if err != nil {
 		return err
 	}
-	defer candidate.Close()
+	keepCandidate := false
+	defer func() {
+		_ = candidate.Close()
+		if !keepCandidate {
+			_ = removeSQLiteFamily(candidatePath)
+		}
+	}()
 	for _, batch := range batches {
 		if _, err = candidate.Apply(ctx, batch, "rebuild_source"); err != nil {
 			_, _ = candidate.db.ExecContext(ctx, `UPDATE dataset_epochs SET state='failed' WHERE state='building'`)
@@ -1451,7 +1529,11 @@ func BuildAndActivate(ctx context.Context, requested string, batches []facts.Bat
 	if _, err = candidate.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		return err
 	}
-	return activateCatalog(catalog, filepath.Base(candidatePath))
+	if err = activateCatalog(catalog, filepath.Base(candidatePath)); err != nil {
+		return err
+	}
+	keepCandidate = true
+	return PruneSnapshots(requested)
 }
 
 func (s *Store) Sessions(revision int64, query string, limit int) (string, int64, []SessionSummary, error) {

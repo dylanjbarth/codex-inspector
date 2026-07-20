@@ -426,6 +426,62 @@ func TestHookQueueCoalescesAndConsumesAfterSuccessfulReconciliation(t *testing.T
 	}
 }
 
+func TestMarkerForExistingMultiSegmentSessionDoesNotRotateEpoch(t *testing.T) {
+	layout, codex := setup(t)
+	resumeDir := filepath.Join(codex, "sessions", "resume")
+	if err := os.MkdirAll(resumeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	resume := `{"timestamp":"2026-07-04T00:00:00Z","type":"session_meta","payload":{"session_id":"root-001","timestamp":"2026-07-04T00:00:00Z","cwd":"/fake/acme","originator":"codex-tui","cli_version":"0.144.1","source":"cli"}}` + "\n" +
+		`{"timestamp":"2026-07-04T00:00:01Z","type":"turn_context","payload":{"turn_id":"resume-turn","model":"gpt-5","effort":"high","cwd":"/fake/acme"}}` + "\n" +
+		`{"timestamp":"2026-07-04T00:00:02Z","type":"event_msg","payload":{"type":"task_started","turn_id":"resume-turn"}}` + "\n" +
+		`{"timestamp":"2026-07-04T00:00:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"resume-turn"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(resumeDir, "resume.jsonl"), []byte(resume), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), Config{Layout: layout, CodexHome: codex}); err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeEpoch, _, err := store.Snapshot()
+	_ = store.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeFiles, err := filepath.Glob(filepath.Join(layout.Root, "index-v2-*.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := hook.Marker{SchemaVersion: "inspector.hook-marker/v1", ProtocolVersion: 1, EventKind: "turn_stop", SessionID: "root-001", TurnID: "turn-root-2", ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	encoded, _ := json.Marshal(marker)
+	if err = os.WriteFile(filepath.Join(layout.Queue, "multi-segment.json"), encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := Run(context.Background(), Config{Layout: layout, CodexHome: codex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err = storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterEpoch, _, err := store.Snapshot()
+	_ = store.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterFiles, err := filepath.Glob(filepath.Join(layout.Root, "index-v2-*.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress.Rebuilt || progress.QueueConsumed != 1 || afterEpoch != beforeEpoch || len(afterFiles) != len(beforeFiles) {
+		t.Fatalf("marker rotated multi-segment epoch: progress=%#v epoch=%s/%s files=%d/%d", progress, beforeEpoch, afterEpoch, len(beforeFiles), len(afterFiles))
+	}
+}
+
 func TestHookProvenTerminalStatesAndExactSpawningTurn(t *testing.T) {
 	root := t.TempDir()
 	codex := filepath.Join(root, "codex")

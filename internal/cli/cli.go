@@ -196,12 +196,48 @@ func stopCmd(args []string, s IO) error {
 	}
 	effective, _ := home.ResolveCodexHome()
 	m, err := proc.Read(l.Run)
-	if err != nil || !proc.Healthy(m) {
-		if *asJSON {
-			return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": nil, "codexHome": effective.Path, "inspectorHome": l.Root})
+	healthy := err == nil && proc.Healthy(m)
+	if err != nil || !healthy {
+		// A failed health probe does not mean the process has stopped. During
+		// startup and shutdown the endpoint can be unavailable while the old
+		// process still owns the lock. Starting its replacement in that window
+		// makes the new child exit immediately on lock contention.
+		if !processLockReleased(l.Run) {
+			if !*asJSON {
+				fmt.Fprintln(s.Err, "Stop: server endpoint is unavailable; waiting for it to become stoppable...")
+			}
+			if err != nil {
+				if !waitForProcessLockRelease(l.Run, 60*time.Second) {
+					return errors.New("Inspector process lock remained held without readable metadata after 1m; inspect the recorded process before retrying")
+				}
+			} else {
+				deadline := time.Now().Add(60 * time.Second)
+				for time.Now().Before(deadline) && !processLockReleased(l.Run) {
+					current, readErr := proc.Read(l.Run)
+					if readErr == nil && current.InstanceID == m.InstanceID && proc.Healthy(current) {
+						healthy = true
+						m = current
+						break
+					}
+					time.Sleep(25 * time.Millisecond)
+				}
+				if !healthy && !processLockReleased(l.Run) {
+					return errors.New("Inspector server remained unavailable while holding the process lock after 1m; inspect the recorded process before retrying")
+				}
+			}
 		}
-		fmt.Fprintf(s.Out, "Inspector is already stopped\ncodex_home=%s\ninspector_home=%s\n", effective.Path, l.Root)
-		return nil
+		if !healthy {
+			if err == nil {
+				_ = proc.RemoveIfInstance(l.Run, m.InstanceID)
+			}
+			if *asJSON {
+				return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": nil, "codexHome": effective.Path, "inspectorHome": l.Root})
+			}
+			fmt.Fprintf(s.Out, "Inspector is already stopped\ncodex_home=%s\ninspector_home=%s\n", effective.Path, l.Root)
+			return nil
+		}
+		// The process was still starting when stop began. It is healthy now,
+		// so continue through the normal graceful shutdown path below.
 	}
 	if !*asJSON {
 		fmt.Fprintf(s.Err, "Stop: requesting graceful shutdown on port %d...\n", m.Port)
@@ -218,7 +254,7 @@ func stopCmd(args []string, s IO) error {
 			}
 		}
 	}
-	const shutdownTimeout = 15 * time.Second
+	const shutdownTimeout = 60 * time.Second
 	deadline := time.Now().Add(shutdownTimeout)
 	cleanupReported := false
 	for time.Now().Before(deadline) {
@@ -241,9 +277,24 @@ func stopCmd(args []string, s IO) error {
 	return fmt.Errorf("Inspector server did not finish stopping within %s; inspect codex-inspector status", shutdownTimeout)
 }
 
+func waitForProcessLockRelease(run string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if processLockReleased(run) {
+			return true
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return processLockReleased(run)
+}
+
 func processLockReleased(run string) bool {
 	lock, err := proc.Acquire(filepath.Join(run, "process.lock"), true)
 	if err != nil {
+		// A missing run directory means no server can own its process lock.
+		if errors.Is(err, os.ErrNotExist) {
+			return true
+		}
 		return false
 	}
 	_ = lock.Close()
@@ -420,7 +471,7 @@ func safeRoute(route string) string {
 	return route
 }
 
-const serverStartupTimeout = 15 * time.Second
+const serverStartupTimeout = 60 * time.Second
 
 func startServer(l home.Layout, progress io.Writer) (proc.Metadata, error) {
 	exe, e := os.Executable()

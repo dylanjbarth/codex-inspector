@@ -469,3 +469,34 @@ func TestProcessLockReleasedTracksServerCleanup(t *testing.T) {
 		t.Fatal("released process lock remained unavailable")
 	}
 }
+
+func TestWaitForProcessLockReleaseWaitsAndTimesOut(t *testing.T) {
+	run := t.TempDir()
+	lock, err := proc.Acquire(filepath.Join(run, "process.lock"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		_ = lock.Close()
+		close(released)
+	}()
+	if !waitForProcessLockRelease(run, time.Second) {
+		t.Fatal("process lock release was not observed")
+	}
+	<-released
+
+	lock, err = proc.Acquire(filepath.Join(run, "process.lock"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	started := time.Now()
+	if waitForProcessLockRelease(run, 30*time.Millisecond) {
+		t.Fatal("held process lock reported as released")
+	}
+	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+		t.Fatalf("process lock timeout was not bounded: %s", elapsed)
+	}
+}

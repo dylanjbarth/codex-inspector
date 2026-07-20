@@ -81,8 +81,16 @@ func TestDatasetEpochAtomicReplacementAndFailedBuildIsolation(t *testing.T) {
 		t.Fatal(e)
 	}
 	bad := facts.Batch{Source: facts.Source{State: "supported", Kind: "active_rollout"}}
+	filesBeforeFailure, e := filepath.Glob(filepath.Join(filepath.Dir(path), "index-v2-*.sqlite"))
+	if e != nil {
+		t.Fatal(e)
+	}
 	if e = store.Rebuild(context.Background(), []facts.Batch{bad}); e == nil {
 		t.Fatal("invalid replacement activated")
+	}
+	filesAfterFailure, globErr := filepath.Glob(filepath.Join(filepath.Dir(path), "index-v2-*.sqlite"))
+	if globErr != nil || len(filesAfterFailure) != len(filesBeforeFailure) {
+		t.Fatalf("failed candidate leaked: before=%d after=%d err=%v", len(filesBeforeFailure), len(filesAfterFailure), globErr)
 	}
 	epochAfterFailure, revAfterFailure, _ := store.Snapshot()
 	if epochAfterFailure != oldEpoch || revAfterFailure != oldRev {
@@ -114,5 +122,35 @@ func TestDatasetEpochAtomicReplacementAndFailedBuildIsolation(t *testing.T) {
 	}
 	if e = oldSnapshot.Commit(); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestRepeatedRebuildsRetainBoundedSnapshotSet(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inspector.db")
+	initial, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = initial.Close(); err != nil {
+		t.Fatal(err)
+	}
+	batches := []facts.Batch{parsed(t, "root.jsonl", "active_rollout"), parsed(t, "descendant.jsonl", "archived_rollout")}
+	for i := 0; i < 6; i++ {
+		store, openErr := storage.Open(path)
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		rebuildErr := store.Rebuild(context.Background(), batches)
+		_ = store.Close()
+		if rebuildErr != nil {
+			t.Fatal(rebuildErr)
+		}
+	}
+	files, err := filepath.Glob(filepath.Join(filepath.Dir(path), "index-v2-*.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) > 3 {
+		t.Fatalf("snapshot retention is unbounded: %d files", len(files))
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,23 @@ import (
 
 func startTestServer(t *testing.T, idle time.Duration) (proc.Metadata, home.Layout, context.CancelFunc, <-chan error) {
 	return startTestServerWith(t, idle, nil)
+}
+
+func TestAutomaticIndexCircuitBreaker(t *testing.T) {
+	s := &state{}
+	for i := 0; i < maxAutomaticIndexRetries; i++ {
+		s.recordIndexResult(indexer.Progress{Rebuilt: true}, nil)
+	}
+	if !s.autoSuppressed || s.indexError != "index_retry_suppressed" {
+		t.Fatalf("repeated rebuilds did not suppress automatic indexing: %#v", s)
+	}
+	s = &state{}
+	for i := 0; i < maxAutomaticIndexRetries; i++ {
+		s.recordIndexResult(indexer.Progress{}, errors.New("failed"))
+	}
+	if !s.autoSuppressed || s.indexError != "index_retry_suppressed" {
+		t.Fatalf("repeated failures did not suppress automatic indexing: %#v", s)
+	}
 }
 
 func TestReviewPlanHandlerFrozenContractAndConfirmationGate(t *testing.T) {
