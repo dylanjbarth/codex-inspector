@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Report"
+  short_description: "Turn Inspector evidence into analytical reports"
+  default_prompt: "Use $build-report to create a source-backed report from Codex Inspector evidence."

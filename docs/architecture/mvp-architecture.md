@@ -173,7 +173,9 @@ The plugin owns:
 
 - the plugin manifest and marketplace presentation;
 - lifecycle hook definitions;
-- setup, open-dashboard, inspect-session, and review-session skills;
+- setup, open-dashboard, inspect-session, and review-session skills, plus
+  analytical workflows for data quality, dashboards, reports, data context,
+  KPI design, validation, and visualization;
 - the fixed Effectiveness Review rubric and instructions;
 - the required CLI compatibility range;
 - user-facing installation and upgrade guidance.

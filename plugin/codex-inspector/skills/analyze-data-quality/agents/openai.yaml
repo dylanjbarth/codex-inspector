@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analyze Data Quality"
+  short_description: "Assess Inspector data before analysis or publication"
+  default_prompt: "Use $analyze-data-quality to assess the reliability and coverage of my Codex Inspector data."

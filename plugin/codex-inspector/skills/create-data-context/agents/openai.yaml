@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Data Context"
+  short_description: "Document Inspector metrics and provenance"
+  default_prompt: "Use $create-data-context to document reusable Codex Inspector metric definitions and provenance."
