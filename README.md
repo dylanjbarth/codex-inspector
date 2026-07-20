@@ -74,6 +74,10 @@ background when the server is new. Check that work with:
 codex-inspector status
 ```
 
+`status` reports the loopback port, effective `CODEX_HOME`, and
+`CODEX_INSPECTOR_HOME`. Stop the local server gracefully with
+`codex-inspector stop`; the command is idempotent when no server is running.
+
 To explicitly block until a finite indexing pass completes and receive its
 final JSON counts, run `codex-inspector sync --wait`. To queue another pass on
 an already-running server without blocking, run `codex-inspector sync

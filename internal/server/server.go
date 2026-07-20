@@ -69,6 +69,8 @@ type state struct {
 	metricEngine    *metrics.Engine
 	reviewManager   *reviews.Manager
 	events          *eventBuffer
+	shutdown        chan struct{}
+	shutdownOnce    sync.Once
 }
 
 type eventBuffer struct {
@@ -116,6 +118,8 @@ func token(n int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 func Run(ctx context.Context, c Config) error {
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 	if c.IdleTimeout <= 0 {
 		c.IdleTimeout = 120 * time.Second
 	}
@@ -190,7 +194,7 @@ func Run(ctx context.Context, c Config) error {
 	}
 	m.StartupStage = "review_store"
 	_ = proc.Write(c.Layout.Run, m)
-	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, codexHomeSource: c.CodexHomeSource, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer()}
+	s := &state{ctx: runCtx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, codexHomeSource: c.CodexHomeSource, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer(), shutdown: make(chan struct{})}
 	s.reviewManager, err = reviews.New(c.Layout, c.CodexExecutable, c.CodexHome, func(id, status string) {
 		s.mu.Lock()
 		s.lastActive = time.Now()
@@ -223,9 +227,17 @@ func Run(ctx context.Context, c Config) error {
 	for {
 		select {
 		case <-ctx.Done():
+			cancelRun()
 			srv.Shutdown(context.Background())
 			return nil
+		case <-s.shutdown:
+			cancelRun()
+			shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(shutdown)
+			return nil
 		case err := <-errc:
+			cancelRun()
 			if errors.Is(err, http.ErrServerClosed) {
 				return nil
 			}
@@ -243,6 +255,7 @@ func Run(ctx context.Context, c Config) error {
 			idle := !s.indexing && !s.reviewManager.Active() && time.Since(s.lastActive) >= c.IdleTimeout
 			s.mu.Unlock()
 			if idle {
+				cancelRun()
 				shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				srv.Shutdown(shutdown)
 				cancel()
@@ -284,6 +297,7 @@ func (s *state) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/startup-diagnostics", s.startupDiagnostics)
 	m.HandleFunc("GET /v1/health", s.auth(s.health))
 	m.HandleFunc("POST /v1/heartbeat", s.auth(s.sameOrigin(s.heartbeat)))
+	m.HandleFunc("POST /v1/shutdown", s.auth(s.sameOrigin(s.shutdownServer)))
 	m.HandleFunc("GET /v1/status", s.auth(s.status))
 	m.HandleFunc("GET /v1/metrics/catalog", s.auth(s.metricCatalog))
 	m.HandleFunc("POST /v1/metrics/query", s.auth(s.sameOrigin(s.metricQuery)))
@@ -407,6 +421,13 @@ func (s *state) heartbeat(w http.ResponseWriter, r *http.Request) {
 	s.lastActive = time.Now()
 	s.mu.Unlock()
 	w.WriteHeader(204)
+}
+func (s *state) shutdownServer(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.lastActive = time.Now()
+	s.mu.Unlock()
+	w.WriteHeader(http.StatusAccepted)
+	s.shutdownOnce.Do(func() { close(s.shutdown) })
 }
 func (s *state) sync(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)

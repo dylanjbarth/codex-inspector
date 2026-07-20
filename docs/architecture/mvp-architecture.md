@@ -229,6 +229,7 @@ The demo public CLI remains intentionally small:
 codex-inspector version
 codex-inspector doctor [--json]
 codex-inspector status [--json]
+codex-inspector stop [--json]
 codex-inspector sync [--background|--wait]
 codex-inspector open [route and scope flags]
 ```

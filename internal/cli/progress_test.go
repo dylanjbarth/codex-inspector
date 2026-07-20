@@ -94,14 +94,22 @@ func TestImmediateCommandsKeepStableSeparatedOutput(t *testing.T) {
 
 	root := t.TempDir()
 	t.Setenv("CODEX_INSPECTOR_HOME", root)
-	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
+	codexHome := filepath.Join(t.TempDir(), "codex")
+	t.Setenv("CODEX_HOME", codexHome)
 	stdout.Reset()
 	stderr.Reset()
 	if code := Main([]string{"status"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
 		t.Fatalf("status exit=%d stderr=%s", code, stderr.String())
 	}
-	if stdout.String() != "Inspector is stopped\n" || stderr.Len() != 0 {
+	if stdout.String() != fmt.Sprintf("Inspector is stopped\ncodex_home=%s\ninspector_home=%s\n", codexHome, root) || stderr.Len() != 0 {
 		t.Fatalf("status output changed: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	if code := Main([]string{"stop"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
+		t.Fatalf("stop exit=%d stderr=%s", code, stderr.String())
+	}
+	if stdout.String() != fmt.Sprintf("Inspector is already stopped\ncodex_home=%s\ninspector_home=%s\n", codexHome, root) || stderr.Len() != 0 {
+		t.Fatalf("stopped stop output changed: stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 
@@ -180,7 +188,7 @@ func TestOpenReuseNoBrowserAndBackgroundSyncStagesPreserveStdout(t *testing.T) {
 	if code := Main([]string{"open", "--no-browser"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
 		t.Fatalf("open exit=%d stderr=%s", code, stderr.String())
 	}
-	if got := stdout.String(); got != "Inspector reused at "+ts.URL+"/\n" {
+	if got := stdout.String(); got != fmt.Sprintf("Inspector reused at %s/\nport=%d\ncodex_home=%s\ninspector_home=%s\n", ts.URL, port, effective.Path, root) {
 		t.Fatalf("open stdout changed: %q", got)
 	}
 	if !strings.Contains(stderr.String(), "reusing the healthy local server") || !strings.Contains(stderr.String(), "browser launch suppressed") || strings.Contains(stderr.String(), token) || strings.Contains(stderr.String(), "private-fragment") {
@@ -197,6 +205,73 @@ func TestOpenReuseNoBrowserAndBackgroundSyncStagesPreserveStdout(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "background indexing queued") || strings.Contains(stderr.String(), token) {
 		t.Fatalf("bad background stages: %s", stderr.String())
+	}
+}
+
+func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
+	root := t.TempDir()
+	inspectorHome := filepath.Join(root, "inspector")
+	codexHome := filepath.Join(root, "codex")
+	t.Setenv("CODEX_INSPECTOR_HOME", inspectorHome)
+	t.Setenv("CODEX_HOME", codexHome)
+	l, err := home.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = home.Ensure(l); err != nil {
+		t.Fatal(err)
+	}
+	const accessToken = "private-stop-token"
+	var port int
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/health":
+			fmt.Fprint(w, `{"healthy":true,"instanceId":"stop-instance","protocolVersion":1}`)
+		case "/v1/status":
+			fmt.Fprint(w, `{"process":{"state":"ready","cliVersion":"0.1.0"},"index":{"state":"current","queuedSessionChanges":0},"hook":{"state":"healthy"}}`)
+		case "/v1/shutdown":
+			if r.Header.Get("Authorization") != "Bearer "+accessToken || r.Header.Get("Origin") != fmt.Sprintf("http://127.0.0.1:%d", port) {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+			_ = os.Remove(proc.Path(l.Run))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+	u, _ := url.Parse(ts.URL)
+	port, _ = strconv.Atoi(u.Port())
+	m := proc.Metadata{InstanceID: "stop-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, AccessToken: accessToken, CodexHome: codexHome, CodexHomeSource: "environment", StartedAt: time.Now()}
+	if err = proc.Write(l.Run, m); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Main([]string{"status"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
+		t.Fatalf("status exit=%d stderr=%s", code, stderr.String())
+	}
+	for _, want := range []string{"Inspector is running", fmt.Sprintf("port=%d", port), "codex_home=" + codexHome, "inspector_home=" + inspectorHome, "process=ready cli=0.1.0 index=current hook=healthy"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("status missing %q: %s", want, stdout.String())
+		}
+	}
+	stdout.Reset()
+	if code := Main([]string{"status", "--json"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
+		t.Fatalf("JSON status exit=%d stderr=%s", code, stderr.String())
+	}
+	var statusJSON map[string]any
+	if json.Unmarshal(stdout.Bytes(), &statusJSON) != nil || statusJSON["running"] != true || statusJSON["port"] != float64(port) || statusJSON["codexHome"] != codexHome || statusJSON["inspectorHome"] != inspectorHome {
+		t.Fatalf("JSON status omitted runtime details: %s", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Main([]string{"stop"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
+		t.Fatalf("stop exit=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), fmt.Sprintf("port %d", port)) || !strings.Contains(stdout.String(), "Inspector stopped") || !strings.Contains(stdout.String(), "codex_home="+codexHome) || !strings.Contains(stdout.String(), "inspector_home="+inspectorHome) {
+		t.Fatalf("stop omitted runtime details: stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
 }
 

@@ -46,6 +46,8 @@ func Main(args []string, streams IO) int {
 		err = doctorCmd(args[1:], streams)
 	case "status":
 		err = statusCmd(args[1:], streams)
+	case "stop":
+		err = stopCmd(args[1:], streams)
 	case "sync":
 		err = syncCmd(args[1:], streams)
 	case "open":
@@ -67,7 +69,7 @@ func Main(args []string, streams IO) int {
 	return 0
 }
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: codex-inspector <version|doctor|status|sync|open> [options]")
+	fmt.Fprintln(w, "usage: codex-inspector <version|doctor|status|stop|sync|open> [options]")
 }
 func versionCmd(args []string, s IO) error {
 	if len(args) > 0 {
@@ -141,10 +143,11 @@ func statusCmd(args []string, s IO) error {
 	}
 	m, e := proc.Read(l.Run)
 	if e != nil || !proc.Healthy(m) {
+		effective, _ := home.ResolveCodexHome()
 		if *asJSON {
-			return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped"})
+			return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": nil, "codexHome": effective.Path, "inspectorHome": l.Root})
 		}
-		fmt.Fprintln(s.Out, "Inspector is stopped")
+		fmt.Fprintf(s.Out, "Inspector is stopped\ncodex_home=%s\ninspector_home=%s\n", effective.Path, l.Root)
 		return nil
 	}
 	body, e := request(m, http.MethodGet, "/v1/status", nil)
@@ -152,8 +155,12 @@ func statusCmd(args []string, s IO) error {
 		return errors.New("Inspector server did not answer; run codex-inspector open")
 	}
 	if *asJSON {
-		_, e = s.Out.Write(body)
-		return e
+		var value map[string]any
+		if json.Unmarshal(body, &value) != nil {
+			return errors.New("Inspector server returned an invalid status; run codex-inspector open")
+		}
+		value["running"], value["port"], value["codexHome"], value["inspectorHome"] = true, m.Port, m.CodexHome, l.Root
+		return json.NewEncoder(s.Out).Encode(value)
 	}
 	var v struct {
 		Process struct {
@@ -171,8 +178,61 @@ func statusCmd(args []string, s IO) error {
 	if json.Unmarshal(body, &v) != nil {
 		return errors.New("Inspector server returned an invalid status; run codex-inspector open")
 	}
-	fmt.Fprintf(s.Out, "process=%s cli=%s index=%s hook=%s queued_markers=%d\n", v.Process.State, v.Process.CLIVersion, v.Index.State, v.Hook.State, v.Index.Queued)
+	fmt.Fprintf(s.Out, "Inspector is running\nport=%d\ncodex_home=%s\ninspector_home=%s\nprocess=%s cli=%s index=%s hook=%s queued_markers=%d\n", m.Port, m.CodexHome, l.Root, v.Process.State, v.Process.CLIVersion, v.Index.State, v.Hook.State, v.Index.Queued)
 	return nil
+}
+func stopCmd(args []string, s IO) error {
+	f := flag.NewFlagSet("stop", flag.ContinueOnError)
+	f.SetOutput(s.Err)
+	asJSON := f.Bool("json", false, "emit JSON")
+	if err := f.Parse(args); err != nil {
+		return err
+	}
+	if f.NArg() != 0 {
+		return errors.New("stop takes no arguments")
+	}
+	l, err := home.Resolve()
+	if err != nil {
+		return errors.New("Inspector home could not be resolved; check CODEX_INSPECTOR_HOME and retry")
+	}
+	effective, _ := home.ResolveCodexHome()
+	m, err := proc.Read(l.Run)
+	if err != nil || !proc.Healthy(m) {
+		if *asJSON {
+			return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": nil, "codexHome": effective.Path, "inspectorHome": l.Root})
+		}
+		fmt.Fprintf(s.Out, "Inspector is already stopped\ncodex_home=%s\ninspector_home=%s\n", effective.Path, l.Root)
+		return nil
+	}
+	if !*asJSON {
+		fmt.Fprintf(s.Err, "Stop: requesting graceful shutdown on port %d...\n", m.Port)
+	}
+	if _, err = request(m, http.MethodPost, "/v1/shutdown", nil); err != nil {
+		current, readErr := proc.Read(l.Run)
+		if readErr == nil && current.InstanceID == m.InstanceID && proc.Healthy(current) {
+			if !*asJSON {
+				fmt.Fprintln(s.Err, "Stop: graceful shutdown is unavailable on this older server; terminating the verified process...")
+			}
+			process, findErr := os.FindProcess(current.PID)
+			if findErr != nil || process.Signal(syscall.SIGTERM) != nil {
+				return errors.New("Inspector server could not be stopped; inspect codex-inspector status")
+			}
+		}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		current, readErr := proc.Read(l.Run)
+		if readErr != nil || current.InstanceID != m.InstanceID || !proc.Healthy(current) {
+			_ = proc.RemoveIfInstance(l.Run, m.InstanceID)
+			if *asJSON {
+				return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": m.Port, "codexHome": m.CodexHome, "inspectorHome": l.Root})
+			}
+			fmt.Fprintf(s.Out, "Inspector stopped\nport=%d\ncodex_home=%s\ninspector_home=%s\n", m.Port, m.CodexHome, l.Root)
+			return nil
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return errors.New("Inspector server did not stop within 5s; inspect codex-inspector status")
 }
 func syncCmd(args []string, s IO) error {
 	f := flag.NewFlagSet("sync", flag.ContinueOnError)
@@ -308,7 +368,7 @@ func openCmd(args []string, s IO) error {
 	if reused {
 		kind = "reused"
 	}
-	fmt.Fprintf(s.Out, "Inspector %s at %s\n", kind, strings.Split(url, "#")[0])
+	fmt.Fprintf(s.Out, "Inspector %s at %s\nport=%d\ncodex_home=%s\ninspector_home=%s\n", kind, strings.Split(url, "#")[0], m.Port, m.CodexHome, l.Root)
 	return nil
 }
 

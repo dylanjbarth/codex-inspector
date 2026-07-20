@@ -276,6 +276,31 @@ func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedShutdownStopsServerAndRejectsUnauthenticatedRequest(t *testing.T) {
+	m, layout, cancel, errs := startTestServer(t, time.Minute)
+	defer cancel()
+	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
+	r, _ := req(t, m, "POST", "/v1/shutdown", nil, map[string]string{"Origin": origin})
+	if r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated shutdown=%d", r.StatusCode)
+	}
+	r, _ = req(t, m, "POST", "/v1/shutdown", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken, "Origin": origin})
+	if r.StatusCode != http.StatusAccepted {
+		t.Fatalf("authenticated shutdown=%d", r.StatusCode)
+	}
+	select {
+	case err := <-errs:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("authenticated shutdown did not stop server")
+	}
+	if _, err := proc.Read(layout.Run); !os.IsNotExist(err) {
+		t.Fatalf("server metadata remained after shutdown: %v", err)
+	}
+}
+
 func TestBrowserCookieJarExchangeAuthenticatesCatalog(t *testing.T) {
 	m, _, cancel, errs := startTestServer(t, time.Second)
 	defer func() { cancel(); <-errs }()
