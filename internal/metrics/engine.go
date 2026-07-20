@@ -271,7 +271,7 @@ func Options(ctx context.Context, store *storage.Store, requestedRevision int64)
 	if rev < 1 || rev > latestRevision {
 		return "", 0, FilterOptions{}, errors.New("revision_unavailable")
 	}
-	out := FilterOptions{Projects: []Option{}, Models: []string{}, ReasoningEfforts: []string{}, ContributionKinds: []Option{{"user_root_direct", "User root"}, {"descendant", "Descendants"}, {"inspector_review", "Inspector Review"}, {"other_orphan", "Other / orphan"}}}
+	out := FilterOptions{Projects: []Option{}, Models: []string{}, ReasoningEfforts: []string{}, ContributionKinds: []Option{{"user_root_direct", "Direct user-session work"}, {"descendant", "Spawned agent work"}, {"inspector_review", "Codex Inspector reviews"}, {"other_orphan", "Other or unlinked session work"}}}
 	rows, err := store.DB().QueryContext(ctx, `SELECT id,display_name FROM projects WHERE epoch_id=? AND created_revision<=? ORDER BY display_name,id LIMIT ?`, epoch, rev, MaxFilterProjects+1)
 	if err != nil {
 		return "", 0, out, err

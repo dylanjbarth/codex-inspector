@@ -78,6 +78,9 @@ func TestDiscoveryExplainsDescendantMatchAndTotals(t *testing.T) {
 	if page.Items[0].DirectTokens == nil || *page.Items[0].DirectTokens != 2000 || page.Items[0].DescendantTokens == nil || *page.Items[0].DescendantTokens != 500 {
 		t.Fatalf("discovery totals differ from metric golden: %#v", page.Items[0])
 	}
+	if page.Items[0].DescendantSessions != 1 {
+		t.Fatalf("discovery tree size differs from the indexed lineage: %#v", page.Items[0])
+	}
 }
 
 func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {

@@ -593,6 +593,7 @@ export interface components {
             startedAt?: components["schemas"]["Timestamp"];
             latestCompleted?: components["schemas"]["Timestamp"];
             completedTurns: number;
+            descendantSessions: number;
             matchCategories: string[];
             matchSnippets: components["schemas"]["MatchSnippet"][];
             directTokens?: number | null;

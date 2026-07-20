@@ -10,7 +10,9 @@
 - Preserve combined, root-session, and descendant-agent attribution for additive measures.
 - Apply one global relative-time range and global project, model, reasoning, and session-kind filters to the dashboard.
 - Present recorded capacity utilization, remaining percentage, reset timing, and freshness descriptively without a health judgment.
+- Render the capacity hero as one Codex 7-day limit observation. Keep other limit identities and windows out of the hero; they remain available to capacity history.
 - Make token-intensive root sessions the primary route from aggregate analysis into the Context inspector.
+- Keep token-intensive rows grouped by user-initiated root: show project/task/opaque ID, active interval, agent-tree size, direct-versus-spawned tokens, and both context and review actions in one scan line.
 - Treat a dashboard as a saved **view**. Templates and blank canvases are starting points for view creation, not peers of Add widget.
 - Consolidate the view picker, New view, global time, collapsed filters, and Edit view into one header.
 - Put Add widget, drag-and-drop rearrangement, and Done inside an explicit edit mode for the current view.
