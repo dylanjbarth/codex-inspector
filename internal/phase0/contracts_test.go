@@ -55,6 +55,33 @@ func TestSourceDecisions(t *testing.T) {
 	}
 }
 
+func TestCompatibilityProbeStopsAfterBoundedPrefix(t *testing.T) {
+	b, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, found := bytes.Cut(b, []byte{'\n'})
+	if !found {
+		t.Fatal("fixture has no complete leading record")
+	}
+	data := append(append(append([]byte(nil), first...), '\n'), bytes.Repeat([]byte{'x'}, 2*maxCompatibilityProbeBytes)...)
+	reader := bytes.NewReader(data)
+	before := reader.Len()
+	decision, err := ProbeRollout(reader)
+	if err != nil || !decision.Supported || decision.SessionID != "root-001" {
+		t.Fatalf("probe=%+v err=%v", decision, err)
+	}
+	if consumed := before - reader.Len(); consumed > maxCompatibilityProbeBytes+1 {
+		t.Fatalf("compatibility probe consumed %d bytes", consumed)
+	}
+
+	tooLarge := strings.Repeat("x", maxCompatibilityProbeBytes+1)
+	decision, err = ProbeRollout(strings.NewReader(tooLarge))
+	if err != nil || decision.Supported || decision.Reason != "leading_record_too_large" {
+		t.Fatalf("oversized probe=%+v err=%v", decision, err)
+	}
+}
+
 func TestSourceFingerprintRejectsMalformedSameVersion(t *testing.T) {
 	data, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
 	if err != nil {

@@ -490,6 +490,58 @@ func ParseFixture(path string) (SourceDecision, error) {
 	return ParseRollout(f)
 }
 
+const maxCompatibilityProbeBytes = 1024 * 1024
+
+// ProbeFixture reads only a bounded rollout prefix needed to identify the
+// frozen source adapter. Full-file validation remains the indexer's job;
+// startup compatibility checks must not parse an arbitrarily large history
+// before the local server can expose its health endpoint.
+func ProbeFixture(path string) (SourceDecision, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return SourceDecision{}, err
+	}
+	defer f.Close()
+	return ProbeRollout(f)
+}
+
+func ProbeRollout(r io.Reader) (SourceDecision, error) {
+	reader := bufio.NewReader(io.LimitReader(r, maxCompatibilityProbeBytes+1))
+	line, readErr := reader.ReadBytes('\n')
+	if len(line) > maxCompatibilityProbeBytes {
+		return SourceDecision{Reason: "leading_record_too_large"}, nil
+	}
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return SourceDecision{}, readErr
+	}
+	if len(bytes.TrimSpace(line)) == 0 {
+		return SourceDecision{Reason: "missing_leading_session_meta"}, nil
+	}
+	var rec record
+	if err := json.Unmarshal(line, &rec); err != nil {
+		return SourceDecision{Reason: "invalid_leading_session_meta"}, nil
+	}
+	if rec.Type != "session_meta" {
+		return SourceDecision{Reason: "missing_leading_session_meta"}, nil
+	}
+	var meta metadataPayload
+	if err := json.Unmarshal(rec.Payload, &meta); err != nil {
+		return SourceDecision{Reason: "invalid_session_meta"}, nil
+	}
+	if meta.SessionID == "" {
+		meta.SessionID = meta.ID
+	}
+	if meta.CLIVersion != SupportedCodexVersion {
+		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID}, nil
+	}
+	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
+		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID}, nil
+	}
+	remaining := int64(maxCompatibilityProbeBytes - len(line))
+	prefix := io.MultiReader(bytes.NewReader(line), io.LimitReader(reader, remaining))
+	return ParseRollout(prefix)
+}
+
 func ParseRollout(r io.Reader) (SourceDecision, error) {
 	reader := bufio.NewReader(r)
 	var records []record

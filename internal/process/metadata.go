@@ -16,6 +16,7 @@ type Metadata struct {
 	AccessToken       string    `json:"accessToken"`
 	FragmentToken     string    `json:"fragmentToken,omitempty"`
 	FragmentExchanged bool      `json:"fragmentExchanged"`
+	StartupStage      string    `json:"startupStage,omitempty"`
 	StartedAt         time.Time `json:"startedAt"`
 }
 

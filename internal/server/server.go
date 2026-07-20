@@ -150,7 +150,7 @@ func Run(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	m := proc.Metadata{InstanceID: id, PID: os.Getpid(), Port: addr.Port, ProtocolVersion: version.Protocol, AccessToken: access, FragmentToken: fragment, StartedAt: time.Now().UTC()}
+	m := proc.Metadata{InstanceID: id, PID: os.Getpid(), Port: addr.Port, ProtocolVersion: version.Protocol, AccessToken: access, FragmentToken: fragment, StartupStage: "codex_host", StartedAt: time.Now().UTC()}
 	if err = proc.Write(c.Layout.Run, m); err != nil {
 		return err
 	}
@@ -159,8 +159,13 @@ func Run(ctx context.Context, c Config) error {
 	if c.Compatibility != nil {
 		snapshot = *c.Compatibility
 	} else {
-		snapshot = compat.Inspect(c.Layout, false)
+		snapshot = compat.InspectWithProgress(c.Layout, false, func(stage string) {
+			m.StartupStage = stage
+			_ = proc.Write(c.Layout.Run, m)
+		})
 	}
+	m.StartupStage = "review_store"
+	_ = proc.Write(c.Layout.Run, m)
 	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer()}
 	s.reviewManager, err = reviews.New(c.Layout, c.CodexExecutable, c.CodexHome, func(id, status string) {
 		s.mu.Lock()
@@ -171,6 +176,9 @@ func Run(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
+	m.StartupStage = "http_server"
+	s.meta.StartupStage = m.StartupStage
+	_ = proc.Write(c.Layout.Run, m)
 	defer s.indexWG.Wait()
 	if c.AutoSync {
 		s.startIndex()

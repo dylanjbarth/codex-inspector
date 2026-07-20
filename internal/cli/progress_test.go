@@ -207,7 +207,7 @@ func TestAwaitServerAllowsSlowReadinessAndSanitizesFailures(t *testing.T) {
 			return proc.Metadata{}, os.ErrNotExist
 		}
 		return want, nil
-	}, func(_ context.Context, m proc.Metadata) bool { return m.InstanceID == "ready" })
+	}, func(_ context.Context, m proc.Metadata) bool { return m.InstanceID == "ready" }, nil)
 	if err != nil || childExited || got.InstanceID != want.InstanceID || reads != 7 {
 		t.Fatalf("slow valid startup failed: got=%+v childExited=%t reads=%d err=%v", got, childExited, reads, err)
 	}
@@ -216,7 +216,7 @@ func TestAwaitServerAllowsSlowReadinessAndSanitizesFailures(t *testing.T) {
 	exited <- fmt.Errorf("raw child failure at /private/path with token-secret")
 	_, childExited, err = awaitServer(ctx, "ignored", exited, time.Second, func(context.Context) bool { return true }, func(string) (proc.Metadata, error) {
 		return proc.Metadata{}, os.ErrNotExist
-	}, func(context.Context, proc.Metadata) bool { return false })
+	}, func(context.Context, proc.Metadata) bool { return false }, nil)
 	if err == nil || !childExited || !strings.Contains(err.Error(), "exited before becoming healthy") || !strings.Contains(err.Error(), "codex-inspector doctor") || strings.Contains(err.Error(), "private/path") || strings.Contains(err.Error(), "token-secret") {
 		t.Fatalf("unsanitized or unactionable exit error: %v", err)
 	}
@@ -225,9 +225,40 @@ func TestAwaitServerAllowsSlowReadinessAndSanitizesFailures(t *testing.T) {
 	timeoutCancel()
 	_, childExited, err = awaitServer(timeoutCtx, "ignored", make(chan error), 2*time.Second, func(context.Context) bool { return true }, func(string) (proc.Metadata, error) {
 		return proc.Metadata{}, os.ErrNotExist
-	}, func(context.Context, proc.Metadata) bool { return false })
+	}, func(context.Context, proc.Metadata) bool { return false }, nil)
 	if err == nil || childExited || !strings.Contains(err.Error(), "still starting after 2s") || !strings.Contains(err.Error(), "codex-inspector doctor") {
 		t.Fatalf("unactionable timeout: %v", err)
+	}
+}
+
+func TestAwaitServerReportsOnlyKnownSanitizedStartupStages(t *testing.T) {
+	reads := 0
+	var stages []string
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, childExited, err := awaitServer(ctx, "ignored", make(chan error), time.Second, func(context.Context) bool { return true }, func(string) (proc.Metadata, error) {
+		reads++
+		switch reads {
+		case 1:
+			return proc.Metadata{StartupStage: "source_format"}, nil
+		case 2:
+			return proc.Metadata{StartupStage: "source_format"}, nil
+		case 3:
+			return proc.Metadata{StartupStage: "raw-secret-/private/path"}, nil
+		default:
+			return proc.Metadata{InstanceID: "ready", StartupStage: "http_server"}, nil
+		}
+	}, func(_ context.Context, m proc.Metadata) bool { return m.InstanceID == "ready" }, func(stage string) {
+		if message := startupStageMessage(stage); message != "" {
+			stages = append(stages, message)
+		}
+	})
+	if err != nil || childExited {
+		t.Fatalf("await server failed: childExited=%t err=%v", childExited, err)
+	}
+	got := strings.Join(stages, "\n")
+	if strings.Count(got, "recorded source format") != 1 || !strings.Contains(got, "authenticated dashboard endpoint") || strings.Contains(got, "raw-secret") || strings.Contains(got, "/private/path") {
+		t.Fatalf("unexpected startup stages: %q", got)
 	}
 }
 
@@ -243,7 +274,7 @@ func TestAwaitServerDeadlineInterruptsBlockingHealthProbe(t *testing.T) {
 	}, func(ctx context.Context, _ proc.Metadata) bool {
 		<-ctx.Done()
 		return false
-	})
+	}, nil)
 	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
 		t.Fatalf("deadline was not bounded: %s", elapsed)
 	}

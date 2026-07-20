@@ -280,7 +280,7 @@ func openCmd(args []string, s IO) error {
 	if !reused {
 		fmt.Fprintln(s.Err, "Open: starting the local server; initial indexing will continue in the background...")
 		_ = os.Remove(proc.Path(l.Run))
-		m, e = startServer(l)
+		m, e = startServer(l, s.Err)
 		if e != nil {
 			fmt.Fprintln(s.Err, "Open: the local server did not become ready.")
 			return e
@@ -331,7 +331,7 @@ func safeRoute(route string) string {
 
 const serverStartupTimeout = 15 * time.Second
 
-func startServer(l home.Layout) (proc.Metadata, error) {
+func startServer(l home.Layout, progress io.Writer) (proc.Metadata, error) {
 	exe, e := os.Executable()
 	if e != nil {
 		return proc.Metadata{}, errors.New("Inspector server executable could not be located; run codex-inspector doctor")
@@ -366,7 +366,11 @@ func startServer(l home.Layout) (proc.Metadata, error) {
 		case <-ctx.Done():
 			return false
 		}
-	}, proc.Read, proc.HealthyContext)
+	}, proc.Read, proc.HealthyContext, func(stage string) {
+		if message := startupStageMessage(stage); message != "" {
+			fmt.Fprintln(progress, message)
+		}
+	})
 	if waitErr != nil {
 		terminateServerStart(cmd.Process, exited, childExited, l.Run)
 		return proc.Metadata{}, waitErr
@@ -374,7 +378,8 @@ func startServer(l home.Layout) (proc.Metadata, error) {
 	return m, nil
 }
 
-func awaitServer(ctx context.Context, run string, exited <-chan error, timeout time.Duration, pause func(context.Context) bool, read func(string) (proc.Metadata, error), healthy func(context.Context, proc.Metadata) bool) (proc.Metadata, bool, error) {
+func awaitServer(ctx context.Context, run string, exited <-chan error, timeout time.Duration, pause func(context.Context) bool, read func(string) (proc.Metadata, error), healthy func(context.Context, proc.Metadata) bool, onStage func(string)) (proc.Metadata, bool, error) {
+	lastStage := ""
 	for {
 		select {
 		case <-exited:
@@ -384,6 +389,12 @@ func awaitServer(ctx context.Context, run string, exited <-chan error, timeout t
 		default:
 		}
 		m, err := read(run)
+		if err == nil && m.StartupStage != "" && m.StartupStage != lastStage {
+			lastStage = m.StartupStage
+			if onStage != nil {
+				onStage(m.StartupStage)
+			}
+		}
 		if err == nil && healthy(ctx, m) {
 			return m, false, nil
 		}
@@ -395,6 +406,29 @@ func awaitServer(ctx context.Context, run string, exited <-chan error, timeout t
 		if !pause(ctx) {
 			return proc.Metadata{}, false, fmt.Errorf("Inspector server was still starting after %s; run codex-inspector doctor", timeout)
 		}
+	}
+}
+
+func startupStageMessage(stage string) string {
+	switch stage {
+	case "codex_host":
+		return "Open: checking Codex CLI compatibility..."
+	case "source_format":
+		return "Open: checking the recorded source format..."
+	case "data_home":
+		return "Open: checking the private Inspector data home..."
+	case "plugin":
+		return "Open: checking the Inspector plugin..."
+	case "hook_trust":
+		return "Open: checking the seven trusted plugin hooks..."
+	case "hook_diagnostics":
+		return "Open: checking hook diagnostics..."
+	case "review_store":
+		return "Open: preparing the local Review store..."
+	case "http_server":
+		return "Open: starting the authenticated dashboard endpoint..."
+	default:
+		return ""
 	}
 }
 

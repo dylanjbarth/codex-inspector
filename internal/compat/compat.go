@@ -77,8 +77,16 @@ func SourceFormat() Check {
 	if len(matches) == 0 {
 		return Check{"source_format", "ok", "no rollout sources yet; current format will be checked before indexing"}
 	}
+	sort.Slice(matches, func(i, j int) bool {
+		left, leftErr := os.Stat(matches[i])
+		right, rightErr := os.Stat(matches[j])
+		if leftErr != nil || rightErr != nil || left.ModTime().Equal(right.ModTime()) {
+			return matches[i] > matches[j]
+		}
+		return left.ModTime().After(right.ModTime())
+	})
 	for _, match := range matches {
-		decision, err := phase0.ParseFixture(match)
+		decision, err := phase0.ProbeFixture(match)
 		if err == nil && decision.Supported {
 			return Check{"source_format", "ok", version.SourceAdapter}
 		}
@@ -293,19 +301,38 @@ func pluginDiagnostics(pluginID string) []Diagnostic {
 }
 
 func Inspect(l home.Layout, includeServer bool) Snapshot {
-	checks := []Check{{"inspector_cli", "ok", "codex-inspector " + version.CLI + "; protocol 1"}, CodexHost(), SourceFormat()}
+	return InspectWithProgress(l, includeServer, nil)
+}
+
+func InspectWithProgress(l home.Layout, includeServer bool, progress func(string)) Snapshot {
+	report := func(stage string) {
+		if progress != nil {
+			progress(stage)
+		}
+	}
+	checks := []Check{{"inspector_cli", "ok", "codex-inspector " + version.CLI + "; protocol 1"}}
+	report("codex_host")
+	checks = append(checks, CodexHost())
+	report("source_format")
+	checks = append(checks, SourceFormat())
+	report("data_home")
 	if err := home.Ensure(l); err != nil {
 		checks = append(checks, Check{"data_home", "error", "Inspector data home could not be initialized"})
 	} else {
 		checks = append(checks, Check{"data_home", "ok", "user-only Inspector directories are ready"})
 	}
+	report("plugin")
 	pcheck, pv, pp, compatibility, pluginID := inspectPlugin()
-	checks = append(checks, pcheck, inspectHookTrust(pluginID))
+	checks = append(checks, pcheck)
+	report("hook_trust")
+	checks = append(checks, inspectHookTrust(pluginID))
+	report("hook_diagnostics")
 	diagnostics := pluginDiagnostics(pluginID)
 	for _, d := range diagnostics {
 		checks = append(checks, Check{"hook_" + d.Code, "error", fmt.Sprintf("plugin hook reported %s at %s", d.Code, d.LastObservedAt)})
 	}
 	if includeServer {
+		report("server")
 		m, e := proc.Read(l.Run)
 		if e == nil && proc.Healthy(m) {
 			checks = append(checks, Check{"server", "ok", "authenticated loopback server is healthy"})
@@ -315,6 +342,7 @@ func Inspect(l home.Layout, includeServer bool) Snapshot {
 			checks = append(checks, Check{"server", "error", "Inspector server is not running; run codex-inspector open"})
 		}
 	}
+	report("complete")
 	for _, c := range checks {
 		if c.Name != "inspector_cli" && c.Status != "ok" {
 			if c.Status == "incompatible" {
