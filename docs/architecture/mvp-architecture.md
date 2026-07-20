@@ -44,7 +44,7 @@ This document is the sole implementation authority. Earlier brainstorming, Build
 | Live active-session events and automatic map growth | Context Inspector is a read-only snapshot through the last indexed completed turn |
 | Deterministic context-leakage and tool-thrashing analyzers | Deferred; neutral facts may be available to Reviews |
 | Complete locally reconstructed context and component attribution | Deferred; show exact recorded context only when the source proves it and otherwise show unavailable |
-| Inspector-added secret redaction | Exact raw local evidence with a prominent sensitive-data warning; diagnostics exclude payloads |
+| Inspector-added secret redaction | Formatted local evidence first, with exact inert records behind an explicit disclosure and concise contextual copy; diagnostics exclude payloads |
 | macOS and Linux release binaries | macOS demo binary only |
 | Broad or historical Codex-format compatibility | Only explicitly tested current Codex source formats; unsupported sources are visibly skipped |
 | A bundled sanitized demo corpus | The demo uses the user's recent and historical local supported-format sessions; tests use tiny synthetic records only |
@@ -88,7 +88,7 @@ Go is selected for predictable deployment, streaming I/O, and straightforward bo
 
 ### 3.2 Dashboard
 
-The dashboard uses React, TypeScript, Vite, and pnpm. Production assets are embedded in the Go binary and served from the local Inspector process.
+The dashboard uses React, TypeScript, Vite, and pnpm. Production assets are embedded in the Go binary and served from the local Inspector process. It uses a light shadcn-based application shell with a responsive sidebar for Dashboard, Context Inspector, and Reviews. Dashboard charts use the shadcn Recharts integration; D3 is reserved for the Context Inspector causal map where it preserves its required interactions.
 
 A browser cannot safely open arbitrary local rollout files or the Inspector SQLite database. The Go process therefore exposes an internal loopback JSON API. This is an in-process boundary, not a separately deployed service.
 
@@ -154,6 +154,12 @@ Initial layout:
 ```
 
 `CODEX_HOME` is the inspected source. `CODEX_INSPECTOR_HOME` is derived Inspector state. Source discovery canonicalizes paths and rejects `CODEX_INSPECTOR_HOME`, including aliases reached through symlinks, so the indexer cannot ingest its own data.
+
+### 3.4.1 Effective Codex-home and dataset binding
+
+Each Inspector invocation resolves exactly one effective Codex home: an explicit `CODEX_HOME` takes precedence, otherwise the default is `~/.codex`. Resolution canonicalizes the path (including existing symlinks) and records whether it came from `environment` or `default`. Inspector never aggregates sources from both locations.
+
+The canonical effective-home identity binds both server metadata and the derived dataset catalog. `open` reuses a healthy server only when its recorded home identity matches the newly resolved requested home. A mismatch starts a new process after the existing process has naturally exited or returns actionable remediation; it must never route the request to the other home's dataset. Dataset catalogs are home-bound, so a home change activates or builds that home's separate derived dataset rather than mixing facts into the active catalog. Status returns the canonical display path and resolution source.
 
 The plugin-provided hook receives Codex's `PLUGIN_ROOT` and `PLUGIN_DATA` environment variables. `PLUGIN_DATA` is diagnostic/plugin state, not the analytics database. The installed Inspector CLI remains the only writer to `CODEX_INSPECTOR_HOME`.
 
@@ -278,6 +284,12 @@ The worker exits when its finite queue and active scan are complete. An initial 
 ### 5.3 Initial and incremental scans
 
 The first sync inventories all discoverable active and archived rollout sources, then parses supported sources in reverse chronological order so recent metrics become useful quickly. It does not impose a session, file, date, or byte cap. Bounded worker concurrency, cooperative yielding, and transaction sizing control resource use while the scan proceeds toward the entire supported history.
+
+### 5.3.1 Finite runtime state and revisions
+
+`scanning` and `catching_up` describe an active index job only. An incomplete active rollout tail is retained as coverage information but, after its finite scan completes, status is `current` rather than permanently indexing. Progress reports inventoried, completed, skipped, unsupported, failed, rebuild-required, and remaining sources. It is determinate only after inventory completes.
+
+The server emits `revision.available` only for a committed revision newer than the client-applied revision. Applying that revision clears the notification; events at or below the applied revision are ignored. Applying a snapshot preserves route, filters, and scroll state.
 
 Source inventory and checkpoints allow the indexer to:
 

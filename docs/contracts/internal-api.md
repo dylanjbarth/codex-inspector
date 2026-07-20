@@ -19,6 +19,9 @@ is generated at `web/src/generated/internal-api.ts` by pinned
   when it represents indexed facts;
 - every indexed snapshot carries `schemaVersion: 2`; a v1 database is a
   rebuild input, never an API snapshot;
+- status identifies the one canonical effective Codex home and whether it was
+  resolved from `CODEX_HOME` or the default; processes and dataset catalogs are
+  bound to that identity and cannot be reused across homes;
 - list endpoints use cursor pagination with maximum page size 200;
 - errors use the shared `Problem` schema and never include raw source payloads.
 
@@ -28,6 +31,9 @@ An omitted requested revision resolves to the latest committed revision at
 request start. A supplied unavailable or superseded revision returns
 `409 revision_unavailable`. SSE `revision.available` means the client may
 offer **New data available**; it does not mutate the page's applied revision.
+The client suppresses events at or below its applied revision and clears the
+action after applying the newest revision without changing route, filters, or
+scroll position.
 Revisions compare only within one epoch. `fullRefreshRequired` is true for an
 epoch replacement, and the event carries schema version 2.
 
@@ -57,8 +63,9 @@ an extension field on one metric definition. The generated response closes
 unknown properties and bounds project, model, reasoning, and contribution-kind
 arrays.
 
-Index status also exposes queued session changes and processed, queued,
-skipped, failed, and requires-rebuild counts. Every metric item carries both
+Index status also exposes queued session changes and inventoried, processed,
+remaining, skipped, unsupported, failed, and requires-rebuild counts. An
+incomplete active tail is coverage state, not an active index job. Every metric item carries both
 indexed time coverage and the requested/effective time boundary. Capacity
 points always expose `remainingPercent`, using `null` when the source did not
 record it rather than deriving a value from `usedPercent`.

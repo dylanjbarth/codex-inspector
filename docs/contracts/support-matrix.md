@@ -72,8 +72,12 @@ supported. The frozen fake shape is in `fixtures/synthetic/session_index.jsonl`.
 
 ## Source locations
 
-`CODEX_HOME` is resolved from the environment and otherwise defaults to
-`~/.codex`. Discovery includes:
+Exactly one effective `CODEX_HOME` is resolved per invocation. An explicit
+environment value has resolution source `environment`; otherwise the default
+`~/.codex` has source `default`. The canonical home identity is written to
+server metadata and used to select a separate derived dataset catalog. A
+healthy process or dataset for another home is never reused or aggregated.
+Discovery includes:
 
 - `sessions/**/*.jsonl` for active rollouts;
 - `archived_sessions/**/*.jsonl` when that directory exists;

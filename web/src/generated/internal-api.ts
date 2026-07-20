@@ -305,6 +305,11 @@ export interface components {
             /** @constant */
             indexSchemaVersion: 2;
         };
+        SourceHome: {
+            path: string;
+            /** @enum {unknown} */
+            resolution: "environment" | "default";
+        };
         ProcessStatus: {
             /** @enum {unknown} */
             state: "starting" | "ready" | "degraded" | "stopping";
@@ -330,7 +335,9 @@ export interface components {
             unsupportedSourceCount: number;
             pendingTailCount: number;
             queuedSessionChanges: number;
+            inventoriedCount: number;
             processedCount: number;
+            remainingCount: number;
             queuedCount: number;
             skippedCount: number;
             failedCount: number;
@@ -365,6 +372,7 @@ export interface components {
             diagnostics: components["schemas"]["HookDiagnostic"][];
         };
         Status: components["schemas"]["Snapshot"] & {
+            sourceHome: components["schemas"]["SourceHome"];
             process: components["schemas"]["ProcessStatus"];
             index: components["schemas"]["IndexStatus"];
             hook: components["schemas"]["HookStatus"];
