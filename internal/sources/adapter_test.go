@@ -202,6 +202,10 @@ func TestFrozenAdapterGoldenFactsAndUnsupportedVersion(t *testing.T) {
 	if b.Source.State != "supported" || b.Session == nil || b.Session.Title != "Fake widget work" {
 		t.Fatalf("unexpected adapter decision: %#v %#v", b.Source, b.Session)
 	}
+	fallback, err := Parse(Candidate{Path: root, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+	if err != nil || fallback.Session == nil || fallback.Session.Title != "Create the fake widget." {
+		t.Fatalf("source-backed title fallback mismatch: title=%q err=%v", fallback.Session.Title, err)
+	}
 	if len(b.Turns) != 2 || b.Turns[0].Usage == nil || *b.Turns[0].Usage.Total != 1200 || b.Turns[1].NormalizationKind != "cumulative_delta" || *b.Turns[1].Usage.Total != 800 {
 		t.Fatalf("usage normalization mismatch: %#v", b.Turns)
 	}

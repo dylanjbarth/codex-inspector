@@ -281,6 +281,7 @@ func (s *state) routes(m *http.ServeMux) {
 		w.Write(b)
 	})
 	m.HandleFunc("POST /v1/token/exchange", s.exchange)
+	m.HandleFunc("GET /v1/startup-diagnostics", s.startupDiagnostics)
 	m.HandleFunc("GET /v1/health", s.auth(s.health))
 	m.HandleFunc("POST /v1/heartbeat", s.auth(s.sameOrigin(s.heartbeat)))
 	m.HandleFunc("GET /v1/status", s.auth(s.status))
@@ -385,6 +386,21 @@ func (s *state) exchange(w http.ResponseWriter, r *http.Request) {
 }
 func (s *state) health(w http.ResponseWriter, r *http.Request) {
 	s.write(w, map[string]any{"healthy": true, "instanceId": s.meta.InstanceID, "protocolVersion": version.Protocol, "cliVersion": version.CLI, "indexSchemaVersion": version.IndexSchema})
+}
+func (s *state) startupDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if !s.validHost(r) {
+		s.problem(w, 403, "host_rejected", "Request host rejected")
+		return
+	}
+	s.write(w, map[string]any{
+		"codexHome": map[string]any{
+			"path":       s.codexHome,
+			"resolution": s.codexHomeSource,
+		},
+		"inspectorHome": map[string]any{
+			"path": s.layout.Root,
+		},
+	})
 }
 func (s *state) heartbeat(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
@@ -596,7 +612,7 @@ func (s *state) streamEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *state) sessions(w http.ResponseWriter, r *http.Request) {
-	allowed := map[string]bool{"revision": true, "pageSize": true, "query": true, "projectId": true, "cursor": true}
+	allowed := map[string]bool{"revision": true, "pageSize": true, "query": true, "projectId": true, "rootId": true, "cursor": true}
 	for key := range r.URL.Query() {
 		if !allowed[key] {
 			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
@@ -626,6 +642,17 @@ func (s *state) sessions(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, 400, "invalid_project_id", "Project ID is invalid")
 		return
 	}
+	rootIDs := r.URL.Query()["rootId"]
+	if len(rootIDs) > 200 {
+		s.problem(w, 400, "invalid_root_ids", "Too many root session IDs")
+		return
+	}
+	for _, rootID := range rootIDs {
+		if !opaqueID.MatchString(rootID) {
+			s.problem(w, 400, "invalid_root_id", "Root session ID is invalid")
+			return
+		}
+	}
 	offset := 0
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		if len(cursor) > 512 {
@@ -645,7 +672,7 @@ func (s *state) sessions(w http.ResponseWriter, r *http.Request) {
 	}
 	defer store.Close()
 	repository := inspector.Repository{Store: store}
-	page, err := repository.Sessions(r.Context(), revision, query, projectID, offset, limit)
+	page, err := repository.Sessions(r.Context(), revision, query, projectID, rootIDs, offset, limit)
 	if err != nil {
 		if err.Error() == "revision_unavailable" {
 			s.problem(w, 409, "revision_unavailable", "Revision is unavailable")
@@ -1083,8 +1110,18 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 	epoch := "phase2-empty"
 	revision := int64(1)
 	dbStatus := storage.Status{}
+	diagnosticGroups := []map[string]any{}
 	if store, openErr := storage.Open(filepath.Join(s.layout.Root, "inspector.db")); openErr == nil {
 		dbStatus, _ = store.Status()
+		if groups, groupErr := store.SourceDiagnosticGroups(r.Context()); groupErr == nil {
+			for _, group := range groups {
+				diagnosticGroups = append(diagnosticGroups, map[string]any{"state": group.State, "reason": group.Reason, "detectedVersion": group.DetectedVersion, "count": group.Count, "remediation": sourceRemediation(group.State, group.Reason)})
+			}
+		} else {
+			diagnosticGroups = append(diagnosticGroups, map[string]any{"state": "failed", "reason": "diagnostic_query_failed", "detectedVersion": "unknown", "count": 1, "remediation": sourceRemediation("failed", "diagnostic_query_failed")})
+			processState = "degraded"
+			lastError = "source_diagnostics_unavailable"
+		}
 		_ = store.Close()
 		if dbStatus.Epoch != "" {
 			epoch, revision = dbStatus.Epoch, dbStatus.Revision
@@ -1105,7 +1142,7 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 		lastError = indexErr
 	}
 	remaining := max(0, progress.Inventoried-progress.Processed-progress.Skipped-progress.Failed-progress.RequiresRebuild)
-	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "inventoriedCount": max(dbStatus.Sources, progress.Inventoried), "processedCount": max(dbStatus.Processed, progress.Processed), "remainingCount": remaining, "queuedCount": max(dbStatus.Pending, remaining), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": dbStatus.Failed + progress.Failed, "requiresRebuildCount": dbStatus.RequiresRebuild, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark}
+	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "inventoriedCount": max(dbStatus.Sources, progress.Inventoried), "processedCount": max(dbStatus.Processed, progress.Processed), "remainingCount": remaining, "queuedCount": max(dbStatus.Pending, remaining), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": dbStatus.Failed + progress.Failed, "requiresRebuildCount": dbStatus.RequiresRebuild, "diagnosticGroups": diagnosticGroups, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark}
 	if progress.Boundary != "" {
 		index["reverseScanBoundary"] = progress.Boundary
 	}
@@ -1117,6 +1154,28 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 		coverage = map[string]any{"fidelity": "exact", "observed": dbStatus.Processed, "eligible": dbStatus.Sources}
 	}
 	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "coverage": coverage, "sourceHome": map[string]any{"path": s.codexHome, "resolution": s.codexHomeSource}, "process": map[string]any{"state": processState, "inspectorVersion": version.CLI, "cliVersion": version.CLI, "cliCompatibility": s.compat.CLICompatibility, "pluginVersion": s.compat.PluginVersion, "pluginProtocolVersion": s.compat.PluginProtocol, "pid": os.Getpid(), "startedAt": s.meta.StartedAt.Format(time.RFC3339Nano)}, "index": index, "hook": map[string]any{"state": hookState, "registeredEvents": []string{"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"}, "lastMarker": lastMarker, "diagnostics": diagnostics}})
+}
+func sourceRemediation(state, reason string) string {
+	switch reason {
+	case "diagnostic_query_failed":
+		return "Run codex-inspector doctor, then restart Inspector. Source issue groups could not be read safely."
+	case "additional_diagnostic_groups":
+		return "Additional source issue groups were combined to keep diagnostics bounded. Update Inspector and sync again before reporting the aggregate."
+	case "unclassified_source_state":
+		return "Inspector withheld an unrecognized diagnostic value. Update Inspector and sync again; report only this reason code if it remains."
+	case "indexed_prefix_changed_or_shrank":
+		return "The recorded source changed before its indexed boundary. Run codex-inspector sync to rebuild derived data from the current local source."
+	case "incompatible_record_envelope", "missing_leading_session_meta", "invalid_session_meta":
+		return "Keep the source intact, update Inspector, and sync again; this record shape is not currently supported."
+	case "parse_failed", "normalization_failed":
+		return "Run codex-inspector sync again. If this group remains, run codex-inspector doctor and report the reason and detected version."
+	case "rebuild_failed":
+		return "Run codex-inspector doctor, resolve the reported data-home issue, then retry codex-inspector sync."
+	}
+	if state == "requires_rebuild" {
+		return "Run codex-inspector sync to rebuild derived data from the unchanged local sources."
+	}
+	return "Update Inspector and retry codex-inspector sync; if the group remains, include this reason and version in the bug report."
 }
 func (s *state) write(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")

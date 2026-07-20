@@ -36,7 +36,7 @@ func main() {
 	}
 	defer store.Close()
 	repository := inspector.Repository{Store: store}
-	page, err := repository.Sessions(context.Background(), 0, "", "", 0, 200)
+	page, err := repository.Sessions(context.Background(), 0, "", "", nil, 0, 200)
 	if err != nil {
 		fatal(err)
 	}

@@ -105,7 +105,8 @@ func TestEveryFilterAndCatalogChoice(t *testing.T) {
 			if got.Results[0].Value.(int64) != tc.want {
 				t.Fatalf("tokens=%v", got.Results[0].Value)
 			}
-			if got.Results[1].Value.(*metrics.CapacityPoint).UsedPercent != 45 {
+			latest := got.Results[1].Value.([]metrics.CapacityPoint)
+			if len(latest) != 1 || latest[0].UsedPercent != 45 {
 				t.Fatal("capacity changed under token filter")
 			}
 		})
@@ -213,7 +214,7 @@ func TestFrozenBucketBoundAndWallClockStaleness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if before.Results[0].Value.(*metrics.CapacityPoint).Stale {
+	if before.Results[0].Value.([]metrics.CapacityPoint)[0].Stale {
 		t.Fatal("premature stale")
 	}
 	now = time.Unix(1782910801, 0)
@@ -221,7 +222,7 @@ func TestFrozenBucketBoundAndWallClockStaleness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !after.Results[0].Value.(*metrics.CapacityPoint).Stale {
+	if !after.Results[0].Value.([]metrics.CapacityPoint)[0].Stale {
 		t.Fatal("cached stale")
 	}
 }
@@ -263,7 +264,7 @@ func TestGoldenMetricsAndFilters(t *testing.T) {
 	if comp["uncachedInput"].(float64) != 1350 || comp["cachedInput"].(float64) != 600 || comp["visibleOutput"].(float64) != 440 || comp["reasoningOutput"].(float64) != 110 {
 		t.Fatalf("composition=%v", comp)
 	}
-	latest := values["latest_capacity_observation"].(map[string]any)
+	latest := values["latest_capacity_observation"].([]any)[0].(map[string]any)
 	if latest["usedPercent"].(float64) != 45 {
 		t.Fatalf("capacity=%v", latest)
 	}
@@ -279,8 +280,57 @@ func TestGoldenMetricsAndFilters(t *testing.T) {
 	if items[0].(map[string]any)["value"].(float64) != 500 {
 		t.Fatalf("filtered=%v", items[0])
 	}
-	if items[1].(map[string]any)["value"].(map[string]any)["usedPercent"].(float64) != 45 {
+	if items[1].(map[string]any)["value"].([]any)[0].(map[string]any)["usedPercent"].(float64) != 45 {
 		t.Fatal("capacity incorrectly filtered")
+	}
+}
+
+func TestCapacityKeepsLatestWindowsAndResetSeriesDistinct(t *testing.T) {
+	s := indexedSyntheticWith(t, func(b []byte) []byte {
+		return []byte(strings.Replace(
+			string(b),
+			`"resets_at":1782910800}}}`,
+			`"resets_at":1782910800},"secondary":{"used_percent":27,"remaining_percent":73,"window_minutes":10080,"resets_at":1784930400}}}`,
+			1,
+		))
+	})
+	result, err := metrics.New(8).Query(context.Background(), s, metrics.Query{
+		MetricKeys: []string{"latest_capacity_observation", "capacity_drawdown"},
+		Timezone:   "UTC",
+		Grain:      "day",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest := result.Results[0].Value.([]metrics.CapacityPoint)
+	if len(latest) != 2 {
+		t.Fatalf("latest windows=%d, want 2: %+v", len(latest), latest)
+	}
+	if latest[0].WindowMinutes != 300 || latest[0].UsedPercent != 45 || latest[1].WindowMinutes != 10080 || latest[1].UsedPercent != 27 {
+		t.Fatalf("latest deterministic order/values=%+v", latest)
+	}
+	if latest[0].ObservedAt != latest[1].ObservedAt {
+		t.Fatalf("primary and secondary should remain latest at equal timestamp: %+v", latest)
+	}
+	if latest[1].RemainingPercent == nil || *latest[1].RemainingPercent != 73 {
+		t.Fatalf("weekly remaining semantics=%+v", latest[1])
+	}
+
+	series := result.Results[1].Value.([]metrics.CapacitySeries)
+	if len(series) != 3 {
+		t.Fatalf("drawdown series=%d, want separate reset/window series: %+v", len(series), series)
+	}
+	for i, windowSeries := range series {
+		if len(windowSeries.Points) != 1 {
+			t.Fatalf("series %d connected reset boundaries: %+v", i, windowSeries)
+		}
+		point := windowSeries.Points[0]
+		if point.LimitID != windowSeries.LimitID || point.WindowMinutes != windowSeries.WindowMinutes || point.ResetsAt != windowSeries.ResetBoundary {
+			t.Fatalf("series %d mixes semantic identities: series=%+v point=%+v", i, windowSeries, point)
+		}
+	}
+	if series[0].WindowMinutes != 300 || series[1].WindowMinutes != 300 || series[2].WindowMinutes != 10080 {
+		t.Fatalf("drawdown series order=%+v", series)
 	}
 }
 

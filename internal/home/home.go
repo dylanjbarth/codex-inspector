@@ -2,11 +2,17 @@ package home
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+
+	_ "modernc.org/sqlite"
 )
 
 type Layout struct {
@@ -50,8 +56,9 @@ func (c CodexHome) ID() string {
 func DatasetBindingPath(l Layout) string { return filepath.Join(l.Cache, "dataset-home.json") }
 
 // BindDatasetHome prevents a catalog from being silently reused for another
-// Codex home. A legacy populated catalog without a binding is intentionally
-// rejected: its source identity cannot be proven without a rebuild.
+// Codex home. Legacy catalogs predate the binding sidecar, so their identity is
+// established from the canonical source paths already recorded in the active
+// database before a sidecar is written. The database itself is never modified.
 func BindDatasetHome(l Layout, source CodexHome) error {
 	path := DatasetBindingPath(l)
 	b, err := os.ReadFile(path)
@@ -68,17 +75,20 @@ func BindDatasetHome(l Layout, source CodexHome) error {
 	if !os.IsNotExist(err) {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(l.Root, "active-index")); err == nil {
-		return errors.New("legacy dataset has no Codex-home binding; set a separate CODEX_INSPECTOR_HOME and rebuild")
-	} else if !os.IsNotExist(err) {
+	legacyDB, populated, err := legacyDatasetPath(l)
+	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(l.Root, "inspector.db")); err == nil {
-		return errors.New("legacy dataset has no Codex-home binding; set a separate CODEX_INSPECTOR_HOME and rebuild")
-	} else if !os.IsNotExist(err) {
-		return err
+	if populated {
+		if err = verifyLegacyDatasetHome(legacyDB, source.Path); err != nil {
+			return err
+		}
 	}
-	b, err = json.Marshal(source)
+	return writeDatasetBinding(path, source)
+}
+
+func writeDatasetBinding(path string, source CodexHome) error {
+	b, err := json.Marshal(source)
 	if err != nil {
 		return err
 	}
@@ -91,6 +101,74 @@ func BindDatasetHome(l Layout, source CodexHome) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+func legacyDatasetPath(l Layout) (string, bool, error) {
+	catalog := filepath.Join(l.Root, "active-index")
+	b, err := os.ReadFile(catalog)
+	if err == nil {
+		name := strings.TrimSpace(string(b))
+		if name == "" || filepath.Base(name) != name || name == "." {
+			return "", true, errors.New("legacy dataset identity cannot be established: active-index is invalid; preserve the existing Inspector home and rebuild into a separate CODEX_INSPECTOR_HOME")
+		}
+		return filepath.Join(l.Root, name), true, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", false, err
+	}
+	database := filepath.Join(l.Root, "inspector.db")
+	if _, err = os.Stat(database); err == nil {
+		return database, true, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", false, err
+	}
+	return "", false, nil
+}
+
+func verifyLegacyDatasetHome(database, requestedHome string) error {
+	dsn := (&url.URL{Scheme: "file", Path: database, RawQuery: "mode=ro"}).String()
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return legacyIdentityError(requestedHome, err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(`SELECT DISTINCT canonical_path FROM source_artifact_versions`)
+	if err != nil {
+		return legacyIdentityError(requestedHome, err)
+	}
+	defer rows.Close()
+
+	seen := false
+	for rows.Next() {
+		var sourcePath string
+		if err = rows.Scan(&sourcePath); err != nil {
+			return legacyIdentityError(requestedHome, err)
+		}
+		seen = true
+		if !pathWithin(requestedHome, sourcePath) {
+			return fmt.Errorf("legacy dataset is not proven to belong to requested Codex home %q (recorded source %q); preserve it and use a separate CODEX_INSPECTOR_HOME or rebuild", requestedHome, sourcePath)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return legacyIdentityError(requestedHome, err)
+	}
+	if !seen {
+		return legacyIdentityError(requestedHome, errors.New("catalog contains no recorded source paths"))
+	}
+	return nil
+}
+
+func legacyIdentityError(requestedHome string, cause error) error {
+	return fmt.Errorf("legacy dataset identity cannot be established for requested Codex home %q: %v; preserve the existing Inspector home and rebuild into a separate CODEX_INSPECTOR_HOME", requestedHome, cause)
+}
+
+func pathWithin(root, candidate string) bool {
+	root = filepath.Clean(root)
+	candidate = filepath.Clean(candidate)
+	rel, err := filepath.Rel(root, candidate)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func Resolve() (Layout, error) {

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1166,6 +1167,105 @@ type Status struct {
 	DatabaseBytes                                                                                 int64
 	Sources, Supported, Unsupported, Pending, Processed, Queued, Skipped, Failed, RequiresRebuild int
 	Boundary, Watermark                                                                           *string
+}
+
+type SourceDiagnosticGroup struct {
+	State, Reason, DetectedVersion string
+	Count                          int
+}
+
+const MaxSourceDiagnosticGroups = 50
+
+var diagnosticVersionPattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}(?:[-+][0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$`)
+
+var diagnosticReasonCodes = map[string]bool{
+	"leading_record_too_large":          true,
+	"missing_leading_session_meta":      true,
+	"invalid_leading_session_meta":      true,
+	"invalid_session_meta":              true,
+	"invalid_session_meta_timestamp":    true,
+	"missing_required_session_identity": true,
+	"incompatible_turn_context":         true,
+	"incompatible_record_envelope":      true,
+	"incompatible_event_record":         true,
+	"incompatible_turn_identity":        true,
+	"incompatible_token_record":         true,
+	"incompatible_response_record":      true,
+	"incompatible_tool_identity":        true,
+	"incompatible_record_shape":         true,
+	"foreign_key_constraint":            true,
+	"identity_constraint":               true,
+	"indexed_prefix_changed_or_shrank":  true,
+	"fact_check_constraint":             true,
+	"storage_busy":                      true,
+	"normalization_failed":              true,
+	"parse_failed":                      true,
+	"rebuild_failed":                    true,
+	"unspecified":                       true,
+}
+
+func normalizeDiagnosticReason(value string) string {
+	value = strings.TrimSpace(value)
+	if diagnosticReasonCodes[value] {
+		return value
+	}
+	return "unclassified_source_state"
+}
+
+func normalizeDiagnosticVersion(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= 64 && diagnosticVersionPattern.MatchString(value) {
+		return value
+	}
+	return "unknown"
+}
+
+// SourceDiagnosticGroups returns payload-free cohorts from the latest version
+// of each source artifact. Paths and source content are deliberately excluded.
+func (s *Store) SourceDiagnosticGroups(ctx context.Context) ([]SourceDiagnosticGroup, error) {
+	epoch, _, err := s.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT v.state,substr(coalesce(v.state_reason,'unspecified'),1,65),substr(coalesce(v.detected_codex_version,'unknown'),1,65),count(*)
+		FROM source_artifact_versions v
+		WHERE v.epoch_id=? AND v.state IN ('unsupported','failed','requires_rebuild')
+		AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)
+		GROUP BY v.state,substr(coalesce(v.state_reason,'unspecified'),1,65),substr(coalesce(v.detected_codex_version,'unknown'),1,65)
+		ORDER BY v.state,count(*) DESC,coalesce(v.state_reason,'unspecified'),coalesce(v.detected_codex_version,'unknown')`, epoch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	groups := make([]SourceDiagnosticGroup, 0, MaxSourceDiagnosticGroups)
+	groupIndexes := map[string]int{}
+	overflowCount := 0
+	for rows.Next() {
+		var group SourceDiagnosticGroup
+		if err = rows.Scan(&group.State, &group.Reason, &group.DetectedVersion, &group.Count); err != nil {
+			return nil, err
+		}
+		group.Reason = normalizeDiagnosticReason(group.Reason)
+		group.DetectedVersion = normalizeDiagnosticVersion(group.DetectedVersion)
+		key := group.State + "\x00" + group.Reason + "\x00" + group.DetectedVersion
+		if index, ok := groupIndexes[key]; ok {
+			groups[index].Count += group.Count
+			continue
+		}
+		if len(groups) < MaxSourceDiagnosticGroups-1 {
+			groupIndexes[key] = len(groups)
+			groups = append(groups, group)
+			continue
+		}
+		overflowCount += group.Count
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if overflowCount > 0 {
+		groups = append(groups, SourceDiagnosticGroup{State: "multiple", Reason: "additional_diagnostic_groups", DetectedVersion: "multiple", Count: overflowCount})
+	}
+	return groups, nil
 }
 
 type SourceInventory struct {

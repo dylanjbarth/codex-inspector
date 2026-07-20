@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -642,22 +643,30 @@ func sortStrings(v []string) {
 		}
 	}
 }
-func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now time.Time) (*CapacityPoint, []CapacitySeries, Coverage, map[string]int, error) {
-	rows, err := db.QueryContext(ctx, `SELECT c.observed_at,c.limit_id,c.window_minutes,c.used_percent,c.remaining_percent,c.resets_at FROM capacity_observations c JOIN events ev ON ev.epoch_id=c.epoch_id AND ev.id=c.event_id WHERE c.epoch_id=? AND ev.commit_revision<=? ORDER BY c.observed_at,c.id`, e, r)
+func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now time.Time) ([]CapacityPoint, []CapacitySeries, Coverage, map[string]int, error) {
+	rows, err := db.QueryContext(ctx, `SELECT c.id,c.observed_at,c.limit_id,c.window_minutes,c.used_percent,c.remaining_percent,c.resets_at FROM capacity_observations c JOIN events ev ON ev.epoch_id=c.epoch_id AND ev.id=c.event_id WHERE c.epoch_id=? AND ev.commit_revision<=? ORDER BY c.observed_at,c.id`, e, r)
 	if err != nil {
 		return nil, nil, Coverage{}, nil, err
 	}
 	defer rows.Close()
-	var latest *CapacityPoint
+	type latestCandidate struct {
+		id    string
+		point CapacityPoint
+	}
+	type windowIdentity struct {
+		limitID      string
+		windowMinute int64
+	}
+	latestByWindow := map[windowIdentity]latestCandidate{}
 	groups := map[string]*CapacitySeries{}
 	order := []string{}
 	eligible, observedCount := 0, 0
 	for rows.Next() {
-		var observed, limit string
+		var id, observed, limit string
 		var window sql.NullInt64
 		var used, remaining sql.NullFloat64
 		var reset sql.NullString
-		if err = rows.Scan(&observed, &limit, &window, &used, &remaining, &reset); err != nil {
+		if err = rows.Scan(&id, &observed, &limit, &window, &used, &remaining, &reset); err != nil {
 			return nil, nil, Coverage{}, nil, err
 		}
 		eligible++
@@ -675,8 +684,14 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 		}
 		rt, _ := time.Parse(time.RFC3339, resetRFC)
 		p.Stale = !now.Before(rt)
-		copy := p
-		latest = &copy
+		windowKey := windowIdentity{limitID: limit, windowMinute: window.Int64}
+		candidate, exists := latestByWindow[windowKey]
+		if !exists && len(latestByWindow) >= MaxCapacitySeries {
+			return nil, nil, Coverage{}, nil, ErrResponseTooLarge
+		}
+		if !exists || observed > candidate.point.ObservedAt || (observed == candidate.point.ObservedAt && id > candidate.id) {
+			latestByWindow[windowKey] = latestCandidate{id: id, point: p}
+		}
 		if q.Start != "" && observed < q.Start {
 			continue
 		}
@@ -698,6 +713,29 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 		}
 		g.Points = append(g.Points, p)
 	}
+	latest := make([]CapacityPoint, 0, len(latestByWindow))
+	for _, candidate := range latestByWindow {
+		latest = append(latest, candidate.point)
+	}
+	sort.Slice(latest, func(i, j int) bool {
+		if latest[i].LimitID != latest[j].LimitID {
+			return latest[i].LimitID < latest[j].LimitID
+		}
+		if latest[i].WindowMinutes != latest[j].WindowMinutes {
+			return latest[i].WindowMinutes < latest[j].WindowMinutes
+		}
+		return latest[i].ObservedAt < latest[j].ObservedAt
+	})
+	sort.Slice(order, func(i, j int) bool {
+		a, b := groups[order[i]], groups[order[j]]
+		if a.LimitID != b.LimitID {
+			return a.LimitID < b.LimitID
+		}
+		if a.WindowMinutes != b.WindowMinutes {
+			return a.WindowMinutes < b.WindowMinutes
+		}
+		return a.ResetBoundary < b.ResetBoundary
+	})
 	out := make([]CapacitySeries, 0, len(order))
 	for _, k := range order {
 		out = append(out, *groups[k])

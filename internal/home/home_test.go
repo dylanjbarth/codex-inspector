@@ -1,9 +1,14 @@
 package home
 
 import (
+	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestResolveAndEnsureUserOnlySeparateHome(t *testing.T) {
@@ -57,7 +62,7 @@ func TestResolveCodexHomeRecordsSourceAndCanonicalPath(t *testing.T) {
 	}
 }
 
-func TestDatasetBindingRejectsDifferentHomesAndLegacyCatalog(t *testing.T) {
+func TestDatasetBindingCleanInstallAndRejectsDifferentHome(t *testing.T) {
 	root := t.TempDir()
 	l := Layout{Root: root, Reviews: filepath.Join(root, "reviews"), Queue: filepath.Join(root, "queue"), Run: filepath.Join(root, "run"), Logs: filepath.Join(root, "logs"), Cache: filepath.Join(root, "cache")}
 	if err := Ensure(l); err != nil {
@@ -70,15 +75,131 @@ func TestDatasetBindingRejectsDifferentHomesAndLegacyCatalog(t *testing.T) {
 	if err := BindDatasetHome(l, CodexHome{Path: filepath.Join(root, "two"), Resolution: "environment"}); err == nil {
 		t.Fatal("accepted another source home")
 	}
-	legacyRoot := t.TempDir()
-	legacy := Layout{Root: legacyRoot, Reviews: filepath.Join(legacyRoot, "reviews"), Queue: filepath.Join(legacyRoot, "queue"), Run: filepath.Join(legacyRoot, "run"), Logs: filepath.Join(legacyRoot, "logs"), Cache: filepath.Join(legacyRoot, "cache")}
-	if err := Ensure(legacy); err != nil {
+	b, err := os.ReadFile(DatasetBindingPath(l))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(legacy.Root, "active-index"), []byte("old\n"), 0o600); err != nil {
+	var recorded CodexHome
+	if err = json.Unmarshal(b, &recorded); err != nil || recorded != first {
+		t.Fatalf("binding=%+v err=%v", recorded, err)
+	}
+}
+
+func TestDatasetBindingUpgradesLegacyCatalogWithoutModifyingDatabase(t *testing.T) {
+	legacy, codexHome, database := legacyCatalog(t, true, "sessions/2026/07/rollout.jsonl")
+	before, err := os.ReadFile(database)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := BindDatasetHome(legacy, first); err == nil {
-		t.Fatal("accepted unbound legacy catalog")
+	source := CodexHome{Path: codexHome, Resolution: "default"}
+	if err = BindDatasetHome(legacy, source); err != nil {
+		t.Fatal(err)
 	}
+	after, err := os.ReadFile(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("legacy database content changed during binding migration")
+	}
+	b, err := os.ReadFile(DatasetBindingPath(legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recorded CodexHome
+	if err = json.Unmarshal(b, &recorded); err != nil || recorded != source {
+		t.Fatalf("binding=%+v err=%v", recorded, err)
+	}
+	if err = BindDatasetHome(legacy, source); err != nil {
+		t.Fatalf("migrated binding is not reusable: %v", err)
+	}
+}
+
+func TestDatasetBindingUpgradesLegacyInspectorDatabaseWithoutCatalogPointer(t *testing.T) {
+	legacy, codexHome, database := legacyCatalog(t, true, "archived_sessions/rollout.jsonl")
+	inspectorDatabase := filepath.Join(legacy.Root, "inspector.db")
+	if err := os.Rename(database, inspectorDatabase); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(legacy.Root, "active-index")); err != nil {
+		t.Fatal(err)
+	}
+	if err := BindDatasetHome(legacy, CodexHome{Path: codexHome, Resolution: "environment"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(DatasetBindingPath(legacy)); err != nil {
+		t.Fatalf("legacy inspector.db was not bound: %v", err)
+	}
+}
+
+func TestDatasetBindingRejectsLegacyHomeMismatchWithoutWritingBinding(t *testing.T) {
+	legacy, _, _ := legacyCatalog(t, true, "sessions/rollout.jsonl")
+	otherHome := filepath.Join(t.TempDir(), "other-codex")
+	err := BindDatasetHome(legacy, CodexHome{Path: otherHome, Resolution: "environment"})
+	if err == nil || !strings.Contains(err.Error(), "not proven to belong") {
+		t.Fatalf("err=%v", err)
+	}
+	if _, statErr := os.Stat(DatasetBindingPath(legacy)); !os.IsNotExist(statErr) {
+		t.Fatalf("binding written after mismatch: %v", statErr)
+	}
+}
+
+func TestDatasetBindingRejectsInvalidBinding(t *testing.T) {
+	root := t.TempDir()
+	l := testLayout(root)
+	if err := Ensure(l); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(DatasetBindingPath(l), []byte(`{"path":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := BindDatasetHome(l, CodexHome{Path: filepath.Join(root, "codex"), Resolution: "environment"})
+	if err == nil || !strings.Contains(err.Error(), "invalid dataset home binding") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestDatasetBindingRejectsLegacyCatalogWhenIdentityCannotBeEstablished(t *testing.T) {
+	legacy, codexHome, _ := legacyCatalog(t, false, "")
+	err := BindDatasetHome(legacy, CodexHome{Path: codexHome, Resolution: "environment"})
+	if err == nil || !strings.Contains(err.Error(), "identity cannot be established") || !strings.Contains(err.Error(), "separate CODEX_INSPECTOR_HOME") {
+		t.Fatalf("err=%v", err)
+	}
+	if _, statErr := os.Stat(DatasetBindingPath(legacy)); !os.IsNotExist(statErr) {
+		t.Fatalf("binding written without identity proof: %v", statErr)
+	}
+}
+
+func legacyCatalog(t *testing.T, withSource bool, relativeSource string) (Layout, string, string) {
+	t.Helper()
+	root := t.TempDir()
+	l := testLayout(filepath.Join(root, "inspector"))
+	if err := Ensure(l); err != nil {
+		t.Fatal(err)
+	}
+	codexHome := filepath.Join(root, "codex")
+	database := filepath.Join(l.Root, "legacy.db")
+	db, err := sql.Open("sqlite", database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`CREATE TABLE source_artifact_versions (canonical_path TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if withSource {
+		if _, err = db.Exec(`INSERT INTO source_artifact_versions(canonical_path) VALUES(?)`, filepath.Join(codexHome, relativeSource)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(l.Root, "active-index"), []byte(filepath.Base(database)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return l, codexHome, database
+}
+
+func testLayout(root string) Layout {
+	return Layout{Root: root, Reviews: filepath.Join(root, "reviews"), Queue: filepath.Join(root, "queue"), Run: filepath.Join(root, "run"), Logs: filepath.Join(root, "logs"), Cache: filepath.Join(root, "cache")}
 }

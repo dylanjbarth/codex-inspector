@@ -9,9 +9,12 @@ is generated at `web/src/generated/internal-api.ts` by pinned
 ## Boundary rules
 
 - bind only to `127.0.0.1` on an ephemeral port;
-- all `/v1/*` routes except token exchange require the SameSite session cookie;
+- all `/v1/*` routes except token exchange and startup diagnostics require the SameSite session cookie;
 - token exchange accepts the per-process fragment token once, rotates it into
   an HttpOnly `SameSite=Strict` cookie, and invalidates the token;
+- startup diagnostics is a read-only loopback endpoint that validates `Host`
+  and returns only the effective `CODEX_HOME` and `CODEX_INSPECTOR_HOME` paths
+  needed to diagnose a failed browser bootstrap;
 - state-changing and streaming requests validate `Host` and `Origin`;
 - paths from browser input are never accepted;
 - evidence is addressed only by opaque `evidenceId` and byte/chunk bounds;
@@ -68,7 +71,17 @@ remaining, skipped, unsupported, failed, and requires-rebuild counts. An
 incomplete active tail is coverage state, not an active index job. Every metric item carries both
 indexed time coverage and the requested/effective time boundary. Capacity
 points always expose `remainingPercent`, using `null` when the source did not
-record it rather than deriving a value from `usedPercent`.
+record it rather than deriving a value from `usedPercent`. The latest-capacity
+metric returns an ordered array containing the newest point for every recorded
+limit/window identity. Drawdown returns separate limit/window/reset-boundary
+series; consumers must not connect points from different series.
+
+Source diagnostic groups expose only normalized reason codes and validated,
+bounded Codex version identifiers. At most 50 groups are returned; the final
+`multiple` group counts every omitted source when the cohort set overflows. A
+cohort-query failure is represented by the fixed `diagnostic_query_failed`
+group and degraded process state, never an empty success response or raw
+database/source error text.
 
 Session maps include ordered root turns plus explicit child-to-spawn-turn
 topology. Root-turn responses expose only completed or terminal turns, never

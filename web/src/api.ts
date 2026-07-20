@@ -1,6 +1,7 @@
 import type { components } from './generated/internal-api'
 
 export type Status = components['schemas']['Status']
+export type StartupDiagnostics = components['schemas']['StartupDiagnostics']
 export type MetricResult = components['schemas']['MetricResult']
 export type FilterOptions = components['schemas']['MetricFilterOptions']
 export type SessionPage = components['schemas']['SessionPage']
@@ -43,6 +44,12 @@ export async function fetchStatus(): Promise<Status> {
   return response.json()
 }
 
+export async function fetchStartupDiagnostics(): Promise<StartupDiagnostics> {
+  const response = await fetch('/v1/startup-diagnostics')
+  if (!response.ok) throw new Error('Startup diagnostics are unavailable')
+  return response.json()
+}
+
 export async function fetchFilterOptions(requestedRevision?:number):Promise<FilterOptions>{
   const params=new URLSearchParams();if(requestedRevision!=null)params.set('requestedRevision',String(requestedRevision));const response=await fetch(`/v1/metrics/catalog${params.size?`?${params}`:''}`);if(!response.ok)throw new Error('Metric catalog is unavailable');const body:components['schemas']['MetricCatalog']=await response.json();return body.filterOptions
 }
@@ -59,6 +66,7 @@ async function inspectorJSON<T>(path:string,message:string):Promise<T>{
   return response.json() as Promise<T>
 }
 export function fetchSessions(query:string,revision:number,cursor?:string):Promise<SessionPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'50'});if(query)params.set('query',query);if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions?${params}`,'Session discovery is unavailable')}
+export function fetchSessionMetadata(rootIds:string[],revision:number):Promise<SessionPage>{const params=new URLSearchParams({revision:String(revision),pageSize:String(Math.max(1,Math.min(200,rootIds.length)))});for(const rootId of rootIds.slice(0,200))params.append('rootId',rootId);return inspectorJSON(`/v1/sessions?${params}`,'Session metadata is unavailable')}
 export function fetchSessionMap(sessionId:string,revision:number):Promise<SessionMap>{return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/map?revision=${revision}`,'Session map is unavailable')}
 export function fetchLedger(sessionId:string,turnId:string,revision:number,cursor?:string):Promise<LedgerPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'200'});if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/ledger?${params}`,'Turn evidence is unavailable')}
 export function fetchEvidence(evidenceId:string,revision:number,offset=0):Promise<EvidenceChunk>{return inspectorJSON(`/v1/evidence/${encodeURIComponent(evidenceId)}?revision=${revision}&offset=${offset}&limit=65536`,'Exact evidence is unavailable')}

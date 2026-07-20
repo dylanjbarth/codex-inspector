@@ -2,9 +2,11 @@ package inspector
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,7 +49,7 @@ func syntheticRepository(t *testing.T) (Repository, func()) {
 func TestDiscoveryExplainsDescendantMatchAndTotals(t *testing.T) {
 	repository, closeStore := syntheticRepository(t)
 	defer closeStore()
-	page, err := repository.Sessions(context.Background(), 0, "delegated check", "", 0, 50)
+	page, err := repository.Sessions(context.Background(), 0, "delegated check", "", nil, 0, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +59,22 @@ func TestDiscoveryExplainsDescendantMatchAndTotals(t *testing.T) {
 	if len(page.Items[0].MatchCategories) != 1 || page.Items[0].MatchCategories[0] != "descendant: message" {
 		t.Fatalf("match explanation is not descendant-specific: %#v", page.Items[0].MatchCategories)
 	}
+	if len(page.Items[0].MatchSnippets) != 1 || page.Items[0].MatchSnippets[0].Category != "descendant: message" || !strings.Contains(page.Items[0].MatchSnippets[0].Text, "delegated check") || len([]rune(page.Items[0].MatchSnippets[0].Text)) > 240 {
+		t.Fatalf("bounded descendant snippet missing: %#v", page.Items[0].MatchSnippets)
+	}
+	rootPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "fake widget", "", []string{page.Items[0].SessionID}, 0, 50)
+	if err != nil || len(rootPage.Items) != 1 || len(rootPage.Items[0].MatchSnippets) == 0 || rootPage.Items[0].MatchSnippets[0].Category != "root: message" || !strings.Contains(strings.ToLower(rootPage.Items[0].MatchSnippets[0].Text), "fake widget") {
+		t.Fatalf("bounded root snippet missing: page=%#v err=%v", rootPage, err)
+	}
+	requestedRoots := make([]string, 50, 51)
+	for i := range requestedRoots {
+		requestedRoots[i] = fmt.Sprintf("session:outside-page-one-%02d", i)
+	}
+	requestedRoots = append(requestedRoots, page.Items[0].SessionID)
+	targeted, err := repository.Sessions(context.Background(), page.AppliedRevision, "", "", requestedRoots, 0, 50)
+	if err != nil || len(targeted.Items) != 1 || targeted.Items[0].SessionID != page.Items[0].SessionID || targeted.Items[0].Title == "" || targeted.Items[0].Project == "" || targeted.Items[0].StartedAt == "" || targeted.Items[0].CompletedTurns == 0 {
+		t.Fatalf("targeted metadata beyond a 50-root discovery page is incomplete: page=%#v err=%v", targeted, err)
+	}
 	if page.Items[0].DirectTokens == nil || *page.Items[0].DirectTokens != 2000 || page.Items[0].DescendantTokens == nil || *page.Items[0].DescendantTokens != 500 {
 		t.Fatalf("discovery totals differ from metric golden: %#v", page.Items[0])
 	}
@@ -65,7 +83,7 @@ func TestDiscoveryExplainsDescendantMatchAndTotals(t *testing.T) {
 func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 	repository, closeStore := syntheticRepository(t)
 	defer closeStore()
-	page, err := repository.Sessions(context.Background(), 0, "", "", 0, 50)
+	page, err := repository.Sessions(context.Background(), 0, "", "", nil, 0, 50)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("session discovery failed: %#v %v", page, err)
 	}

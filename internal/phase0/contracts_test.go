@@ -549,7 +549,7 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	}
 	assertSchemaRequired(t, doc.Components.Schemas, "ProcessStatus", "state", "inspectorVersion", "cliVersion", "cliCompatibility", "pluginVersion", "pluginProtocolVersion", "pid", "startedAt")
 	assertSchemaRequired(t, doc.Components.Schemas, "Snapshot", "schemaVersion", "datasetEpoch", "appliedRevision", "coverage")
-	assertSchemaRequired(t, doc.Components.Schemas, "IndexStatus", "state", "datasetEpoch", "appliedRevision", "schemaVersion", "databaseBytes", "sourceCount", "supportedSourceCount", "unsupportedSourceCount", "pendingTailCount", "queuedSessionChanges", "processedCount", "queuedCount", "skippedCount", "failedCount", "requiresRebuildCount", "reverseScanBoundary", "completedWatermark")
+	assertSchemaRequired(t, doc.Components.Schemas, "IndexStatus", "state", "datasetEpoch", "appliedRevision", "schemaVersion", "databaseBytes", "sourceCount", "supportedSourceCount", "unsupportedSourceCount", "pendingTailCount", "queuedSessionChanges", "processedCount", "queuedCount", "skippedCount", "failedCount", "requiresRebuildCount", "diagnosticGroups", "reverseScanBoundary", "completedWatermark")
 	assertSchemaRequired(t, doc.Components.Schemas, "HookStatus", "state", "registeredEvents", "lastMarker", "diagnostics")
 	assertSchemaRequired(t, doc.Components.Schemas, "MetricMetadata", "formulaVersion", "fidelity", "coverage", "indexedCoverage", "timeBoundary", "exclusionReasons")
 	assertSchemaRequired(t, doc.Components.Schemas, "IndexedCoverage", "indexedStart", "indexedEnd", "completedWatermark")
@@ -603,6 +603,31 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	remainingTypes, _ := remaining["type"].([]any)
 	if !reflect.DeepEqual(remainingTypes, []any{"number", "null"}) {
 		t.Errorf("CapacityPoint.remainingPercent type=%v, want honest nullable number", remainingTypes)
+	}
+	latestAllOf, _ := doc.Components.Schemas["LatestCapacityMetric"]["allOf"].([]any)
+	latestShape, _ := latestAllOf[1].(map[string]any)
+	latestProperties, _ := latestShape["properties"].(map[string]any)
+	latestValue, _ := latestProperties["value"].(map[string]any)
+	latestItems, _ := latestValue["items"].(map[string]any)
+	if latestValue["type"] != "array" || latestValue["maxItems"] != float64(100) || latestItems["$ref"] != "#/components/schemas/CapacityPoint" {
+		t.Errorf("LatestCapacityMetric.value=%v, want bounded CapacityPoint array", latestValue)
+	}
+	diagnosticProperties, _ := doc.Components.Schemas["SourceDiagnosticGroup"]["properties"].(map[string]any)
+	for _, field := range []string{"reason", "detectedVersion", "remediation"} {
+		property, _ := diagnosticProperties[field].(map[string]any)
+		if property["maxLength"] == nil {
+			t.Errorf("SourceDiagnosticGroup.%s is not string-bounded", field)
+		}
+	}
+	diagnosticReason, _ := diagnosticProperties["reason"].(map[string]any)
+	diagnosticVersion, _ := diagnosticProperties["detectedVersion"].(map[string]any)
+	if diagnosticReason["enum"] == nil || diagnosticVersion["pattern"] == nil {
+		t.Errorf("SourceDiagnosticGroup must constrain reason codes and detected versions: reason=%v version=%v", diagnosticReason, diagnosticVersion)
+	}
+	indexProperties, _ := doc.Components.Schemas["IndexStatus"]["properties"].(map[string]any)
+	diagnosticGroups, _ := indexProperties["diagnosticGroups"].(map[string]any)
+	if diagnosticGroups["maxItems"] != float64(50) {
+		t.Errorf("IndexStatus.diagnosticGroups maxItems=%v, want 50", diagnosticGroups["maxItems"])
 	}
 	rootTurnProperties, _ := doc.Components.Schemas["RootTurn"]["properties"].(map[string]any)
 	stateSchema, _ := rootTurnProperties["state"].(map[string]any)

@@ -13,7 +13,7 @@ timezone.
 | `recorded_tokens_over_time` | tokens | completion-time calendar buckets grouped by contribution kind |
 | `token_composition` | tokens | mutually exclusive `uncached_input`, `cached_input`, `visible_output`, `reasoning_output`, `residual` |
 | `top_root_sessions_by_tokens` | tokens | roots ranked by inclusive tokens, returning direct and descendant separately |
-| `latest_capacity_observation` | percent | latest source-recorded observation by observation time |
+| `latest_capacity_observation` | percent | latest source-recorded observation per limit/window identity by observation time, returned in deterministic limit/window order |
 | `capacity_drawdown` | percent | ordered source observations partitioned by limit/window and reset boundary |
 
 The catalog response is pinned to an applied index revision. It includes
@@ -60,8 +60,11 @@ shown rather than silently redistributed.
 - Additive responses preserve combined, direct, descendant, Review, and
   other/orphan values where those populations exist.
 - Capacity ignores project, model, reasoning, and contribution filters. The
-  latest card also ignores the selected historical time range; the drawdown
-  series respects it.
+  latest cards also ignore the selected historical time range; the drawdown
+  series respects it. Every meaningful limit/window identity is represented by
+  its newest complete point; equal observation times use stable source identity
+  as a tie-breaker. Drawdown series are separately partitioned by limit, window,
+  and reset boundary, so different windows and reset periods are never joined.
 
 Missing or partial fields produce coverage metadata, not zero values. In
 particular, if eligible completed turns exist but none has usable recorded

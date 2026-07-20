@@ -67,6 +67,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 cp "${repo_root}/fixtures/synthetic/root.jsonl" "${repo_root}/fixtures/synthetic/descendant.jsonl" "${repo_root}/fixtures/synthetic/unsupported.jsonl" "${codex_home}/sessions/"
+cp "${repo_root}/fixtures/synthetic/session_index.jsonl" "${codex_home}/session_index.jsonl"
 current_stage=build
 "${repo_root}/scripts/phase1/build-web.sh" >/dev/null
 GOCACHE="${GOCACHE:-${TMPDIR:-/tmp}/codex-inspector-phase6-gocache}" go build -o "${bin_dir}/codex-inspector" "${repo_root}/cmd/codex-inspector"

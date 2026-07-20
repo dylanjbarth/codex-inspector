@@ -2,10 +2,16 @@ package inspector
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
+	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/dylanjbarth/codex-inspector/internal/storage"
 )
@@ -20,17 +26,23 @@ type Coverage struct {
 }
 
 type SessionSummary struct {
-	SessionID        string   `json:"sessionId"`
-	RootWorkUnitID   string   `json:"rootWorkUnitId"`
-	Purpose          string   `json:"purpose"`
-	Title            string   `json:"title,omitempty"`
-	Project          string   `json:"project,omitempty"`
-	StartedAt        string   `json:"startedAt,omitempty"`
-	CompletedTurns   int      `json:"completedTurns"`
-	LatestCompleted  string   `json:"latestCompleted,omitempty"`
-	MatchCategories  []string `json:"matchCategories"`
-	DirectTokens     *int64   `json:"directTokens"`
-	DescendantTokens *int64   `json:"descendantTokens"`
+	SessionID        string         `json:"sessionId"`
+	RootWorkUnitID   string         `json:"rootWorkUnitId"`
+	Purpose          string         `json:"purpose"`
+	Title            string         `json:"title,omitempty"`
+	Project          string         `json:"project,omitempty"`
+	StartedAt        string         `json:"startedAt,omitempty"`
+	CompletedTurns   int            `json:"completedTurns"`
+	LatestCompleted  string         `json:"latestCompleted,omitempty"`
+	MatchCategories  []string       `json:"matchCategories"`
+	MatchSnippets    []MatchSnippet `json:"matchSnippets"`
+	DirectTokens     *int64         `json:"directTokens"`
+	DescendantTokens *int64         `json:"descendantTokens"`
+}
+
+type MatchSnippet struct {
+	Category string `json:"category"`
+	Text     string `json:"text"`
 }
 
 type SessionPage struct {
@@ -127,7 +139,7 @@ const latestSessions = `WITH sv AS (
 	SELECT l.* FROM session_label_versions l WHERE l.epoch_id=? AND l.revision=(SELECT max(x.revision) FROM session_label_versions x WHERE x.epoch_id=l.epoch_id AND x.session_id=l.session_id AND x.revision<=?)
 ) `
 
-func (r Repository) Sessions(ctx context.Context, revision int64, query, projectID string, offset, limit int) (SessionPage, error) {
+func (r Repository) Sessions(ctx context.Context, revision int64, query, projectID string, rootIDs []string, offset, limit int) (SessionPage, error) {
 	epoch, revision, err := snapshot(r.Store, revision)
 	if err != nil {
 		return SessionPage{}, err
@@ -138,14 +150,22 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	if limit > 200 {
 		limit = 200
 	}
-	rows, err := r.Store.DB().QueryContext(ctx, latestSessions+`SELECT root.id,rv.purpose,coalesce(l.title,''),coalesce(p.canonical_identity,''),coalesce(min(t.started_at),''),count(t.id),coalesce(max(t.completed_at),max(t.terminal_at),'')
+	sessionQuery := latestSessions + `SELECT root.id,rv.purpose,coalesce(l.title,''),coalesce(p.canonical_identity,''),coalesce(min(t.started_at),''),count(t.id),coalesce(max(t.completed_at),max(t.terminal_at),'')
 		FROM sessions root JOIN sv rv ON rv.session_id=root.id AND rv.root_work_unit_id=root.id
 		LEFT JOIN labels l ON l.session_id=root.id
 		LEFT JOIN projects p ON p.epoch_id=rv.epoch_id AND p.id=rv.project_id
 		JOIN sv member ON member.root_work_unit_id=root.id
 		JOIN turns t ON t.epoch_id=root.epoch_id AND t.session_id=member.session_id AND t.state='completed' AND t.commit_revision<=?
-		WHERE root.epoch_id=? AND root.created_revision<=? AND (?='' OR rv.project_id=?)
-		GROUP BY root.id ORDER BY max(t.completed_at) DESC,root.id`, epoch, revision, epoch, revision, revision, epoch, revision, projectID, projectID)
+		WHERE root.epoch_id=? AND root.created_revision<=? AND (?='' OR rv.project_id=?)`
+	args := []any{epoch, revision, epoch, revision, revision, epoch, revision, projectID, projectID}
+	if len(rootIDs) > 0 {
+		sessionQuery += ` AND root.id IN (` + strings.TrimRight(strings.Repeat("?,", len(rootIDs)), ",") + `)`
+		for _, id := range rootIDs {
+			args = append(args, id)
+		}
+	}
+	sessionQuery += ` GROUP BY root.id ORDER BY max(t.completed_at) DESC,root.id`
+	rows, err := r.Store.DB().QueryContext(ctx, sessionQuery, args...)
 	if err != nil {
 		return SessionPage{}, err
 	}
@@ -157,7 +177,7 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 			return SessionPage{}, err
 		}
 		item.RootWorkUnitID = item.SessionID
-		item.MatchCategories, err = r.matchCategories(ctx, epoch, revision, item.SessionID, query)
+		item.MatchCategories, item.MatchSnippets, err = r.matches(ctx, epoch, revision, item.SessionID, query)
 		if err != nil {
 			return SessionPage{}, err
 		}
@@ -191,9 +211,9 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	return page, nil
 }
 
-func (r Repository) matchCategories(ctx context.Context, epoch string, revision int64, rootID, query string) ([]string, error) {
+func (r Repository) matches(ctx context.Context, epoch string, revision int64, rootID, query string) ([]string, []MatchSnippet, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil, nil
+		return nil, []MatchSnippet{}, nil
 	}
 	rows, err := r.Store.DB().QueryContext(ctx, latestSessions+`SELECT s.id,coalesce(l.title,''),s.source_session_id,coalesce(p.canonical_identity,''),coalesce(group_concat(pa.alias_value,' '),'')
 		FROM sv JOIN sessions s ON s.epoch_id=sv.epoch_id AND s.id=sv.session_id
@@ -201,7 +221,7 @@ func (r Repository) matchCategories(ctx context.Context, epoch string, revision 
 		LEFT JOIN project_aliases pa ON pa.epoch_id=sv.epoch_id AND pa.project_id=sv.project_id AND pa.observed_revision<=?
 		WHERE sv.epoch_id=? AND sv.root_work_unit_id=? GROUP BY s.id`, epoch, revision, epoch, revision, revision, epoch, rootID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	categories := map[string]bool{}
 	q := strings.ToLower(query)
@@ -209,7 +229,7 @@ func (r Repository) matchCategories(ctx context.Context, epoch string, revision 
 		var id, title, sourceID, project, aliases string
 		if err = rows.Scan(&id, &title, &sourceID, &project, &aliases); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, nil, err
 		}
 		prefix := "root"
 		if id != rootID {
@@ -226,22 +246,40 @@ func (r Repository) matchCategories(ctx context.Context, epoch string, revision 
 		}
 	}
 	if err = rows.Close(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	fts := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
-	rows, err = r.Store.DB().QueryContext(ctx, latestSessions+`SELECT s.id,d.match_category FROM sv JOIN turns t ON t.session_id=sv.session_id AND t.commit_revision<=? JOIN events e ON e.epoch_id=t.epoch_id AND e.turn_id=t.id AND e.commit_revision<=? JOIN event_search_documents d ON d.epoch_id=e.epoch_id AND d.event_id=e.id JOIN event_search ON event_search.rowid=d.rowid JOIN sessions s ON s.epoch_id=sv.epoch_id AND s.id=sv.session_id WHERE sv.epoch_id=? AND sv.root_work_unit_id=? AND event_search MATCH ?`, epoch, revision, epoch, revision, revision, revision, epoch, rootID, fts)
+	rows, err = r.Store.DB().QueryContext(ctx, latestSessions+`SELECT s.id,d.match_category,v.canonical_path,e.byte_start,e.byte_end,e.content_sha256
+		FROM sv JOIN turns t ON t.session_id=sv.session_id AND t.commit_revision<=?
+		JOIN events e ON e.epoch_id=t.epoch_id AND e.turn_id=t.id AND e.commit_revision<=?
+		JOIN event_search_documents d ON d.epoch_id=e.epoch_id AND d.event_id=e.id
+		JOIN event_search ON event_search.rowid=d.rowid
+		JOIN sessions s ON s.epoch_id=sv.epoch_id AND s.id=sv.session_id
+		JOIN evidence_refs er ON er.epoch_id=e.epoch_id AND er.event_id=e.id
+		JOIN source_artifact_versions v ON v.epoch_id=er.epoch_id AND v.source_id=er.source_id AND v.revision=(SELECT max(vx.revision) FROM source_artifact_versions vx WHERE vx.epoch_id=v.epoch_id AND vx.source_id=v.source_id AND vx.revision<=?)
+		WHERE sv.epoch_id=? AND sv.root_work_unit_id=? AND event_search MATCH ? ORDER BY e.observed_at,e.record_ordinal LIMIT 20`, epoch, revision, epoch, revision, revision, revision, revision, epoch, rootID, fts)
+	snippets := make([]MatchSnippet, 0, 4)
+	seenSnippets := map[string]bool{}
 	if err == nil {
 		for rows.Next() {
-			var id, category string
-			if err = rows.Scan(&id, &category); err != nil {
+			var id, category, path, digest string
+			var byteStart, byteEnd int64
+			if err = rows.Scan(&id, &category, &path, &byteStart, &byteEnd, &digest); err != nil {
 				rows.Close()
-				return nil, err
+				return nil, nil, err
 			}
 			prefix := "root"
 			if id != rootID {
 				prefix = "descendant"
 			}
-			categories[prefix+": "+strings.ReplaceAll(category, "_", " ")] = true
+			label := prefix + ": " + strings.ReplaceAll(category, "_", " ")
+			categories[label] = true
+			if len(snippets) < 4 {
+				if text := sourceMatchSnippet(path, byteStart, byteEnd, digest, category, query); text != "" && !seenSnippets[label+"\x00"+text] {
+					seenSnippets[label+"\x00"+text] = true
+					snippets = append(snippets, MatchSnippet{Category: label, Text: text})
+				}
+			}
 		}
 		err = rows.Close()
 	}
@@ -255,7 +293,84 @@ func (r Repository) matchCategories(ctx context.Context, epoch string, revision 
 		out = append(out, category)
 	}
 	sort.Strings(out)
-	return out, err
+	return out, snippets, err
+}
+
+func sourceMatchSnippet(path string, start, end int64, expectedHash, category, query string) string {
+	if start < 0 || end <= start || end-start > 2*1024*1024 {
+		return ""
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.NewSectionReader(file, start, end-start))
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(raw)
+	if hex.EncodeToString(digest[:]) != expectedHash {
+		return ""
+	}
+	var record struct {
+		Payload map[string]json.RawMessage `json:"payload"`
+	}
+	if json.Unmarshal(raw, &record) != nil {
+		return ""
+	}
+	var text string
+	if category == "message" {
+		text = readableBlocks(record.Payload["content"])
+	} else if category == "tool_result" {
+		if json.Unmarshal(record.Payload["output"], &text) != nil {
+			text = readableBlocks(record.Payload["output"])
+		}
+	}
+	return boundedMatchSnippet(text, query, 240)
+}
+
+func readableBlocks(raw json.RawMessage) string {
+	var blocks []struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	parts := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if strings.TrimSpace(block.Text) != "" {
+			parts = append(parts, block.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func boundedMatchSnippet(text, query string, limit int) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" || limit < 2 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	start := 0
+	if at := strings.Index(strings.ToLower(text), strings.ToLower(strings.TrimSpace(query))); at > 0 {
+		start = utf8.RuneCountInString(text[:at]) - limit/3
+		if start < 0 {
+			start = 0
+		}
+	}
+	end := min(len(runes), start+limit-2)
+	prefix, suffix := "", ""
+	if start > 0 {
+		prefix = "…"
+	}
+	if end < len(runes) {
+		suffix = "…"
+	}
+	return prefix + string(runes[start:end]) + suffix
 }
 
 func (r Repository) rootTotals(ctx context.Context, epoch string, revision int64, rootID string) (*int64, *int64, error) {

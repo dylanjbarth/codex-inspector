@@ -457,6 +457,9 @@ func normalize(b facts.Batch, rows []located, proofs map[string]TerminalProof) f
 			_ = json.Unmarshal(payload["id"], &id)
 			_ = json.Unmarshal(payload["phase"], &mp)
 			text := responseText(payload["content"])
+			if role == "user" && b.Session.Title == "" {
+				b.Session.Title = friendlySessionTitle(text)
+			}
 			b.Messages = append(b.Messages, facts.Message{EventID: eventID, Role: role, Phase: mp, SourceMessageID: id, Readable: true, ContentLength: int64(len([]byte(text))), ContentSHA256: hash([]byte(text))})
 			b.Events[len(b.Events)-1].SearchText = text
 			b.Events[len(b.Events)-1].SearchCategory = "message"
@@ -510,6 +513,24 @@ func normalize(b facts.Batch, rows []located, proofs map[string]TerminalProof) f
 	}
 	_ = completed
 	return b
+}
+
+func friendlySessionTitle(text string) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+	const maxRunes = 96
+	title := strings.Join(words, " ")
+	runes := []rune(title)
+	if len(runes) <= maxRunes {
+		return title
+	}
+	short := strings.TrimSpace(string(runes[:maxRunes]))
+	if split := strings.LastIndex(short, " "); split >= maxRunes/2 {
+		short = short[:split]
+	}
+	return strings.TrimSpace(short) + "…"
 }
 
 func validate(rows []located) string {

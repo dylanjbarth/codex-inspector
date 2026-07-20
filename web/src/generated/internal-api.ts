@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/startup-diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getStartupDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -310,6 +326,13 @@ export interface components {
             /** @enum {unknown} */
             resolution: "environment" | "default";
         };
+        InspectorHome: {
+            path: string;
+        };
+        StartupDiagnostics: {
+            codexHome: components["schemas"]["SourceHome"];
+            inspectorHome: components["schemas"]["InspectorHome"];
+        };
         ProcessStatus: {
             /** @enum {unknown} */
             state: "starting" | "ready" | "degraded" | "stopping";
@@ -321,6 +344,15 @@ export interface components {
             pluginProtocolVersion: number | null;
             pid: number;
             startedAt: components["schemas"]["Timestamp"];
+        };
+        SourceDiagnosticGroup: {
+            /** @enum {unknown} */
+            state: "unsupported" | "failed" | "requires_rebuild" | "multiple";
+            /** @enum {string} */
+            reason: "leading_record_too_large" | "missing_leading_session_meta" | "invalid_leading_session_meta" | "invalid_session_meta" | "invalid_session_meta_timestamp" | "missing_required_session_identity" | "incompatible_turn_context" | "incompatible_record_envelope" | "incompatible_event_record" | "incompatible_turn_identity" | "incompatible_token_record" | "incompatible_response_record" | "incompatible_tool_identity" | "incompatible_record_shape" | "foreign_key_constraint" | "identity_constraint" | "indexed_prefix_changed_or_shrank" | "fact_check_constraint" | "storage_busy" | "normalization_failed" | "parse_failed" | "rebuild_failed" | "unspecified" | "unclassified_source_state" | "additional_diagnostic_groups" | "diagnostic_query_failed";
+            detectedVersion: string;
+            count: number;
+            remediation: string;
         };
         IndexStatus: {
             /** @enum {unknown} */
@@ -342,6 +374,7 @@ export interface components {
             skippedCount: number;
             failedCount: number;
             requiresRebuildCount: number;
+            diagnosticGroups: components["schemas"]["SourceDiagnosticGroup"][];
             /** Format: date-time */
             reverseScanBoundary: string | null;
             /** Format: date-time */
@@ -564,7 +597,7 @@ export interface components {
         LatestCapacityMetric: components["schemas"]["MetricMetadata"] & {
             /** @constant */
             key: "latest_capacity_observation";
-            value: components["schemas"]["CapacityPoint"] | null;
+            value: components["schemas"]["CapacityPoint"][];
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -587,6 +620,10 @@ export interface components {
         MetricResult: components["schemas"]["Snapshot"] & {
             results: components["schemas"]["MetricItem"][];
         };
+        MatchSnippet: {
+            category: string;
+            text: string;
+        };
         SessionSummary: {
             sessionId: components["schemas"]["OpaqueId"];
             rootWorkUnitId: components["schemas"]["OpaqueId"];
@@ -598,6 +635,7 @@ export interface components {
             latestCompleted?: components["schemas"]["Timestamp"];
             completedTurns: number;
             matchCategories: string[];
+            matchSnippets: components["schemas"]["MatchSnippet"][];
             directTokens?: number | null;
             descendantTokens?: number | null;
         };
@@ -1096,6 +1134,27 @@ export interface operations {
             409: components["responses"]["ProblemResponse"];
         };
     };
+    getStartupDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective local homes for diagnosing startup authentication failures */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartupDiagnostics"];
+                };
+            };
+            403: components["responses"]["ProblemResponse"];
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -1247,6 +1306,7 @@ export interface operations {
                 pageSize?: components["parameters"]["PageSizeParameter"];
                 query?: string;
                 projectId?: components["schemas"]["OpaqueId"];
+                rootId?: components["schemas"]["OpaqueId"][];
                 revision?: components["parameters"]["RevisionParameter"];
             };
             header?: never;

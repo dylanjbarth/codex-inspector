@@ -49,7 +49,7 @@ func main() {
 		case "recorded_tokens_over_time":
 			summary["timeBucketCount"] = len(item.Value.([]metrics.Bucket))
 		case "latest_capacity_observation":
-			summary["latestCapacityRecorded"] = item.Value != nil
+			summary["latestCapacityWindowCount"] = len(item.Value.([]metrics.CapacityPoint))
 		}
 	}
 	enc := json.NewEncoder(os.Stdout)

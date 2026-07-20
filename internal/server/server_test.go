@@ -947,3 +947,65 @@ func TestStatusSurfacesPluginDataDiagnostics(t *testing.T) {
 		t.Fatalf("diagnostic not surfaced: %s", body)
 	}
 }
+
+func TestStatusReportsPayloadSafeDiagnosticQueryFailure(t *testing.T) {
+	m, layout, cancel, errs := startTestServer(t, time.Second)
+	defer func() { cancel(); <-errs }()
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.DB().Exec(`DROP TABLE source_artifact_versions`); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	response, body := req(t, m, "GET", "/v1/status", nil, map[string]string{"Authorization": "Bearer " + m.AccessToken})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.StatusCode, body)
+	}
+	var got struct {
+		Process struct{ State string } `json:"process"`
+		Index   struct {
+			LastErrorCode    string `json:"lastErrorCode"`
+			DiagnosticGroups []struct {
+				State, Reason, DetectedVersion, Remediation string
+				Count                                       int
+			} `json:"diagnosticGroups"`
+		} `json:"index"`
+	}
+	if err = json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Process.State != "degraded" || got.Index.LastErrorCode != "source_diagnostics_unavailable" || len(got.Index.DiagnosticGroups) != 1 {
+		t.Fatalf("query failure falsely reported healthy: %s", body)
+	}
+	group := got.Index.DiagnosticGroups[0]
+	if group.State != "failed" || group.Reason != "diagnostic_query_failed" || group.DetectedVersion != "unknown" || group.Count != 1 || group.Remediation == "" {
+		t.Fatalf("unsafe query diagnostic: %+v", group)
+	}
+	if bytes.Contains(body, []byte("source_artifact_versions")) || bytes.Contains(body, []byte("SQL")) {
+		t.Fatalf("database details escaped status: %s", body)
+	}
+	var statusJSON any
+	if err = json.Unmarshal(body, &statusJSON); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = doc.Components.Schemas["Status"].Value.VisitJSON(statusJSON); err != nil {
+		t.Fatalf("query failure status violates bounded schema: %v", err)
+	}
+}
+
+func TestIndexedPrefixChangeHasActionableRemediation(t *testing.T) {
+	remediation := sourceRemediation("requires_rebuild", "indexed_prefix_changed_or_shrank")
+	if !strings.Contains(remediation, "codex-inspector sync") || !strings.Contains(remediation, "rebuild") {
+		t.Fatalf("prefix-change remediation is not actionable: %q", remediation)
+	}
+}
