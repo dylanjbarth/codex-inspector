@@ -24,10 +24,13 @@ type SessionSummary struct {
 	RootWorkUnitID   string   `json:"rootWorkUnitId"`
 	Purpose          string   `json:"purpose"`
 	Title            string   `json:"title,omitempty"`
+	Project          string   `json:"project,omitempty"`
+	StartedAt        string   `json:"startedAt,omitempty"`
+	CompletedTurns   int      `json:"completedTurns"`
+	LatestCompleted  string   `json:"latestCompleted,omitempty"`
 	MatchCategories  []string `json:"matchCategories"`
 	DirectTokens     *int64   `json:"directTokens"`
 	DescendantTokens *int64   `json:"descendantTokens"`
-	latestCompleted  string
 }
 
 type SessionPage struct {
@@ -135,9 +138,10 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	if limit > 200 {
 		limit = 200
 	}
-	rows, err := r.Store.DB().QueryContext(ctx, latestSessions+`SELECT root.id,rv.purpose,coalesce(l.title,''),coalesce(max(t.completed_at),max(t.terminal_at),'')
+	rows, err := r.Store.DB().QueryContext(ctx, latestSessions+`SELECT root.id,rv.purpose,coalesce(l.title,''),coalesce(p.canonical_identity,''),coalesce(min(t.started_at),''),count(t.id),coalesce(max(t.completed_at),max(t.terminal_at),'')
 		FROM sessions root JOIN sv rv ON rv.session_id=root.id AND rv.root_work_unit_id=root.id
 		LEFT JOIN labels l ON l.session_id=root.id
+		LEFT JOIN projects p ON p.epoch_id=rv.epoch_id AND p.id=rv.project_id
 		JOIN sv member ON member.root_work_unit_id=root.id
 		JOIN turns t ON t.epoch_id=root.epoch_id AND t.session_id=member.session_id AND t.state='completed' AND t.commit_revision<=?
 		WHERE root.epoch_id=? AND root.created_revision<=? AND (?='' OR rv.project_id=?)
@@ -149,7 +153,7 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	all := make([]SessionSummary, 0)
 	for rows.Next() {
 		var item SessionSummary
-		if err = rows.Scan(&item.SessionID, &item.Purpose, &item.Title, &item.latestCompleted); err != nil {
+		if err = rows.Scan(&item.SessionID, &item.Purpose, &item.Title, &item.Project, &item.StartedAt, &item.CompletedTurns, &item.LatestCompleted); err != nil {
 			return SessionPage{}, err
 		}
 		item.RootWorkUnitID = item.SessionID

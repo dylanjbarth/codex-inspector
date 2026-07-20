@@ -593,6 +593,10 @@ export interface components {
             /** @enum {unknown} */
             purpose: "user" | "spawned" | "inspector_review" | "other" | "orphan";
             title?: string;
+            project?: string;
+            startedAt?: components["schemas"]["Timestamp"];
+            latestCompleted?: components["schemas"]["Timestamp"];
+            completedTurns: number;
             matchCategories: string[];
             directTokens?: number | null;
             descendantTokens?: number | null;
