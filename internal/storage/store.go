@@ -1215,6 +1215,7 @@ var diagnosticReasonCodes = map[string]bool{
 	"invalid_session_meta":              true,
 	"invalid_session_meta_timestamp":    true,
 	"missing_required_session_identity": true,
+	"unsupported_codex_version":         true,
 	"incompatible_turn_context":         true,
 	"incompatible_record_envelope":      true,
 	"incompatible_event_record":         true,

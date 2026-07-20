@@ -1094,6 +1094,8 @@ func sourceRemediation(state, reason string) string {
 		return "Inspector withheld an unrecognized diagnostic value. Update Inspector and sync again; report only this reason code if it remains."
 	case "indexed_prefix_changed_or_shrank":
 		return "The recorded source changed before its indexed boundary. Run codex-inspector sync to rebuild derived data from the current local source."
+	case "unsupported_codex_version":
+		return "This exact Codex rollout version is not supported. Update Inspector and sync again after support for this version is available."
 	case "incompatible_record_envelope", "missing_leading_session_meta", "invalid_session_meta":
 		return "Keep the source intact, update Inspector, and sync again; this record shape is not currently supported."
 	case "parse_failed", "normalization_failed":
