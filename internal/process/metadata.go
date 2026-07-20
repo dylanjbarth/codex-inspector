@@ -17,6 +17,8 @@ type Metadata struct {
 	FragmentToken     string    `json:"fragmentToken,omitempty"`
 	FragmentExchanged bool      `json:"fragmentExchanged"`
 	StartupStage      string    `json:"startupStage,omitempty"`
+	CodexHome         string    `json:"codexHome"`
+	CodexHomeSource   string    `json:"codexHomeSource"`
 	StartedAt         time.Time `json:"startedAt"`
 }
 
@@ -28,7 +30,7 @@ func Read(run string) (Metadata, error) {
 		return Metadata{}, err
 	}
 	var m Metadata
-	if json.Unmarshal(b, &m) != nil || m.InstanceID == "" || m.PID < 1 || m.Port < 1 || m.Port > 65535 || m.ProtocolVersion < 1 || m.AccessToken == "" {
+	if json.Unmarshal(b, &m) != nil || m.InstanceID == "" || m.PID < 1 || m.Port < 1 || m.Port > 65535 || m.ProtocolVersion < 1 || m.AccessToken == "" || m.CodexHome == "" || (m.CodexHomeSource != "environment" && m.CodexHomeSource != "default") {
 		return Metadata{}, errors.New("invalid process metadata")
 	}
 	return m, nil

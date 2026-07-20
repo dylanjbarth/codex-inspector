@@ -167,7 +167,11 @@ func TestOpenReuseNoBrowserAndBackgroundSyncStagesPreserveStdout(t *testing.T) {
 	if err = home.Ensure(l); err != nil {
 		t.Fatal(err)
 	}
-	m := proc.Metadata{InstanceID: "test-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, AccessToken: token, FragmentToken: "private-fragment", StartedAt: time.Now()}
+	effective, err := home.ResolveCodexHome()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := proc.Metadata{InstanceID: "test-instance", PID: os.Getpid(), Port: port, ProtocolVersion: 1, AccessToken: token, FragmentToken: "private-fragment", CodexHome: effective.Path, CodexHomeSource: effective.Resolution, StartedAt: time.Now()}
 	if err = proc.Write(l.Run, m); err != nil {
 		t.Fatal(err)
 	}

@@ -43,6 +43,7 @@ var assets embed.FS
 type Config struct {
 	Layout          home.Layout
 	CodexHome       string
+	CodexHomeSource string
 	IdleTimeout     time.Duration
 	Ready           chan<- proc.Metadata
 	Compatibility   *compat.Snapshot
@@ -50,23 +51,24 @@ type Config struct {
 	CodexExecutable string
 }
 type state struct {
-	mu            sync.Mutex
-	ctx           context.Context
-	indexWG       sync.WaitGroup
-	meta          proc.Metadata
-	cookie        string
-	exchanged     bool
-	lastActive    time.Time
-	host, origin  string
-	layout        home.Layout
-	codexHome     string
-	compat        compat.Snapshot
-	indexing      bool
-	indexProgress indexer.Progress
-	indexError    string
-	metricEngine  *metrics.Engine
-	reviewManager *reviews.Manager
-	events        *eventBuffer
+	mu              sync.Mutex
+	ctx             context.Context
+	indexWG         sync.WaitGroup
+	meta            proc.Metadata
+	cookie          string
+	exchanged       bool
+	lastActive      time.Time
+	host, origin    string
+	layout          home.Layout
+	codexHome       string
+	codexHomeSource string
+	compat          compat.Snapshot
+	indexing        bool
+	indexProgress   indexer.Progress
+	indexError      string
+	metricEngine    *metrics.Engine
+	reviewManager   *reviews.Manager
+	events          *eventBuffer
 }
 
 type eventBuffer struct {
@@ -120,6 +122,28 @@ func Run(ctx context.Context, c Config) error {
 	if err := home.Ensure(c.Layout); err != nil {
 		return err
 	}
+	if c.CodexHome == "" {
+		effective, err := home.ResolveCodexHome()
+		if err != nil {
+			return err
+		}
+		c.CodexHome, c.CodexHomeSource = effective.Path, effective.Resolution
+	} else {
+		absolute, err := filepath.Abs(c.CodexHome)
+		if err != nil {
+			return err
+		}
+		if canonical, err := filepath.EvalSymlinks(absolute); err == nil {
+			absolute = canonical
+		}
+		c.CodexHome = filepath.Clean(absolute)
+	}
+	if c.CodexHomeSource == "" {
+		c.CodexHomeSource = "environment"
+	}
+	if err := home.BindDatasetHome(c.Layout, home.CodexHome{Path: c.CodexHome, Resolution: c.CodexHomeSource}); err != nil {
+		return err
+	}
 	lock, err := proc.Acquire(filepath.Join(c.Layout.Run, "process.lock"), true)
 	if err != nil {
 		return errors.New("another Inspector process owns the process lock")
@@ -150,7 +174,7 @@ func Run(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	m := proc.Metadata{InstanceID: id, PID: os.Getpid(), Port: addr.Port, ProtocolVersion: version.Protocol, AccessToken: access, FragmentToken: fragment, StartupStage: "codex_host", StartedAt: time.Now().UTC()}
+	m := proc.Metadata{InstanceID: id, PID: os.Getpid(), Port: addr.Port, ProtocolVersion: version.Protocol, AccessToken: access, FragmentToken: fragment, StartupStage: "codex_host", CodexHome: c.CodexHome, CodexHomeSource: c.CodexHomeSource, StartedAt: time.Now().UTC()}
 	if err = proc.Write(c.Layout.Run, m); err != nil {
 		return err
 	}
@@ -166,7 +190,7 @@ func Run(ctx context.Context, c Config) error {
 	}
 	m.StartupStage = "review_store"
 	_ = proc.Write(c.Layout.Run, m)
-	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer()}
+	s := &state{ctx: ctx, meta: m, cookie: cookie, lastActive: time.Now(), host: fmt.Sprintf("127.0.0.1:%d", addr.Port), origin: fmt.Sprintf("http://127.0.0.1:%d", addr.Port), layout: c.Layout, codexHome: c.CodexHome, codexHomeSource: c.CodexHomeSource, compat: snapshot, metricEngine: metrics.New(64), events: newEventBuffer()}
 	s.reviewManager, err = reviews.New(c.Layout, c.CodexExecutable, c.CodexHome, func(id, status string) {
 		s.mu.Lock()
 		s.lastActive = time.Now()
@@ -1073,8 +1097,6 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if dbStatus.RequiresRebuild > 0 {
 		indexState = "requires_rebuild"
-	} else if dbStatus.Pending > 0 {
-		indexState = "catching_up"
 	} else if dbStatus.Sources > 0 {
 		indexState = "current"
 	}
@@ -1082,7 +1104,8 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 		indexState = "failed"
 		lastError = indexErr
 	}
-	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "processedCount": max(dbStatus.Processed, progress.Processed), "queuedCount": max(dbStatus.Pending, max(0, progress.Inventoried-progress.Processed-progress.Skipped-progress.Failed-progress.RequiresRebuild)), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": dbStatus.Failed + progress.Failed, "requiresRebuildCount": dbStatus.RequiresRebuild, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark}
+	remaining := max(0, progress.Inventoried-progress.Processed-progress.Skipped-progress.Failed-progress.RequiresRebuild)
+	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "inventoriedCount": max(dbStatus.Sources, progress.Inventoried), "processedCount": max(dbStatus.Processed, progress.Processed), "remainingCount": remaining, "queuedCount": max(dbStatus.Pending, remaining), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": dbStatus.Failed + progress.Failed, "requiresRebuildCount": dbStatus.RequiresRebuild, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark}
 	if progress.Boundary != "" {
 		index["reverseScanBoundary"] = progress.Boundary
 	}
@@ -1093,7 +1116,7 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 	if dbStatus.Supported > 0 {
 		coverage = map[string]any{"fidelity": "exact", "observed": dbStatus.Processed, "eligible": dbStatus.Sources}
 	}
-	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "coverage": coverage, "process": map[string]any{"state": processState, "inspectorVersion": version.CLI, "cliVersion": version.CLI, "cliCompatibility": s.compat.CLICompatibility, "pluginVersion": s.compat.PluginVersion, "pluginProtocolVersion": s.compat.PluginProtocol, "pid": os.Getpid(), "startedAt": s.meta.StartedAt.Format(time.RFC3339Nano)}, "index": index, "hook": map[string]any{"state": hookState, "registeredEvents": []string{"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"}, "lastMarker": lastMarker, "diagnostics": diagnostics}})
+	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "coverage": coverage, "sourceHome": map[string]any{"path": s.codexHome, "resolution": s.codexHomeSource}, "process": map[string]any{"state": processState, "inspectorVersion": version.CLI, "cliVersion": version.CLI, "cliCompatibility": s.compat.CLICompatibility, "pluginVersion": s.compat.PluginVersion, "pluginProtocolVersion": s.compat.PluginProtocol, "pid": os.Getpid(), "startedAt": s.meta.StartedAt.Format(time.RFC3339Nano)}, "index": index, "hook": map[string]any{"state": hookState, "registeredEvents": []string{"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"}, "lastMarker": lastMarker, "diagnostics": diagnostics}})
 }
 func (s *state) write(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")

@@ -269,6 +269,10 @@ func openCmd(args []string, s IO) error {
 	if e = home.Ensure(l); e != nil {
 		return errors.New("Inspector data home could not be prepared; run codex-inspector doctor")
 	}
+	effectiveHome, e := home.ResolveCodexHome()
+	if e != nil {
+		return errors.New("Codex source home could not be resolved; run codex-inspector doctor")
+	}
 	lock, e := proc.Acquire(filepath.Join(l.Run, "open.lock"), false)
 	if e != nil {
 		return errors.New("Inspector could not coordinate local server startup; run codex-inspector doctor")
@@ -277,6 +281,9 @@ func openCmd(args []string, s IO) error {
 	fmt.Fprintln(s.Err, "Open: checking for a healthy local Inspector server...")
 	m, e := proc.Read(l.Run)
 	reused := e == nil && proc.Healthy(m)
+	if reused && m.CodexHome != effectiveHome.Path {
+		return errors.New("a healthy Inspector server is bound to a different Codex home; wait for it to stop or use a separate CODEX_INSPECTOR_HOME")
+	}
 	if !reused {
 		fmt.Fprintln(s.Err, "Open: starting the local server; initial indexing will continue in the background...")
 		_ = os.Remove(proc.Path(l.Run))
@@ -463,7 +470,11 @@ func serveCmd(args []string, s IO) error {
 	if e != nil {
 		return e
 	}
-	return server.Run(context.Background(), server.Config{Layout: l, IdleTimeout: *idle, AutoSync: true})
+	effective, e := home.ResolveCodexHome()
+	if e != nil {
+		return e
+	}
+	return server.Run(context.Background(), server.Config{Layout: l, CodexHome: effective.Path, CodexHomeSource: effective.Resolution, IdleTimeout: *idle, AutoSync: true})
 }
 func request(m proc.Metadata, method, path string, body []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

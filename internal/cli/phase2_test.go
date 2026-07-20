@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dylanjbarth/codex-inspector/internal/home"
 	"github.com/dylanjbarth/codex-inspector/internal/storage"
 	_ "modernc.org/sqlite"
 )
@@ -47,6 +49,20 @@ func TestSyncRebuildsSchemaV1ThroughValidatedCatalogAndPreservesOnFailure(t *tes
 				t.Fatal(openErr)
 			}
 			if err := os.WriteFile(filepath.Join(inspector, "active-index"), []byte("inspector.db\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(inspector, "cache"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			canonicalCodex, err := filepath.EvalSymlinks(codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding, err := json.Marshal(home.CodexHome{Path: canonicalCodex, Resolution: "environment"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(inspector, "cache", "dataset-home.json"), binding, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			rollout := filepath.Join(codex, "sessions", "root.jsonl")

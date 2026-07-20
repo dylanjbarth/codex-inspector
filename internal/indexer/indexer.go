@@ -39,12 +39,23 @@ type Config struct {
 type spawningProof struct{ parentSessionID, turnID string }
 
 func Run(ctx context.Context, cfg Config) (Progress, error) {
+	var effective home.CodexHome
 	if cfg.CodexHome == "" {
 		var err error
-		cfg.CodexHome, err = sources.CodexHome()
+		effective, err = home.ResolveCodexHome()
 		if err != nil {
 			return Progress{}, err
 		}
+		cfg.CodexHome = effective.Path
+	} else {
+		abs, err := filepath.Abs(cfg.CodexHome)
+		if err != nil {
+			return Progress{}, err
+		}
+		if canonical, err := filepath.EvalSymlinks(abs); err == nil {
+			abs = canonical
+		}
+		effective = home.CodexHome{Path: filepath.Clean(abs), Resolution: "environment"}
 	}
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = runtime.NumCPU()
@@ -56,6 +67,9 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		}
 	}
 	if err := home.Ensure(cfg.Layout); err != nil {
+		return Progress{}, err
+	}
+	if err := home.BindDatasetHome(cfg.Layout, effective); err != nil {
 		return Progress{}, err
 	}
 	lock, err := proc.Acquire(filepath.Join(cfg.Layout.Run, "writer.lock"), true)

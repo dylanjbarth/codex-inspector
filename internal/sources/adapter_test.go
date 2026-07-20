@@ -388,3 +388,35 @@ func TestAbortedInterruptedAndReconciledTruncatedTerminalStates(t *testing.T) {
 		}
 	}
 }
+
+func TestAdapterRetainsPrimaryAndSecondaryRateLimitWindows(t *testing.T) {
+	data, err := os.ReadFile(fixture(t, "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.Replace(data, []byte(`"resets_at":1782907200}}`), []byte(`"resets_at":1782907200},"secondary":{"used_percent":12,"remaining_percent":88,"window_minutes":10080,"resets_at":1783500000}}`), 1)
+	path := filepath.Join(t.TempDir(), "multiple-windows.jsonl")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(batch.Capacity) != 3 {
+		t.Fatalf("capacity windows=%d", len(batch.Capacity))
+	}
+	var weekly facts.Capacity
+	for _, point := range batch.Capacity {
+		if point.WindowMinutes != nil && *point.WindowMinutes == 10080 {
+			weekly = point
+		}
+	}
+	if weekly.UsedPercent == nil || *weekly.UsedPercent != 12 || weekly.RemainingPercent == nil || *weekly.RemainingPercent != 88 || weekly.ResetsAt != "1783500000" {
+		t.Fatalf("weekly=%+v", weekly)
+	}
+}

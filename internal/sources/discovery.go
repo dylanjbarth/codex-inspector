@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dylanjbarth/codex-inspector/internal/home"
 )
 
 type Candidate struct {
@@ -18,15 +20,8 @@ type Candidate struct {
 }
 
 func CodexHome() (string, error) {
-	root := os.Getenv("CODEX_HOME")
-	if root == "" {
-		h, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		root = filepath.Join(h, ".codex")
-	}
-	return filepath.Abs(root)
+	effective, err := home.ResolveCodexHome()
+	return effective.Path, err
 }
 
 func Discover(codexHome, inspectorHome string) ([]Candidate, error) {

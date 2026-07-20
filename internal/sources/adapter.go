@@ -76,6 +76,12 @@ type eventWire struct {
 			Window    *int64          `json:"window_minutes"`
 			Resets    json.RawMessage `json:"resets_at"`
 		} `json:"primary"`
+		Secondary *struct {
+			Used      *float64        `json:"used_percent"`
+			Remaining *float64        `json:"remaining_percent"`
+			Window    *int64          `json:"window_minutes"`
+			Resets    json.RawMessage `json:"resets_at"`
+		} `json:"secondary"`
 	} `json:"rate_limits"`
 }
 type turnWire struct {
@@ -434,9 +440,16 @@ func normalize(b facts.Batch, rows []located, proofs map[string]TerminalProof) f
 		if row.Record.Type == "event_msg" && ev.Type == "context_compacted" {
 			compactionTrigger = eventID
 		}
-		if row.Record.Type == "event_msg" && ev.Type == "token_count" && ev.RateLimits != nil && ev.RateLimits.Primary != nil {
-			p := ev.RateLimits.Primary
-			b.Capacity = append(b.Capacity, facts.Capacity{ID: "capacity:" + hash([]byte(eventID+":"+ev.RateLimits.LimitID)), EventID: eventID, LimitID: ev.RateLimits.LimitID, ObservedAt: row.Record.Timestamp, WindowMinutes: p.Window, UsedPercent: p.Used, RemainingPercent: p.Remaining, ResetsAt: numberString(p.Resets)})
+		if row.Record.Type == "event_msg" && ev.Type == "token_count" && ev.RateLimits != nil {
+			appendCapacity := func(window *int64, used, remaining *float64, resets json.RawMessage, ordinal string) {
+				b.Capacity = append(b.Capacity, facts.Capacity{ID: "capacity:" + hash([]byte(eventID+":"+ev.RateLimits.LimitID+":"+ordinal)), EventID: eventID, LimitID: ev.RateLimits.LimitID, ObservedAt: row.Record.Timestamp, WindowMinutes: window, UsedPercent: used, RemainingPercent: remaining, ResetsAt: numberString(resets)})
+			}
+			if p := ev.RateLimits.Primary; p != nil {
+				appendCapacity(p.Window, p.Used, p.Remaining, p.Resets, "primary")
+			}
+			if p := ev.RateLimits.Secondary; p != nil {
+				appendCapacity(p.Window, p.Used, p.Remaining, p.Resets, "secondary")
+			}
 		}
 		if row.Record.Type == "response_item" && kind == "message" {
 			var role, id, mp string
