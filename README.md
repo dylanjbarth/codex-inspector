@@ -77,11 +77,36 @@ codex-inspector status
 `status` reports the loopback port, effective `CODEX_HOME`, and
 `CODEX_INSPECTOR_HOME`. Stop the local server gracefully with
 `codex-inspector stop`; the command is idempotent when no server is running.
+If a browser cookie expires or is cleared while the server is still running,
+rerun `codex-inspector open` to reconnect that browser without restarting the
+server.
 
 To explicitly block until a finite indexing pass completes and receive its
 final JSON counts, run `codex-inspector sync --wait`. To queue another pass on
 an already-running server without blocking, run `codex-inspector sync
 --background`.
+
+### Local development rebuild
+
+After changing files under `web/src`, rebuild the Vite assets, embed them in a
+new Go binary, and restart the local server with:
+
+```sh
+scripts/dev-rebuild-restart.sh
+```
+
+The helper installs into the directory containing the active
+`codex-inspector` executable. If the CLI is not yet on `PATH`, it uses Go's
+configured binary directory. Override the destination when needed:
+
+```sh
+CODEX_INSPECTOR_DEV_GOBIN="$HOME/.local/bin" scripts/dev-rebuild-restart.sh
+```
+
+Arguments are forwarded to `codex-inspector open`; for example, rebuild and
+restart without launching a browser with
+`scripts/dev-rebuild-restart.sh --no-browser`. Run `pnpm install
+--frozen-lockfile` first when frontend dependencies are not installed.
 
 ### Manual CLI install
 

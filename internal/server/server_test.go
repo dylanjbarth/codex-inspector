@@ -219,7 +219,7 @@ func req(t *testing.T, m proc.Metadata, method, path string, body []byte, header
 	return response, b[:n]
 }
 func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
-	m, _, cancel, errs := startTestServer(t, 1500*time.Millisecond)
+	m, layout, cancel, errs := startTestServer(t, 1500*time.Millisecond)
 	defer cancel()
 	origin := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
 	payload, _ := json.Marshal(map[string]any{"token": m.FragmentToken, "instanceId": m.InstanceID, "protocolVersion": m.ProtocolVersion})
@@ -240,8 +240,15 @@ func TestSecurityExchangeStatusAndIdleShutdown(t *testing.T) {
 		t.Fatalf("bad cookie: %+v", cookie)
 	}
 	r, _ = req(t, m, "POST", "/v1/token/exchange", payload, map[string]string{"Origin": origin})
-	if r.StatusCode != 409 {
-		t.Fatalf("token reuse=%d", r.StatusCode)
+	if r.StatusCode != http.StatusNoContent {
+		t.Fatalf("browser reconnect=%d", r.StatusCode)
+	}
+	current, err := proc.Read(layout.Run)
+	if err != nil {
+		t.Fatalf("read metadata after reconnect: %v", err)
+	}
+	if current.FragmentToken != m.FragmentToken || !current.FragmentExchanged {
+		t.Fatalf("reconnect metadata did not retain the browser handoff: %+v", current)
 	}
 	r, statusBody := req(t, m, "GET", "/v1/status", nil, map[string]string{"Cookie": cookie.String()})
 	if r.StatusCode != 200 {

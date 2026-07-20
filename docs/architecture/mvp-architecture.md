@@ -110,7 +110,7 @@ The demo loopback security contract is:
 - bind only to `127.0.0.1` on an ephemeral port;
 - generate a cryptographically random per-process access token;
 - place the token only in the fragment of the initial browser URL;
-- exchange the fragment token once for a SameSite session cookie and remove the fragment from browser history;
+- exchange the fragment token for a SameSite session cookie whenever `codex-inspector open` connects a browser, and remove the fragment from browser history;
 - validate `Host` and `Origin` on state-changing and streaming requests;
 - serve no remote scripts, fonts, images, or other assets;
 - set a restrictive Content Security Policy;

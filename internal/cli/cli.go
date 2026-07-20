@@ -219,20 +219,44 @@ func stopCmd(args []string, s IO) error {
 			}
 		}
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	const shutdownTimeout = 15 * time.Second
+	deadline := time.Now().Add(shutdownTimeout)
+	cleanupReported := false
 	for time.Now().Before(deadline) {
 		current, readErr := proc.Read(l.Run)
-		if readErr != nil || current.InstanceID != m.InstanceID || !proc.Healthy(current) {
-			_ = proc.RemoveIfInstance(l.Run, m.InstanceID)
-			if *asJSON {
-				return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": m.Port, "codexHome": m.CodexHome, "inspectorHome": l.Root})
+		if readErr == nil && current.InstanceID != m.InstanceID {
+			return reportStopped(s, *asJSON, m, l)
+		}
+		if readErr != nil || !proc.Healthy(current) {
+			if processLockReleased(l.Run) {
+				_ = proc.RemoveIfInstance(l.Run, m.InstanceID)
+				return reportStopped(s, *asJSON, m, l)
 			}
-			fmt.Fprintf(s.Out, "Inspector stopped\nport=%d\ncodex_home=%s\ninspector_home=%s\n", m.Port, m.CodexHome, l.Root)
-			return nil
+			if !*asJSON && !cleanupReported {
+				fmt.Fprintln(s.Err, "Stop: waiting for indexing and process cleanup to finish...")
+				cleanupReported = true
+			}
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	return errors.New("Inspector server did not stop within 5s; inspect codex-inspector status")
+	return fmt.Errorf("Inspector server did not finish stopping within %s; inspect codex-inspector status", shutdownTimeout)
+}
+
+func processLockReleased(run string) bool {
+	lock, err := proc.Acquire(filepath.Join(run, "process.lock"), true)
+	if err != nil {
+		return false
+	}
+	_ = lock.Close()
+	return true
+}
+
+func reportStopped(s IO, asJSON bool, m proc.Metadata, l home.Layout) error {
+	if asJSON {
+		return json.NewEncoder(s.Out).Encode(map[string]any{"running": false, "state": "stopped", "port": m.Port, "codexHome": m.CodexHome, "inspectorHome": l.Root})
+	}
+	fmt.Fprintf(s.Out, "Inspector stopped\nport=%d\ncodex_home=%s\ninspector_home=%s\n", m.Port, m.CodexHome, l.Root)
+	return nil
 }
 func syncCmd(args []string, s IO) error {
 	f := flag.NewFlagSet("sync", flag.ContinueOnError)
@@ -355,10 +379,7 @@ func openCmd(args []string, s IO) error {
 	} else {
 		fmt.Fprintln(s.Err, "Open: reusing the healthy local server.")
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", m.Port, safeRoute(*route))
-	if !m.FragmentExchanged && m.FragmentToken != "" {
-		url += "#token=" + m.FragmentToken + "&instanceId=" + m.InstanceID + "&protocolVersion=" + strconv.Itoa(m.ProtocolVersion)
-	}
+	url := dashboardURL(m, *route)
 	if e = openDashboard(url, *noBrowser, s.Err, runtime.GOOS, func(target string) error {
 		return exec.Command("/usr/bin/open", target).Run()
 	}); e != nil {
@@ -370,6 +391,14 @@ func openCmd(args []string, s IO) error {
 	}
 	fmt.Fprintf(s.Out, "Inspector %s at %s\nport=%d\ncodex_home=%s\ninspector_home=%s\n", kind, strings.Split(url, "#")[0], m.Port, m.CodexHome, l.Root)
 	return nil
+}
+
+func dashboardURL(m proc.Metadata, route string) string {
+	url := fmt.Sprintf("http://127.0.0.1:%d%s", m.Port, safeRoute(route))
+	if m.FragmentToken != "" {
+		url += "#token=" + m.FragmentToken + "&instanceId=" + m.InstanceID + "&protocolVersion=" + strconv.Itoa(m.ProtocolVersion)
+	}
+	return url
 }
 
 func openDashboard(url string, noBrowser bool, w io.Writer, goos string, launch func(string) error) error {

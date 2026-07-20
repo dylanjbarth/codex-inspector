@@ -444,3 +444,29 @@ func TestOpenDashboardReportsBrowserAndSuppressedVariants(t *testing.T) {
 		t.Fatalf("missing browser failure transition: err=%v output=%q", err, out.String())
 	}
 }
+
+func TestDashboardURLReconnectsAfterPriorFragmentExchange(t *testing.T) {
+	m := proc.Metadata{Port: 52557, InstanceID: "instance-1", ProtocolVersion: 1, FragmentToken: "private-fragment", FragmentExchanged: true}
+	got := dashboardURL(m, "/context")
+	want := "http://127.0.0.1:52557/context#token=private-fragment&instanceId=instance-1&protocolVersion=1"
+	if got != want {
+		t.Fatalf("dashboard URL=%q want=%q", got, want)
+	}
+}
+
+func TestProcessLockReleasedTracksServerCleanup(t *testing.T) {
+	run := t.TempDir()
+	lock, err := proc.Acquire(filepath.Join(run, "process.lock"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processLockReleased(run) {
+		t.Fatal("held process lock reported as released")
+	}
+	if err = lock.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !processLockReleased(run) {
+		t.Fatal("released process lock remained unavailable")
+	}
+}

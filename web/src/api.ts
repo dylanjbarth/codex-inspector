@@ -40,7 +40,7 @@ export async function establishSession(): Promise<Status> {
 
 export async function fetchStatus(): Promise<Status> {
   const response = await fetch('/v1/status')
-  if (!response.ok) throw new Error('Inspector session is unavailable')
+  if (!response.ok) throw new Error('This browser is not connected to the running Inspector server')
   return response.json()
 }
 

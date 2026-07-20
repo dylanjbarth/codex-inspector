@@ -34,7 +34,7 @@ describe('Token & Capacity dashboard',()=>{
   render(<App/>);expect(await screen.findByText('Partial recorded coverage')).toBeInTheDocument();fireEvent.click(screen.getByText('Coverage details'));expect(await screen.findByText('Why sources are limited')).toBeInTheDocument();expect(screen.getAllByText(/3432 sources · Codex 0.129.0-alpha.15/).length).toBeGreaterThan(0);expect(screen.getAllByText('incompatible_record_envelope').length).toBeGreaterThan(0);expect(screen.getAllByText('Update Inspector, then sync again.').length).toBeGreaterThan(0)
   cleanup();vi.restoreAllMocks();vi.spyOn(globalThis,'fetch').mockImplementation(async input=>String(input).startsWith('/v1/metrics/catalog')?new Response(JSON.stringify(catalog())):new Response(JSON.stringify(status('empty'))));render(<App/>);expect(await screen.findByText('Ready for your first sync')).toBeInTheDocument()
   cleanup();vi.restoreAllMocks();const bad=status();bad.process.cliCompatibility='unsupported';vi.spyOn(globalThis,'fetch').mockImplementation(async input=>String(input).startsWith('/v1/metrics/catalog')?new Response(JSON.stringify(catalog())):new Response(JSON.stringify(bad)));render(<App/>);expect(await screen.findByText('Inspector versions are incompatible')).toBeInTheDocument()
-  cleanup();vi.restoreAllMocks();vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response(null,{status:401}));render(<App/>);expect(await screen.findByText('Unable to open Inspector')).toBeInTheDocument()
+  cleanup();vi.restoreAllMocks();vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response(null,{status:401}));render(<App/>);expect(await screen.findByText('Reconnect this browser')).toBeInTheDocument();expect(screen.getByText('codex-inspector open')).toBeInTheDocument()
  })
 })
 

@@ -10,8 +10,10 @@ is generated at `web/src/generated/internal-api.ts` by pinned
 
 - bind only to `127.0.0.1` on an ephemeral port;
 - all `/v1/*` routes except token exchange and startup diagnostics require the SameSite session cookie;
-- token exchange accepts the per-process fragment token once, rotates it into
-  an HttpOnly `SameSite=Strict` cookie, and invalidates the token;
+- token exchange accepts the per-process fragment token whenever the CLI opens
+  a browser, establishes an HttpOnly `SameSite=Strict` cookie, and removes the
+  fragment from browser history; the token remains only in user-readable
+  process metadata so a cleared or expired browser session can reconnect;
 - startup diagnostics is a read-only loopback endpoint that validates `Host`
   and returns only the effective `CODEX_HOME` and `CODEX_INSPECTOR_HOME` paths
   needed to diagnose a failed browser bootstrap;

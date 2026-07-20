@@ -56,7 +56,6 @@ type state struct {
 	indexWG         sync.WaitGroup
 	meta            proc.Metadata
 	cookie          string
-	exchanged       bool
 	lastActive      time.Time
 	host, origin    string
 	layout          home.Layout
@@ -373,10 +372,6 @@ func (s *state) exchange(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.exchanged {
-		s.problem(w, 409, "token_used", "Startup token was already exchanged")
-		return
-	}
 	if in.InstanceID != s.meta.InstanceID || in.ProtocolVersion != s.meta.ProtocolVersion {
 		s.problem(w, 409, "bootstrap_mismatch", "Startup metadata does not match this process")
 		return
@@ -386,13 +381,11 @@ func (s *state) exchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nextMeta := s.meta
-	nextMeta.FragmentToken = ""
 	nextMeta.FragmentExchanged = true
 	if err := proc.Write(s.layout.Run, nextMeta); err != nil {
 		s.problem(w, 500, "metadata_write_failed", "Secure session metadata could not be updated")
 		return
 	}
-	s.exchanged = true
 	s.meta = nextMeta
 	s.lastActive = time.Now()
 	http.SetCookie(w, &http.Cookie{Name: "codex_inspector_session", Value: s.cookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 3600})
