@@ -10,9 +10,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 type Props = { status: Status; children: React.ReactNode }
 
 const routes = [
-  { href: '/', label: 'Dashboard', note: 'Usage & capacity', icon: BarChart3 },
-  { href: '/context', label: 'Context Inspector', note: 'Source-backed evidence', icon: BookOpenText },
-  { href: '/reviews', label: 'Reviews', note: 'Persisted Codex tasks', icon: RefreshCw },
+  { href: '/', label: 'Dashboard', icon: BarChart3 },
+  { href: '/context', label: 'Context Inspector', icon: BookOpenText },
+  { href: '/reviews', label: 'Reviews', icon: RefreshCw },
 ]
 
 function active(href: string) {
@@ -21,9 +21,9 @@ function active(href: string) {
 
 function Nav({ compact = false }: { compact?: boolean }) {
   return <nav className="shell-nav" aria-label="Inspector sections">
-    {routes.map(({ href, label, note, icon: Icon }) => <a key={href} className={active(href) ? 'shell-nav-link active' : 'shell-nav-link'} href={href} aria-current={active(href) ? 'page' : undefined}>
+    {routes.map(({ href, label, icon: Icon }) => <a key={href} className={active(href) ? 'shell-nav-link active' : 'shell-nav-link'} href={href} aria-current={active(href) ? 'page' : undefined} title={compact ? label : undefined}>
       <Icon aria-hidden="true" size={17} />
-      {!compact && <span><strong>{label}</strong><small>{note}</small></span>}
+      {!compact && <span><strong>{label}</strong></span>}
       {!compact && active(href) && <ChevronRight aria-hidden="true" size={15} />}
     </a>)}
   </nav>
@@ -45,16 +45,21 @@ export function AppShell({ status, children }: Props) {
   // Runtime responses always include it; the fallback keeps the shell readable
   // rather than fabricating a filesystem path.
   const sourceHome = status.sourceHome ?? { path: 'Source home unavailable', resolution: 'default' as const }
+  const toggleSidebar = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement
+    if (target.closest('a,button,[role="button"],input,select,textarea')) return
+    setCollapsed(value => !value)
+  }, [])
   return <TooltipProvider><div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
-    <aside className="shell-sidebar">
-      <div className="shell-brand"><span className="brand-mark">CI</span>{!collapsed && <span><strong>Codex Inspector</strong><small>Local observability</small></span>}</div>
+    <aside className="shell-sidebar" onClick={toggleSidebar} title={collapsed ? 'Click to expand sidebar' : 'Click empty sidebar space to collapse'}>
+      <div className="shell-brand"><span className="brand-mark">CI</span>{!collapsed && <span><strong>Codex Inspector</strong></span>}</div>
       <Nav compact={collapsed} />
       {!collapsed && <RuntimeSummary status={status} />}
       <Tooltip><TooltipTrigger asChild><Button className="shell-collapse" variant="ghost" size="icon" onClick={() => setCollapsed(value => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</Button></TooltipTrigger><TooltipContent>{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</TooltipContent></Tooltip>
     </aside>
     <div className="shell-content">
       <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><span className="brand-mark">CI</span><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /><RuntimeSummary status={status} /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
-      <div className="shell-dataset"><span>Reading one local source</span><strong title={sourceHome.path}>{sourceHome.path}</strong><Badge variant="secondary">{sourceHome.resolution === 'environment' ? 'CODEX_HOME' : 'default home'}</Badge></div>
+      <div className="shell-dataset" aria-label="Effective Codex source home"><span>CODEX_HOME</span><strong title={sourceHome.path}>{sourceHome.path}</strong><Badge variant="secondary">{sourceHome.resolution === 'environment' ? 'env' : 'default'}</Badge></div>
       {children}
     </div>
   </div></TooltipProvider>
