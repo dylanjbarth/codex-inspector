@@ -25,7 +25,7 @@ import (
 //go:embed migrations/001_schema.sql
 var migrations embed.FS
 
-const AdapterVersion = "rollout-jsonl/codex-cli-0.144.1/v1"
+const AdapterVersion = "rollout-jsonl/codex-exact-cohorts/v2"
 
 type Store struct {
 	db        *sql.DB

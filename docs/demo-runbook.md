@@ -10,8 +10,8 @@ promise for other hosts, source formats, operating systems, or release lines.
 | --- | --- |
 | macOS | 26.5.1 (build 25F80) |
 | architecture | arm64 |
-| Codex CLI/host | codex-cli 0.144.1 |
-| rollout adapter | rollout-jsonl/codex-cli-0.144.1/v1 |
+| Codex CLI/host | codex-cli 0.145.0-alpha.18 |
+| rollout adapter | rollout-jsonl/codex-exact-cohorts/v2 |
 | Inspector CLI | 0.1.x |
 | Inspector plugin | 0.1.x |
 | plugin protocol | 1 |
@@ -207,7 +207,7 @@ developer rollout may append during a real-corpus profile.
 
 ## Known limitations and deferred hardening
 
-- Only the tested macOS arm64, Codex 0.144.1 structural source contract, and
+- Only the tested macOS arm64, the documented exact Codex source cohorts, and
   Inspector 0.1.x line are supported for this demo.
 - There is no notarization, automatic update, shell-profile repair, complete
   uninstall workflow, Linux/Windows support, cloud service, or public API.

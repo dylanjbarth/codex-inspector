@@ -23,7 +23,7 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-cli-0.144.1/v1"
+	AdapterVersion        = "rollout-jsonl/codex-exact-cohorts/v2"
 )
 
 type wireRecord struct {

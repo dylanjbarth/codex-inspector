@@ -17,9 +17,20 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-cli-0.144.1/v1"
+	AdapterVersion        = "rollout-jsonl/codex-exact-cohorts/v2"
 	FormulaVersion        = 1
 )
+
+var supportedCodexVersions = map[string]bool{
+	"0.142.5":          true,
+	"0.144.0-alpha.4":  true,
+	"0.144.1":          true,
+	"0.145.0-alpha.18": true,
+}
+
+func SupportsCodexVersion(version string) bool {
+	return supportedCodexVersions[version]
+}
 
 type SourceDecision struct {
 	Supported       bool
@@ -531,6 +542,9 @@ func ProbeRollout(r io.Reader) (SourceDecision, error) {
 	if meta.SessionID == "" {
 		meta.SessionID = meta.ID
 	}
+	if !SupportsCodexVersion(meta.CLIVersion) {
+		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID}, nil
+	}
 	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
 		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID}, nil
 	}
@@ -574,6 +588,9 @@ func ParseRollout(r io.Reader) (SourceDecision, error) {
 	}
 	if meta.SessionID == "" {
 		meta.SessionID = meta.ID
+	}
+	if !SupportsCodexVersion(meta.CLIVersion) {
+		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID, PendingTail: pendingTail}, nil
 	}
 	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
 		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID, PendingTail: pendingTail}, nil

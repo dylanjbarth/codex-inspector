@@ -4,8 +4,9 @@
 
 | Capability | Frozen value | Compatibility decision |
 | --- | --- | --- |
-| Codex CLI/host | `codex-cli 0.144.1` | exact tested demo host |
-| rollout adapter | `rollout-jsonl/codex-cli-0.144.1/v1` | accept only the structural fingerprint below; CLI version is diagnostic, never sufficient on its own |
+| Codex CLI/host | `codex-cli 0.145.0-alpha.18` | exact tested local host |
+| rollout adapter | `rollout-jsonl/codex-exact-cohorts/v2` | accept only an exact proven version plus the structural fingerprint below |
+| exact rollout versions | `0.142.5`, `0.144.0-alpha.4`, `0.144.1`, `0.145.0-alpha.18` | no range inference; every source still passes the full structural validator |
 | session index | legacy append-only `id`/`thread_name`/`updated_at` records; file absent on proof host | optional label input; absence is supported |
 | demo OS | macOS 26.5.1 | exact proof machine |
 | architecture | `arm64` | only published demo artifact |
@@ -32,7 +33,10 @@ A supported source is newline-delimited JSON with:
    `originator`, and `source`; user roots use a non-empty string source while
    descendants use the observed `subagent.other` or
    `subagent.thread_spawn` tagged-object shape;
-2. `payload.cli_version` is retained as an inventory cohort discriminator; acceptance requires the complete structural fingerprint below rather than an exact version or broad version range;
+2. `payload.cli_version` equals one of the exact rollout versions above; matching
+   the version is necessary but never sufficient, and an incompatible record,
+   event, response, identity, usage, or lifecycle shape remains rejected with a
+   payload-safe reason;
 3. a `turn_context` record per visible turn with `payload.turn_id`, `model`,
    `effort`, and `cwd`;
 4. `event_msg/task_started` and, for committed turns,
@@ -70,6 +74,18 @@ valid entry by file order wins for a repeated ID. It supplies display labels
 only and can never create a logical session or make an unsupported rollout
 supported. The frozen fake shape is in `fixtures/synthetic/session_index.jsonl`.
 
+The three locally observed historical cohorts also have leaf-canonicalized,
+structure-preserving fixtures under `fixtures/local-structural/cohorts/`.
+Their manifest records the exact structural fingerprint and deterministic
+expected lifecycle, evidence, lineage, and token outcomes. One spawned source
+and one root source from the local inventory share an explicit canonical
+replacement ID so persistence can be reproduced without retaining private
+identifiers. The manifest labels that constructed relationship and does not
+claim the raw sources were related. Tests pass the fixtures through the
+production adapter and full local index path. They are evidence for only the
+exact versions and shapes recorded in the manifest, never for an inferred
+version range.
+
 ## Source locations
 
 Exactly one effective `CODEX_HOME` is resolved per invocation. An explicit
@@ -94,7 +110,7 @@ Canonical discovery rejects `CODEX_INSPECTOR_HOME` and any symlink alias of it.
 
 The plugin registers command hooks for `SessionStart`, `UserPromptSubmit`,
 `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, and `Stop`.
-Codex 0.144.1 sends one JSON object on stdin. Inspector consumes only:
+Codex 0.145.0-alpha.18 sends one JSON object on stdin. Inspector consumes only:
 
 - `session_id`
 - `turn_id` when present

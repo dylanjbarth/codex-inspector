@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dylanjbarth/codex-inspector/internal/facts"
@@ -218,7 +219,7 @@ func TestFrozenAdapterGoldenFactsAndUnsupportedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Source.State != "unsupported" || u.Source.StateReason != "incompatible_record_envelope" || u.Session != nil {
+	if u.Source.State != "unsupported" || u.Source.StateReason != "unsupported_codex_version" || u.Session != nil {
 		t.Fatalf("unsupported source parsed optimistically: %#v", u)
 	}
 }
@@ -425,14 +426,31 @@ func TestAdapterRetainsPrimaryAndSecondaryRateLimitWindows(t *testing.T) {
 	}
 }
 
-func TestAdapterAcceptsOnlyStructurallyCompatibleVersionCohorts(t *testing.T) {
+func TestAdapterAcceptsOnlyProvenExactVersionCohorts(t *testing.T) {
 	data, err := os.ReadFile(fixture(t, "root.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = bytes.Replace(data, []byte(`"cli_version":"0.144.1"`), []byte(`"cli_version":"0.142.5"`), 1)
-	path := filepath.Join(t.TempDir(), "compatible-cohort.jsonl")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	for _, version := range []string{"0.142.5", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18"} {
+		t.Run(version, func(t *testing.T) {
+			candidate := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"`+version+`"`, 1))
+			path := filepath.Join(t.TempDir(), "compatible-cohort.jsonl")
+			if writeErr := os.WriteFile(path, candidate, 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			info, statErr := os.Stat(path)
+			if statErr != nil {
+				t.Fatal(statErr)
+			}
+			batch, parseErr := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-exact-cohorts/v2" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
+				t.Fatalf("batch=%+v turns=%d evidence=%d err=%v", batch.Source, len(batch.Turns), len(batch.Evidence), parseErr)
+			}
+		})
+	}
+	unknown := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.145.0-alpha.19"`, 1))
+	path := filepath.Join(t.TempDir(), "unknown-cohort.jsonl")
+	if err = os.WriteFile(path, unknown, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
@@ -440,7 +458,7 @@ func TestAdapterAcceptsOnlyStructurallyCompatibleVersionCohorts(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
-	if err != nil || batch.Source.State != "supported" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
-		t.Fatalf("batch=%+v turns=%d evidence=%d err=%v", batch.Source, len(batch.Turns), len(batch.Evidence), err)
+	if err != nil || batch.Source.State != "unsupported" || batch.Source.StateReason != "unsupported_codex_version" {
+		t.Fatalf("unknown batch=%+v err=%v", batch.Source, err)
 	}
 }
