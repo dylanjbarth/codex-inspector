@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "inspector.local-compatibility-summary/v2",
+  "observedAt": "2026-07-20T14:29:13Z",
+  "sourceHomeResolution": "default",
+  "privacy": "payload-safe aggregate only",
+  "inventoryFingerprint": "4095ad88b51baa28565b4e99117ced2a6304a03bac1204827d76a22330275d2c",
+  "sourceCount": 90,
+  "rolloutCount": 89,
+  "labelSourceCount": 1,
+  "recoverableCount": 36,
+  "groups": [
+    { "sourceKind": "active_rollout", "version": "0.142.5", "reason": "incompatible_response_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 4 },
+    { "sourceKind": "active_rollout", "version": "0.142.5", "reason": "structurally_compatible_candidate", "recoverable": true, "pendingTail": false, "adapterVerified": true, "identityVerified": true, "completedTurns": true, "usageFacts": true, "evidenceFacts": true, "evidenceOffsetsSafe": true, "lineageVerified": true, "count": 3 },
+    { "sourceKind": "active_rollout", "version": "0.144.0-alpha.4", "reason": "incompatible_event_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 19 },
+    { "sourceKind": "active_rollout", "version": "0.144.0-alpha.4", "reason": "incompatible_record_envelope", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 1 },
+    { "sourceKind": "active_rollout", "version": "0.144.0-alpha.4", "reason": "incompatible_response_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 1 },
+    { "sourceKind": "active_rollout", "version": "0.144.0-alpha.4", "reason": "incompatible_turn_context", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 2 },
+    { "sourceKind": "active_rollout", "version": "0.144.0-alpha.4", "reason": "structurally_compatible_candidate", "recoverable": true, "pendingTail": false, "adapterVerified": true, "identityVerified": true, "completedTurns": true, "usageFacts": true, "evidenceFacts": true, "evidenceOffsetsSafe": true, "lineageVerified": true, "count": 21 },
+    { "sourceKind": "archived_rollout", "version": "0.144.0-alpha.4", "reason": "incompatible_event_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 2 },
+    { "sourceKind": "archived_rollout", "version": "0.144.0-alpha.4", "reason": "incompatible_token_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 1 },
+    { "sourceKind": "archived_rollout", "version": "0.144.0-alpha.4", "reason": "structurally_compatible_candidate", "recoverable": true, "pendingTail": false, "adapterVerified": true, "identityVerified": true, "completedTurns": true, "usageFacts": true, "evidenceFacts": true, "evidenceOffsetsSafe": true, "lineageVerified": true, "count": 1 },
+    { "sourceKind": "active_rollout", "version": "0.145.0-alpha.18", "reason": "incompatible_event_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 16 },
+    { "sourceKind": "active_rollout", "version": "0.145.0-alpha.18", "reason": "incompatible_record_envelope", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 2 },
+    { "sourceKind": "active_rollout", "version": "0.145.0-alpha.18", "reason": "incompatible_turn_context", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 3 },
+    { "sourceKind": "active_rollout", "version": "0.145.0-alpha.18", "reason": "structurally_compatible_candidate", "recoverable": true, "pendingTail": false, "adapterVerified": true, "identityVerified": true, "completedTurns": true, "usageFacts": true, "evidenceFacts": true, "evidenceOffsetsSafe": true, "lineageVerified": true, "count": 11 },
+    { "sourceKind": "archived_rollout", "version": "0.145.0-alpha.18", "reason": "incompatible_event_record", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 1 },
+    { "sourceKind": "archived_rollout", "version": "0.145.0-alpha.18", "reason": "incompatible_record_envelope", "recoverable": false, "pendingTail": false, "adapterVerified": false, "identityVerified": false, "completedTurns": false, "usageFacts": false, "evidenceFacts": false, "evidenceOffsetsSafe": false, "lineageVerified": false, "count": 1 }
+  ]
+}

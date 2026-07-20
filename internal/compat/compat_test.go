@@ -29,6 +29,13 @@ func TestHostAndPluginCompatibilityFailuresAreAuthentic(t *testing.T) {
 	}
 }
 
+func TestCodexHostPreservesExactPrereleaseVersion(t *testing.T) {
+	fakeCodex(t, `echo 'codex-cli 0.145.0-alpha.18'`)
+	if got := CodexHost(); got.Status != "ok" || got.Detail != "codex-cli 0.145.0-alpha.18" {
+		t.Fatalf("host: %+v", got)
+	}
+}
+
 func TestPluginVersionAndIdentityMismatches(t *testing.T) {
 	fakeCodex(t, `echo '{"installed":[{"name":"codex-inspector","pluginId":"codex-inspector@market","version":"0.2.0","enabled":true}]}'`)
 	check, _, _, state, _ := inspectPlugin()
@@ -64,7 +71,7 @@ func TestSourceFormatUsesFrozenDiscriminator(t *testing.T) {
 		t.Fatalf("unsupported source: %+v", got)
 	}
 	copyFixture("root.jsonl")
-	if got := SourceFormat(); got.Status != "ok" || got.Detail != "rollout-jsonl/codex-cli-0.144.1/v1" {
+	if got := SourceFormat(); got.Status != "ok" || got.Detail != "rollout-jsonl/codex-exact-cohorts/v2" {
 		t.Fatalf("supported source: %+v", got)
 	}
 }

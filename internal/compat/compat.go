@@ -42,7 +42,7 @@ type Snapshot struct {
 	HookDiagnostics  []Diagnostic
 }
 
-var versionPattern = regexp.MustCompile(`codex-cli\s+([0-9.]+)`)
+var versionPattern = regexp.MustCompile(`codex-cli\s+([0-9A-Za-z.+-]+)`)
 var hashPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 var pluginIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+$`)
 
