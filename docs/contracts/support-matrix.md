@@ -5,7 +5,7 @@
 | Capability | Frozen value | Compatibility decision |
 | --- | --- | --- |
 | Codex CLI/host | `codex-cli 0.144.1` | exact tested demo host |
-| rollout adapter | `rollout-jsonl/codex-cli-0.144.1/v1` | accept only the structural fingerprint below |
+| rollout adapter | `rollout-jsonl/codex-cli-0.144.1/v1` | accept only the structural fingerprint below; CLI version is diagnostic, never sufficient on its own |
 | session index | legacy append-only `id`/`thread_name`/`updated_at` records; file absent on proof host | optional label input; absence is supported |
 | demo OS | macOS 26.5.1 | exact proof machine |
 | architecture | `arm64` | only published demo artifact |
@@ -32,7 +32,7 @@ A supported source is newline-delimited JSON with:
    `originator`, and `source`; user roots use a non-empty string source while
    descendants use the observed `subagent.other` or
    `subagent.thread_spawn` tagged-object shape;
-2. `payload.cli_version == "0.144.1"`;
+2. `payload.cli_version` is retained as an inventory cohort discriminator; acceptance requires the complete structural fingerprint below rather than an exact version or broad version range;
 3. a `turn_context` record per visible turn with `payload.turn_id`, `model`,
    `effort`, and `cwd`;
 4. `event_msg/task_started` and, for committed turns,

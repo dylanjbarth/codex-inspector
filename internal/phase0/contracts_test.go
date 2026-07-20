@@ -42,7 +42,7 @@ func TestSourceDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if unsupported.Supported || unsupported.Reason != "unsupported_codex_version" {
+	if unsupported.Supported || unsupported.Reason != "incompatible_record_envelope" {
 		t.Fatalf("unexpected unsupported decision: %+v", unsupported)
 	}
 

@@ -214,7 +214,7 @@ func TestFrozenAdapterGoldenFactsAndUnsupportedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Source.State != "unsupported" || u.Source.StateReason != "unsupported_codex_version" || u.Session != nil {
+	if u.Source.State != "unsupported" || u.Source.StateReason != "incompatible_record_envelope" || u.Session != nil {
 		t.Fatalf("unsupported source parsed optimistically: %#v", u)
 	}
 }
@@ -418,5 +418,25 @@ func TestAdapterRetainsPrimaryAndSecondaryRateLimitWindows(t *testing.T) {
 	}
 	if weekly.UsedPercent == nil || *weekly.UsedPercent != 12 || weekly.RemainingPercent == nil || *weekly.RemainingPercent != 88 || weekly.ResetsAt != "1783500000" {
 		t.Fatalf("weekly=%+v", weekly)
+	}
+}
+
+func TestAdapterAcceptsOnlyStructurallyCompatibleVersionCohorts(t *testing.T) {
+	data, err := os.ReadFile(fixture(t, "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.Replace(data, []byte(`"cli_version":"0.144.1"`), []byte(`"cli_version":"0.142.5"`), 1)
+	path := filepath.Join(t.TempDir(), "compatible-cohort.jsonl")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+	if err != nil || batch.Source.State != "supported" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
+		t.Fatalf("batch=%+v turns=%d evidence=%d err=%v", batch.Source, len(batch.Turns), len(batch.Evidence), err)
 	}
 }

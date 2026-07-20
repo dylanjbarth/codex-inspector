@@ -33,7 +33,7 @@
       "identityFingerprint": "bb0ac5b9a3c5dd36e91a563ab2d710924e830b5cf0c83d5a3e3fb1f81af02c90",
       "currentFingerprint": "c25ac1ab9093c5b9517b7eae1dddc1a46617be9edc508ea0d843616d2978eb33",
       "sessionId": "unsupported-001",
-      "decision": "unsupported_codex_version",
+      "decision": "incompatible_record_envelope",
       "pendingTail": false,
       "completeBytes": 372,
       "adapterVersion": "rollout-jsonl/codex-cli-0.144.1/v1"

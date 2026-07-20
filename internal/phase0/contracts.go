@@ -531,9 +531,6 @@ func ProbeRollout(r io.Reader) (SourceDecision, error) {
 	if meta.SessionID == "" {
 		meta.SessionID = meta.ID
 	}
-	if meta.CLIVersion != SupportedCodexVersion {
-		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID}, nil
-	}
 	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
 		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID}, nil
 	}
@@ -577,9 +574,6 @@ func ParseRollout(r io.Reader) (SourceDecision, error) {
 	}
 	if meta.SessionID == "" {
 		meta.SessionID = meta.ID
-	}
-	if meta.CLIVersion != SupportedCodexVersion {
-		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID, PendingTail: pendingTail}, nil
 	}
 	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
 		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID, PendingTail: pendingTail}, nil
