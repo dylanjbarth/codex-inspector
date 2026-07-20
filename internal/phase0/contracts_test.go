@@ -43,7 +43,7 @@ func TestSourceDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if unsupported.Supported || unsupported.Reason != "unsupported_codex_version" {
+	if unsupported.Supported || unsupported.Reason != "incompatible_record_envelope" {
 		t.Fatalf("unexpected unsupported decision: %+v", unsupported)
 	}
 
@@ -56,24 +56,24 @@ func TestSourceDecisions(t *testing.T) {
 	}
 }
 
-func TestOnlyProvenExactVersionCohortsReachStructuralValidation(t *testing.T) {
+func TestRecentCodexVersionsReachStructuralValidation(t *testing.T) {
 	data, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, version := range []string{"0.142.5", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18"} {
+	for _, version := range []string{"0.142.5", "0.143.0", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			candidate := strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"`+version+`"`, 1)
 			decision, parseErr := ParseRollout(strings.NewReader(candidate))
 			if parseErr != nil || !decision.Supported {
-				t.Fatalf("proven cohort rejected: decision=%+v err=%v", decision, parseErr)
+				t.Fatalf("recent structurally compatible source rejected: decision=%+v err=%v", decision, parseErr)
 			}
 		})
 	}
-	unknown := strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.145.0-alpha.19"`, 1)
-	decision, err := ParseRollout(strings.NewReader(unknown))
+	old := strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.142.4"`, 1)
+	decision, err := ParseRollout(strings.NewReader(old))
 	if err != nil || decision.Supported || decision.Reason != "unsupported_codex_version" {
-		t.Fatalf("unproven version accepted: decision=%+v err=%v", decision, err)
+		t.Fatalf("old version accepted: decision=%+v err=%v", decision, err)
 	}
 }
 

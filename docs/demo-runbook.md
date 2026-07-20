@@ -10,8 +10,8 @@ promise for other hosts, source formats, operating systems, or release lines.
 | --- | --- |
 | macOS | 26.5.1 (build 25F80) |
 | architecture | arm64 |
-| Codex CLI/host | codex-cli 0.145.0-alpha.18 |
-| rollout adapter | rollout-jsonl/codex-exact-cohorts/v2 |
+| Codex CLI/host | codex-cli >=0.142.5 (proof host: 0.145.0-alpha.18) |
+| rollout adapter | rollout-jsonl/codex-recent-structural/v4 |
 | Inspector CLI | 0.1.x |
 | Inspector plugin | 0.1.x |
 | plugin protocol | 1 |

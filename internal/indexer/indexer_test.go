@@ -158,6 +158,44 @@ func TestCheckpointReconciliationParsesOnlyChangedSources(t *testing.T) {
 	}
 }
 
+func TestCheckpointAdapterUpgradeReprocessesUnchangedSource(t *testing.T) {
+	layout, codex := setup(t)
+	cfg := Config{Layout: layout, CodexHome: codex, Concurrency: 2}
+	rootPath := filepath.Join(codex, "sessions", "2026", "07", "01", "rollout-root-001.jsonl")
+	rootPath, err := filepath.EvalSymlinks(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := sources.Parse(sources.Candidate{Path: rootPath, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch.Source.AdapterVersion = "obsolete-adapter"
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.Apply(context.Background(), batch, "old_adapter_seed"); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	progress, err := Run(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !progress.Rebuilt || progress.Processed != progress.Inventoried || progress.Skipped != 0 {
+		t.Fatalf("adapter upgrade did not rebuild unchanged source: progress=%#v", progress)
+	}
+}
+
 func TestAppendChangesOnlyNewTurnAndPinnedRevision(t *testing.T) {
 	layout, codex := setup(t)
 	cfg := Config{Layout: layout, CodexHome: codex}

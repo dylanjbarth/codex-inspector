@@ -219,7 +219,7 @@ func TestFrozenAdapterGoldenFactsAndUnsupportedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Source.State != "unsupported" || u.Source.StateReason != "unsupported_codex_version" || u.Session != nil {
+	if u.Source.State != "unsupported" || u.Source.StateReason != "incompatible_record_envelope" || u.Session != nil {
 		t.Fatalf("unsupported source parsed optimistically: %#v", u)
 	}
 }
@@ -426,12 +426,12 @@ func TestAdapterRetainsPrimaryAndSecondaryRateLimitWindows(t *testing.T) {
 	}
 }
 
-func TestAdapterAcceptsOnlyProvenExactVersionCohorts(t *testing.T) {
+func TestAdapterAcceptsRecentStructurallyCompatibleVersions(t *testing.T) {
 	data, err := os.ReadFile(fixture(t, "root.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, version := range []string{"0.142.5", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18"} {
+	for _, version := range []string{"0.142.5", "0.143.0", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			candidate := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"`+version+`"`, 1))
 			path := filepath.Join(t.TempDir(), "compatible-cohort.jsonl")
@@ -443,14 +443,14 @@ func TestAdapterAcceptsOnlyProvenExactVersionCohorts(t *testing.T) {
 				t.Fatal(statErr)
 			}
 			batch, parseErr := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
-			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-exact-cohorts/v2" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
+			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-recent-structural/v4" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
 				t.Fatalf("batch=%+v turns=%d evidence=%d err=%v", batch.Source, len(batch.Turns), len(batch.Evidence), parseErr)
 			}
 		})
 	}
-	unknown := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.145.0-alpha.19"`, 1))
-	path := filepath.Join(t.TempDir(), "unknown-cohort.jsonl")
-	if err = os.WriteFile(path, unknown, 0o600); err != nil {
+	old := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.142.4"`, 1))
+	path := filepath.Join(t.TempDir(), "old-cohort.jsonl")
+	if err = os.WriteFile(path, old, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
@@ -459,6 +459,40 @@ func TestAdapterAcceptsOnlyProvenExactVersionCohorts(t *testing.T) {
 	}
 	batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
 	if err != nil || batch.Source.State != "unsupported" || batch.Source.StateReason != "unsupported_codex_version" {
-		t.Fatalf("unknown batch=%+v err=%v", batch.Source, err)
+		t.Fatalf("old batch=%+v err=%v", batch.Source, err)
+	}
+}
+
+func TestSelfParentSubagentSegmentRemainsRootWork(t *testing.T) {
+	data, err := os.ReadFile(fixture(t, "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.Replace(
+		string(data),
+		`"source":"cli"`,
+		`"parent_thread_id":"root-001","source":{"subagent":{"other":"guardian"}}`,
+		1,
+	))
+	path := filepath.Join(t.TempDir(), "self-parent-guardian.jsonl")
+	if err = os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if batch.Session == nil {
+		t.Fatalf("self-parent segment was not normalized: %#v", batch.Source)
+	}
+	if batch.Session.Purpose != "user" || batch.Session.RootWorkUnitID != batch.Session.SourceSessionID {
+		t.Fatalf("self-parent segment misclassified: %#v", batch.Session)
+	}
+	if len(batch.Lineage) != 0 {
+		t.Fatalf("self-parent segment emitted lineage: %#v", batch.Lineage)
 	}
 }

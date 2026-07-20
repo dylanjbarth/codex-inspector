@@ -125,6 +125,29 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	if err != nil {
 		return Progress{}, err
 	}
+	for _, checkpoint := range checkpoints {
+		if checkpoint.AdapterVersion == sources.AdapterVersion {
+			continue
+		}
+		// Adapter changes can alter already-normalized ownership and attribution.
+		// Replaying an unchanged source incrementally is both semantically unsafe
+		// and rejected by checkpoint monotonicity, so replace the full derived
+		// catalog atomically before applying any ordinary incremental work.
+		if err = rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews); err != nil {
+			p.Failed++
+			p.FailureReasons["rebuild_failed"]++
+			return p, err
+		}
+		p.Processed = p.Inventoried
+		p.Rebuilt = true
+		for _, markerPath := range markerPaths {
+			if os.Remove(markerPath) == nil {
+				p.QueueConsumed++
+			}
+		}
+		notify(cfg, p)
+		return p, nil
+	}
 	work := make([]sources.Candidate, 0, len(inventory))
 	for _, candidate := range inventory {
 		checkpoint, found := checkpoints[candidate.Path]

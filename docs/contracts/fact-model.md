@@ -45,7 +45,7 @@ would require a project version table rather than an in-place update.
 | capacity | parent event plus limit/window identity |
 | evidence | opaque ID resolving to pinned event/source fingerprints and locator |
 
-For `rollout-jsonl/codex-exact-cohorts/v2`, the immutable segment identity
+For `rollout-jsonl/codex-recent-structural/v4`, the immutable segment identity
 fingerprint is SHA-256 over the source session ID, a separator, and exact
 complete leading `session_meta` record bytes. Source and segment IDs are
 domain-prefixed hashes over that immutable material. Active/archive kind, path,

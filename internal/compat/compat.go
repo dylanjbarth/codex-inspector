@@ -55,8 +55,8 @@ func CodexHost() Check {
 	if len(m) != 2 {
 		return Check{"codex_host", "error", "Codex CLI version could not be identified"}
 	}
-	if m[1] != version.CodexHost {
-		return Check{"codex_host", "incompatible", fmt.Sprintf("requires codex-cli %s; found %s", version.CodexHost, m[1])}
+	if !version.SupportsCodexHost(m[1]) {
+		return Check{"codex_host", "incompatible", fmt.Sprintf("requires codex-cli %s or newer; found %s", version.MinCodexHost, m[1])}
 	}
 	return Check{"codex_host", "ok", fmt.Sprintf("codex-cli %s", m[1])}
 }
@@ -343,14 +343,22 @@ func InspectWithProgress(l home.Layout, includeServer bool, progress func(string
 		}
 	}
 	report("complete")
+	compatibility = runtimeCompatibility(checks, compatibility)
+	return Snapshot{checks, pv, pp, compatibility, diagnostics}
+}
+
+func runtimeCompatibility(checks []Check, compatibility string) string {
 	for _, c := range checks {
-		if c.Name != "inspector_cli" && c.Status != "ok" {
-			if c.Status == "incompatible" {
-				compatibility = "unsupported"
-			} else if compatibility == "supported" {
-				compatibility = "unknown"
-			}
+		// Source compatibility is tracked per artifact by the index. One old or
+		// structurally changed rollout must not disable an otherwise healthy CLI.
+		if c.Name == "inspector_cli" || c.Name == "source_format" || c.Status == "ok" {
+			continue
+		}
+		if c.Status == "incompatible" {
+			compatibility = "unsupported"
+		} else if compatibility == "supported" {
+			compatibility = "unknown"
 		}
 	}
-	return Snapshot{checks, pv, pp, compatibility, diagnostics}
+	return compatibility
 }

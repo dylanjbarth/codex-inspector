@@ -19,7 +19,7 @@ func fakeCodex(t *testing.T, body string) {
 }
 
 func TestHostAndPluginCompatibilityFailuresAreAuthentic(t *testing.T) {
-	fakeCodex(t, `if [ "$1" = "--version" ]; then echo 'codex-cli 0.143.0'; else echo '{"installed":[]}'; fi`)
+	fakeCodex(t, `if [ "$1" = "--version" ]; then echo 'codex-cli 0.141.9'; else echo '{"installed":[]}'; fi`)
 	if got := CodexHost(); got.Status != "incompatible" {
 		t.Fatalf("host: %+v", got)
 	}
@@ -29,10 +29,25 @@ func TestHostAndPluginCompatibilityFailuresAreAuthentic(t *testing.T) {
 	}
 }
 
-func TestCodexHostPreservesExactPrereleaseVersion(t *testing.T) {
-	fakeCodex(t, `echo 'codex-cli 0.145.0-alpha.18'`)
-	if got := CodexHost(); got.Status != "ok" || got.Detail != "codex-cli 0.145.0-alpha.18" {
-		t.Fatalf("host: %+v", got)
+func TestCodexHostRejectsVersionsBelowTheRecentFloor(t *testing.T) {
+	for _, candidate := range []string{"0.142.4", "0.142.5-alpha.1", "not-semver"} {
+		t.Run(candidate, func(t *testing.T) {
+			fakeCodex(t, `echo 'codex-cli `+candidate+`'`)
+			if got := CodexHost(); got.Status != "incompatible" {
+				t.Fatalf("host: %+v", got)
+			}
+		})
+	}
+}
+
+func TestCodexHostAcceptsRecentStableAndPrereleaseVersions(t *testing.T) {
+	for _, candidate := range []string{"0.142.5", "0.143.0", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
+		t.Run(candidate, func(t *testing.T) {
+			fakeCodex(t, `echo 'codex-cli `+candidate+`'`)
+			if got := CodexHost(); got.Status != "ok" || got.Detail != "codex-cli "+candidate {
+				t.Fatalf("host: %+v", got)
+			}
+		})
 	}
 }
 
@@ -71,8 +86,23 @@ func TestSourceFormatUsesFrozenDiscriminator(t *testing.T) {
 		t.Fatalf("unsupported source: %+v", got)
 	}
 	copyFixture("root.jsonl")
-	if got := SourceFormat(); got.Status != "ok" || got.Detail != "rollout-jsonl/codex-exact-cohorts/v2" {
+	if got := SourceFormat(); got.Status != "ok" || got.Detail != "rollout-jsonl/codex-recent-structural/v4" {
 		t.Fatalf("supported source: %+v", got)
+	}
+}
+
+func TestSourceFormatDoesNotDisableHealthyRuntime(t *testing.T) {
+	checks := []Check{
+		{Name: "codex_host", Status: "ok"},
+		{Name: "source_format", Status: "incompatible"},
+		{Name: "plugin", Status: "ok"},
+	}
+	if got := runtimeCompatibility(checks, "supported"); got != "supported" {
+		t.Fatalf("source coverage disabled runtime: %s", got)
+	}
+	checks = append(checks, Check{Name: "hook_trust", Status: "incompatible"})
+	if got := runtimeCompatibility(checks, "supported"); got != "unsupported" {
+		t.Fatalf("runtime incompatibility was ignored: %s", got)
 	}
 }
 

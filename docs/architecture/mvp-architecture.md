@@ -217,7 +217,7 @@ Compatibility uses:
 
 Plugin-only skill or prompt improvements do not require a CLI upgrade when the protocol remains compatible. An incompatible Inspector CLI refuses hook markers and database writes, while the hook exits successfully and Inspector surfaces a rate-limited setup warning. An unsupported Codex host or source format is reported by `doctor` and skipped during indexing rather than parsed optimistically.
 
-Phase 0 freezes the exact tested Codex host version, source-format fingerprints, plugin/CLI range, and supported demo macOS architecture. “Current Codex” means that explicit matrix, not an unbounded promise about future releases.
+Codex hosts at or above the documented compatibility floor are accepted, including newer stable and prerelease builds. Every rollout still passes the complete structural validator, and incompatible sources are excluded individually without disabling an otherwise healthy Inspector runtime.
 
 ### 4.4 Public CLI surface
 

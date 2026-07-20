@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -708,9 +709,6 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 			groups[key] = g
 			order = append(order, key)
 		}
-		if len(g.Points) >= MaxCapacityPoints {
-			return nil, nil, Coverage{}, nil, ErrResponseTooLarge
-		}
 		g.Points = append(g.Points, p)
 	}
 	latest := make([]CapacityPoint, 0, len(latestByWindow))
@@ -738,7 +736,9 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 	})
 	out := make([]CapacitySeries, 0, len(order))
 	for _, k := range order {
-		out = append(out, *groups[k])
+		series := *groups[k]
+		series.Points = downsampleCapacityPoints(series.Points, MaxCapacityPoints)
+		out = append(out, series)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, nil, Coverage{}, nil, err
@@ -749,4 +749,75 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 		excluded["incomplete_capacity_observation"] = eligible - observedCount
 	}
 	return latest, out, cov, excluded, nil
+}
+
+// downsampleCapacityPoints applies Largest-Triangle-Three-Buckets sampling so
+// dense recorded series stay within the response contract without discarding
+// their endpoints or flattening visually significant changes.
+func downsampleCapacityPoints(points []CapacityPoint, limit int) []CapacityPoint {
+	if limit <= 0 {
+		return nil
+	}
+	if len(points) <= limit {
+		return points
+	}
+	if limit == 1 {
+		return []CapacityPoint{points[len(points)-1]}
+	}
+	if limit == 2 {
+		return []CapacityPoint{points[0], points[len(points)-1]}
+	}
+
+	x := make([]float64, len(points))
+	for i, point := range points {
+		observedAt, err := time.Parse(time.RFC3339, point.ObservedAt)
+		if err != nil {
+			x[i] = float64(i)
+			continue
+		}
+		x[i] = float64(observedAt.UnixNano()) / float64(time.Millisecond)
+	}
+
+	sampled := make([]CapacityPoint, 0, limit)
+	sampled = append(sampled, points[0])
+	every := float64(len(points)-2) / float64(limit-2)
+	selected := 0
+	for bucket := 0; bucket < limit-2; bucket++ {
+		averageStart := int(math.Floor(float64(bucket+1)*every)) + 1
+		averageEnd := int(math.Floor(float64(bucket+2)*every)) + 1
+		if averageEnd > len(points) {
+			averageEnd = len(points)
+		}
+		if averageStart >= averageEnd {
+			averageStart = averageEnd - 1
+		}
+		var averageX, averageY float64
+		for i := averageStart; i < averageEnd; i++ {
+			averageX += x[i]
+			averageY += points[i].UsedPercent
+		}
+		averageCount := float64(averageEnd - averageStart)
+		averageX /= averageCount
+		averageY /= averageCount
+
+		rangeStart := int(math.Floor(float64(bucket)*every)) + 1
+		rangeEnd := int(math.Floor(float64(bucket+1)*every)) + 1
+		if rangeEnd > len(points)-1 {
+			rangeEnd = len(points) - 1
+		}
+		pointAX, pointAY := x[selected], points[selected].UsedPercent
+		maxArea := -1.0
+		next := rangeStart
+		for i := rangeStart; i < rangeEnd; i++ {
+			area := math.Abs((pointAX-averageX)*(points[i].UsedPercent-pointAY) - (pointAX-x[i])*(averageY-pointAY))
+			if area > maxArea {
+				maxArea = area
+				next = i
+			}
+		}
+		sampled = append(sampled, points[next])
+		selected = next
+	}
+	sampled = append(sampled, points[len(points)-1])
+	return sampled
 }

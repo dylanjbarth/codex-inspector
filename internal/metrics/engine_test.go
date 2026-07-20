@@ -334,6 +334,49 @@ func TestCapacityKeepsLatestWindowsAndResetSeriesDistinct(t *testing.T) {
 	}
 }
 
+func TestCapacityDrawdownDownsamplesOversizedResetSeries(t *testing.T) {
+	const firstObserved = "2026-07-01T10:00:06.000000Z"
+	lastObserved := fmt.Sprintf("2026-07-01T10:00:06.%06dZ", metrics.MaxCapacityPoints+1)
+	s := indexedSyntheticWith(t, func(b []byte) []byte {
+		lines := strings.Split(string(b), "\n")
+		out := make([]string, 0, len(lines)+metrics.MaxCapacityPoints)
+		for _, line := range lines {
+			if !strings.Contains(line, `"timestamp":"2026-07-01T10:00:06Z"`) {
+				out = append(out, line)
+				continue
+			}
+			for i := 0; i < metrics.MaxCapacityPoints+2; i++ {
+				observed := fmt.Sprintf("2026-07-01T10:00:06.%06dZ", i)
+				point := strings.Replace(line, "2026-07-01T10:00:06Z", observed, 1)
+				point = strings.Replace(point, `"used_percent":40`, fmt.Sprintf(`"used_percent":%d`, 20+i%70), 1)
+				out = append(out, point)
+			}
+		}
+		return []byte(strings.Join(out, "\n"))
+	})
+
+	result, err := metrics.New(8).Query(context.Background(), s, metrics.Query{
+		MetricKeys: []string{"capacity_drawdown"},
+		Timezone:   "UTC",
+		Grain:      "day",
+		Start:      "2026-07-01T10:00:00Z",
+		End:        "2026-07-01T10:01:00Z",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	series := result.Results[0].Value.([]metrics.CapacitySeries)
+	if len(series) == 0 {
+		t.Fatal("capacity drawdown returned no series")
+	}
+	if len(series[0].Points) != metrics.MaxCapacityPoints {
+		t.Fatalf("series points=%d, want %d", len(series[0].Points), metrics.MaxCapacityPoints)
+	}
+	if series[0].Points[0].ObservedAt != firstObserved || series[0].Points[len(series[0].Points)-1].ObservedAt != lastObserved {
+		t.Fatalf("downsampled endpoints=%q..%q, want %q..%q", series[0].Points[0].ObservedAt, series[0].Points[len(series[0].Points)-1].ObservedAt, firstObserved, lastObserved)
+	}
+}
+
 func TestChicagoCalendarBucketAcrossDST(t *testing.T) {
 	loc, err := time.LoadLocation("America/Chicago")
 	if err != nil {

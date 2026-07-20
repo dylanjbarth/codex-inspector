@@ -1,12 +1,12 @@
 # Supported Codex contract matrix
 
-## Frozen demo target
+## Supported runtime target
 
-| Capability | Frozen value | Compatibility decision |
+| Capability | Supported value | Compatibility decision |
 | --- | --- | --- |
-| Codex CLI/host | `codex-cli 0.145.0-alpha.18` | exact tested local host |
-| rollout adapter | `rollout-jsonl/codex-exact-cohorts/v2` | accept only an exact proven version plus the structural fingerprint below |
-| exact rollout versions | `0.142.5`, `0.144.0-alpha.4`, `0.144.1`, `0.145.0-alpha.18` | no range inference; every source still passes the full structural validator |
+| Codex CLI/host | `codex-cli >=0.142.5` | recent stable and prerelease hosts are accepted |
+| rollout adapter | `rollout-jsonl/codex-recent-structural/v4` | recent sources proceed to the complete structural validator below |
+| proven rollout fixtures | `0.142.5`, `0.144.0-alpha.4`, `0.144.1`, `0.145.0-alpha.18` | regression corpus; not an exhaustive allowlist |
 | session index | legacy append-only `id`/`thread_name`/`updated_at` records; file absent on proof host | optional label input; absence is supported |
 | demo OS | macOS 26.5.1 | exact proof machine |
 | architecture | `arm64` | only published demo artifact |
@@ -33,10 +33,10 @@ A supported source is newline-delimited JSON with:
    `originator`, and `source`; user roots use a non-empty string source while
    descendants use the observed `subagent.other` or
    `subagent.thread_spawn` tagged-object shape;
-2. `payload.cli_version` equals one of the exact rollout versions above; matching
-   the version is necessary but never sufficient, and an incompatible record,
-   event, response, identity, usage, or lifecycle shape remains rejected with a
-   payload-safe reason;
+2. `payload.cli_version` is a valid release at or above `0.142.5`; matching the
+   recent-version policy is necessary but never sufficient, and an incompatible
+   record, event, response, identity, usage, or lifecycle shape remains rejected
+   with a payload-safe reason;
 3. a `turn_context` record per visible turn with `payload.turn_id`, `model`,
    `effort`, and `cwd`;
 4. `event_msg/task_started` and, for committed turns,
@@ -62,10 +62,10 @@ metadata, `rate_limits`, `world_state`, response IDs, and tool call IDs. A
 missing optional field lowers field coverage; it is not synthesized.
 
 The adapter rejects the source before normalization when the CLI version is
-different, the leading metadata record is absent, required identity fields are
-missing, a turn/event/tool identity is inconsistent, a complete record or
-known discriminator has an incompatible type, or an unknown record/event
-discriminator appears. The inventory keeps
+older than the compatibility floor, the leading metadata record is absent,
+required identity fields are missing, a turn/event/tool identity is
+inconsistent, a complete record or known discriminator has an incompatible
+type, or an unknown record/event discriminator appears. The inventory keeps
 the detected version, byte count, and a payload-free reason.
 
 The optional `session_index.jsonl` label adapter accepts append-only objects
@@ -82,9 +82,9 @@ and one root source from the local inventory share an explicit canonical
 replacement ID so persistence can be reproduced without retaining private
 identifiers. The manifest labels that constructed relationship and does not
 claim the raw sources were related. Tests pass the fixtures through the
-production adapter and full local index path. They are evidence for only the
-exact versions and shapes recorded in the manifest, never for an inferred
-version range.
+production adapter and full local index path. They remain regression evidence
+for the exact shapes recorded in the manifest. Newer versions are accepted as
+candidates but must independently pass the same validator.
 
 ## Source locations
 
@@ -110,7 +110,7 @@ Canonical discovery rejects `CODEX_INSPECTOR_HOME` and any symlink alias of it.
 
 The plugin registers command hooks for `SessionStart`, `UserPromptSubmit`,
 `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, and `Stop`.
-Codex 0.145.0-alpha.18 sends one JSON object on stdin. Inspector consumes only:
+Recent Codex hosts send one JSON object on stdin. Inspector consumes only:
 
 - `session_id`
 - `turn_id` when present

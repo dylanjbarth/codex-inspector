@@ -797,7 +797,7 @@ export interface components {
             sourcePrefixSha256: string;
             eventFingerprint: string;
             /** @constant */
-            adapterVersion: "rollout-jsonl/codex-exact-cohorts/v2";
+            adapterVersion: "rollout-jsonl/codex-recent-structural/v4";
             recordOrdinal: number;
             byteStart?: number;
             byteEnd?: number;

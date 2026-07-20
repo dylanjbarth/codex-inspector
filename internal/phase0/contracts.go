@@ -13,23 +13,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	inspectorversion "github.com/dylanjbarth/codex-inspector/internal/version"
 )
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-exact-cohorts/v2"
+	AdapterVersion        = "rollout-jsonl/codex-recent-structural/v4"
 	FormulaVersion        = 1
 )
 
-var supportedCodexVersions = map[string]bool{
-	"0.142.5":          true,
-	"0.144.0-alpha.4":  true,
-	"0.144.1":          true,
-	"0.145.0-alpha.18": true,
-}
-
 func SupportsCodexVersion(version string) bool {
-	return supportedCodexVersions[version]
+	return inspectorversion.SupportsCodexHost(version)
 }
 
 type SourceDecision struct {

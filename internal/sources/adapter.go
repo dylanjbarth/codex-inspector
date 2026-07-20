@@ -23,7 +23,7 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-exact-cohorts/v2"
+	AdapterVersion        = "rollout-jsonl/codex-recent-structural/v4"
 )
 
 type wireRecord struct {
@@ -173,14 +173,19 @@ func ParseContextWithProofs(ctx context.Context, candidate Candidate, labels map
 	if strings.Contains(strings.ToLower(meta.Originator), "codex-inspector") {
 		purpose = "inspector_review"
 	}
-	if meta.ParentThreadID != "" {
+	// A resumed segment can identify its own logical session as its parent even
+	// when its source is encoded as a subagent (for example, a guardian). That
+	// is segment continuity, not spawned work. Keep both ownership and purpose
+	// rooted in the logical session, just as we already avoid emitting a
+	// self-lineage edge below.
+	if meta.ParentThreadID != "" && meta.ParentThreadID != meta.SessionID {
 		if sourceIsSubagent(meta.Source) {
 			root, purpose, lineageKind = meta.ParentThreadID, "spawned", "spawned"
 		} else {
 			root, lineageKind = meta.SessionID, "forked_from"
 		}
 	}
-	if meta.ContinuationThreadID != "" && meta.ParentThreadID == "" {
+	if meta.ContinuationThreadID != "" && meta.ParentThreadID == "" && meta.ContinuationThreadID != meta.SessionID {
 		root, lineageKind = meta.ContinuationThreadID, "continued_as"
 	}
 	sessionID := "session:" + hash([]byte(meta.SessionID))

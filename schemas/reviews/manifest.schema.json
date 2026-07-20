@@ -107,7 +107,7 @@
           "sourceId": { "$ref": "#/$defs/id" },
           "sourcePrefixSha256": { "$ref": "#/$defs/sha256" },
           "eventFingerprint": { "$ref": "#/$defs/sha256" },
-          "adapterVersion": { "const": "rollout-jsonl/codex-exact-cohorts/v2" },
+          "adapterVersion": { "const": "rollout-jsonl/codex-recent-structural/v4" },
           "recordOrdinal": { "type": "integer", "minimum": 0 },
           "byteStart": { "type": "integer", "minimum": 0 },
           "byteEnd": { "type": "integer", "minimum": 0 },
