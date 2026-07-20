@@ -16,7 +16,7 @@ export function Reviews({revision,projects}:Props){
   return <ReviewHistory/>
 }
 
-function Shell({children}:{children:React.ReactNode}){return <main className="reviews-shell"><header><div><span className="eyebrow">PERSISTED CODEX TASKS</span><h1>Effectiveness Reviews</h1></div><nav><a className="quiet-link" href="/">Token &amp; Capacity</a><a className="quiet-link" href="/context">Context Inspector</a></nav></header>{children}</main>}
+function Shell({children}:{children:React.ReactNode}){return <section className="reviews-shell"><header><div><span className="eyebrow">PERSISTED CODEX TASKS</span><h1>Effectiveness Reviews</h1></div></header>{children}</section>}
 
 function ReviewHistory(){
   const [page,setPage]=React.useState<ReviewPage|null>(null),[error,setError]=React.useState('')

@@ -18,12 +18,12 @@ export function ContextInspector({revision,available,onApply}:Props){
   const [routeState,setRoute]=React.useState(route())
   const returnTo=new URLSearchParams(location.search).get('return')
   React.useEffect(()=>{const update=()=>setRoute(route());addEventListener('popstate',update);return()=>removeEventListener('popstate',update)},[])
-  return <main className="inspector-shell"><header><div><span className="eyebrow">SOURCE-BACKED TRACE</span><h1>Context Inspector</h1></div><nav>{returnTo&&returnTo.startsWith('/reviews/')&&<a className="quiet-link" href={returnTo}>Return to Review</a>}<a className="quiet-link" href="/reviews">Reviews</a><a className="quiet-link" href="/">Token &amp; Capacity</a></nav></header>
+  return <section className="inspector-shell"><header><div><span className="eyebrow">SOURCE-BACKED TRACE</span><h1>Context Inspector</h1></div><nav>{returnTo&&returnTo.startsWith('/reviews/')&&<a className="quiet-link" href={returnTo}>Return to Review</a>}</nav></header>
     {available!=null&&available!==revision&&<button className="new-data" onClick={()=>void onApply()}>New data available — preserve this view &amp; apply</button>}
     <div className="fidelity-legend" aria-label="Evidence fidelity"><span><i className="exact-dot"/>Exact source evidence</span><span><i className="derived-dot"/>Derived aggregate</span><span><i className="unavailable-dot"/>Unavailable in demo</span></div>
     {routeState.sessionId?<SessionView key={`${routeState.sessionId}:${revision}`} route={routeState} revision={revision}/>:<Discovery revision={revision}/>} 
     <aside className="sensitive-warning">Sensitive local data: exact evidence can contain secrets, messages, tool arguments, or results. Inspector renders it as inert text and never adds masking.</aside>
-  </main>
+  </section>
 }
 
 function Discovery({revision}:{revision:number}){

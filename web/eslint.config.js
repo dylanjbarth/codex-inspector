@@ -14,4 +14,8 @@ export default tseslint.config(
     plugins: { 'react-hooks': hooks, 'react-refresh': refresh },
     rules: { ...hooks.configs.recommended.rules, ...refresh.configs.vite.rules },
   },
+  {
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 )
