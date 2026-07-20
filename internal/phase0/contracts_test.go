@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -644,6 +645,10 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	diagnosticVersion, _ := diagnosticProperties["detectedVersion"].(map[string]any)
 	if diagnosticReason["enum"] == nil || diagnosticVersion["pattern"] == nil {
 		t.Errorf("SourceDiagnosticGroup must constrain reason codes and detected versions: reason=%v version=%v", diagnosticReason, diagnosticVersion)
+	}
+	reasonEnum, _ := diagnosticReason["enum"].([]any)
+	if !slices.Contains(reasonEnum, any("unsupported_codex_version")) {
+		t.Errorf("SourceDiagnosticGroup.reason must publish unsupported_codex_version: %v", reasonEnum)
 	}
 	indexProperties, _ := doc.Components.Schemas["IndexStatus"]["properties"].(map[string]any)
 	diagnosticGroups, _ := indexProperties["diagnosticGroups"].(map[string]any)

@@ -98,6 +98,20 @@ func TestSourceInventoryAtIsRevisionPinned(t *testing.T) {
 	}
 
 	revision++
+	if _, err = store.DB().Exec(`INSERT INTO index_revisions(epoch_id,revision,committed_at,reason) VALUES(?,?,?,'inventory')`, epoch, revision, "2026-07-19T12:00:30Z"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.DB().Exec(`INSERT INTO source_artifact_versions(epoch_id,source_id,revision,source_kind,canonical_path,inode,byte_size,mtime_ns,detected_codex_version,adapter_version,state,state_reason,source_evidence_availability,availability_observed_at)
+		SELECT epoch_id,source_id,?,source_kind,canonical_path,inode,byte_size,mtime_ns,'0.145.0-alpha.19',adapter_version,'unsupported','unsupported_codex_version',source_evidence_availability,availability_observed_at
+		FROM source_artifact_versions WHERE epoch_id=? AND source_id=? ORDER BY revision DESC LIMIT 1`, revision, epoch, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	groups, err = store.SourceDiagnosticGroups(context.Background())
+	if err != nil || len(groups) != 1 || groups[0].State != "unsupported" || groups[0].Reason != "unsupported_codex_version" || groups[0].DetectedVersion != "0.145.0-alpha.19" || groups[0].Count != 1 {
+		t.Fatalf("unsupported version diagnostic was not preserved: groups=%+v err=%v", groups, err)
+	}
+
+	revision++
 	if _, err = store.DB().Exec(`INSERT INTO index_revisions(epoch_id,revision,committed_at,reason) VALUES(?,?,?,'inventory')`, epoch, revision, "2026-07-19T12:01:00Z"); err != nil {
 		t.Fatal(err)
 	}
