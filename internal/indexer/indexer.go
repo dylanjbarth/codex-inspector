@@ -35,6 +35,7 @@ type Config struct {
 	CodexHome   string
 	Concurrency int
 	OnCommit    func(Progress)
+	OnParse     func(sources.Candidate)
 }
 type spawningProof struct{ parentSessionID, turnID string }
 
@@ -83,22 +84,16 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	}
 	markers, markerPaths, terminalProofs, spawningProofs := readMarkers(cfg.Layout.Queue)
 	prioritize(candidates, markers)
+	inventory := candidates
 	p := Progress{Inventoried: len(candidates), FailureReasons: map[string]int{}}
 	var firstFailure error
 	rebuildRequested := false
 	processedSessions := map[string]string{}
-	labels := map[string]string{}
-	for _, c := range candidates {
-		if c.Kind == "session_index" {
-			if got, e := sources.ReadSessionLabels(c.Path); e == nil {
-				labels = got
-			}
-		}
-	}
 	indexPath := filepath.Join(cfg.Layout.Root, "inspector.db")
 	store, err := storage.Open(indexPath)
 	if errors.Is(err, storage.ErrSchemaV1RequiresRebuild) {
-		batches, buildErr := inventoryBatches(ctx, candidates, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews)
+		labels := sessionLabels(inventory)
+		batches, buildErr := inventoryBatches(ctx, inventory, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews)
 		if buildErr != nil {
 			return p, buildErr
 		}
@@ -122,8 +117,32 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		return Progress{}, err
 	}
 	defer store.Close()
+	checkpoints, err := store.CheckpointsByPath()
+	if err != nil {
+		return Progress{}, err
+	}
+	work := make([]sources.Candidate, 0, len(inventory))
+	for _, candidate := range inventory {
+		checkpoint, found := checkpoints[candidate.Path]
+		if found && unchangedCandidate(candidate, checkpoint) && !checkpointTargeted(candidate, checkpoint, markers, terminalProofs, spawningProofs) {
+			p.Skipped++
+			continue
+		}
+		work = append(work, candidate)
+	}
+	if p.Skipped > 0 {
+		notify(cfg, p)
+	}
+	candidates = work
+	labels := map[string]string{}
+	if len(candidates) > 0 {
+		labels = sessionLabels(inventory)
+	}
 	for _, c := range candidates {
 		if c.Kind == "session_index" {
+			if cfg.OnParse != nil {
+				cfg.OnParse(c)
+			}
 			batch, e := sources.ParseSessionIndex(c)
 			if e != nil {
 				p.Failed++
@@ -179,6 +198,9 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		go func() {
 			defer wg.Done()
 			for idx := range jobs {
+				if cfg.OnParse != nil {
+					cfg.OnParse(rollouts[idx])
+				}
 				b, e := sources.ParseContextWithProofs(ctx, rollouts[idx], labels, terminalProofs)
 				results <- result{idx, b, e}
 			}
@@ -234,7 +256,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 					notify(cfg, p)
 					continue
 				}
-				if item.batch.Source.Size == checkpoint.Size && item.batch.Source.PrefixSHA256 == checkpoint.Prefix && checkpoint.Path == candidate.Path && checkpoint.State != "requires_rebuild" {
+				if item.batch.Source.Size == checkpoint.Size && item.batch.Source.PrefixSHA256 == checkpoint.Prefix && checkpoint.Path == candidate.Path && checkpoint.State != "requires_rebuild" && !checkpointTargeted(candidate, checkpoint, markers, terminalProofs, spawningProofs) {
 					p.Skipped++
 					notify(cfg, p)
 					continue
@@ -275,7 +297,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		}
 	}
 	if p.Failed == 0 && rebuildRequested {
-		if err := rebuildInventory(ctx, store, candidates, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews); err != nil {
+		if err := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews); err != nil {
 			p.Failed++
 			p.FailureReasons["rebuild_failed"]++
 			if firstFailure == nil {
@@ -644,6 +666,44 @@ func notify(c Config, p Progress) {
 	}
 	runtime.Gosched()
 }
+
+func sessionLabels(candidates []sources.Candidate) map[string]string {
+	labels := map[string]string{}
+	for _, candidate := range candidates {
+		if candidate.Kind != "session_index" {
+			continue
+		}
+		if got, err := sources.ReadSessionLabels(candidate.Path); err == nil {
+			labels = got
+		}
+	}
+	return labels
+}
+
+func unchangedCandidate(candidate sources.Candidate, checkpoint storage.Checkpoint) bool {
+	return candidate.Path == checkpoint.Path &&
+		candidate.Kind == checkpoint.Kind &&
+		candidate.Size == checkpoint.Size &&
+		candidate.MTimeNS == checkpoint.MTimeNS &&
+		checkpoint.AdapterVersion == sources.AdapterVersion &&
+		checkpoint.State != "requires_rebuild"
+}
+
+func checkpointTargeted(candidate sources.Candidate, checkpoint storage.Checkpoint, markers map[string]bool, terminalProofs map[string]map[string]sources.TerminalProof, spawningProofs map[string]spawningProof) bool {
+	if terminalProofs[checkpoint.SourceSessionID] != nil {
+		return true
+	}
+	if _, ok := spawningProofs[checkpoint.SourceSessionID]; ok {
+		return true
+	}
+	for id := range markers {
+		if id == checkpoint.SourceSessionID || filepath.Clean(id) == candidate.Path || strings.Contains(filepath.Base(candidate.Path), id) {
+			return true
+		}
+	}
+	return false
+}
+
 func prefixMatches(path string, n int64, want string) bool {
 	if n < 0 {
 		return false

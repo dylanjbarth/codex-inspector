@@ -159,14 +159,19 @@ func TestDatasetBindingRejectsInvalidBinding(t *testing.T) {
 	}
 }
 
-func TestDatasetBindingRejectsLegacyCatalogWhenIdentityCannotBeEstablished(t *testing.T) {
+func TestDatasetBindingBindsEmptyBootstrapCatalog(t *testing.T) {
 	legacy, codexHome, _ := legacyCatalog(t, false, "")
-	err := BindDatasetHome(legacy, CodexHome{Path: codexHome, Resolution: "environment"})
-	if err == nil || !strings.Contains(err.Error(), "identity cannot be established") || !strings.Contains(err.Error(), "separate CODEX_INSPECTOR_HOME") {
-		t.Fatalf("err=%v", err)
+	source := CodexHome{Path: codexHome, Resolution: "environment"}
+	if err := BindDatasetHome(legacy, source); err != nil {
+		t.Fatal(err)
 	}
-	if _, statErr := os.Stat(DatasetBindingPath(legacy)); !os.IsNotExist(statErr) {
-		t.Fatalf("binding written without identity proof: %v", statErr)
+	b, err := os.ReadFile(DatasetBindingPath(legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recorded CodexHome
+	if err = json.Unmarshal(b, &recorded); err != nil || recorded != source {
+		t.Fatalf("binding=%+v err=%v", recorded, err)
 	}
 }
 

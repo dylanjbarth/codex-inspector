@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -114,6 +115,46 @@ func TestFullScanIdempotenceGoldenAndStates(t *testing.T) {
 	_, rev2, _ := store.Snapshot()
 	if rev2 != rev1 || scalar(t, store.DB(), "select sum(total_tokens) from turn_usage") != 2500 {
 		t.Fatalf("idempotence failed: revisions %d -> %d", rev1, rev2)
+	}
+}
+
+func TestCheckpointReconciliationParsesOnlyChangedSources(t *testing.T) {
+	layout, codex := setup(t)
+	cfg := Config{Layout: layout, CodexHome: codex, Concurrency: 2}
+	if _, err := Run(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	var parsed atomic.Int64
+	cfg.OnParse = func(sources.Candidate) { parsed.Add(1) }
+	unchanged, err := Run(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Load() != 0 || unchanged.Processed != 0 || unchanged.Skipped != unchanged.Inventoried {
+		t.Fatalf("unchanged reconciliation parsed sources: parsed=%d progress=%#v", parsed.Load(), unchanged)
+	}
+
+	root := filepath.Join(codex, "sessions", "2026", "07", "01", "rollout-root-001.jsonl")
+	f, err := os.OpenFile(root, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.WriteString(appendTurn); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	parsed.Store(0)
+	changed, err := Run(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Load() != 1 || changed.Processed != 1 || changed.Skipped != changed.Inventoried-1 {
+		t.Fatalf("append did not isolate changed source: parsed=%d progress=%#v", parsed.Load(), changed)
 	}
 }
 

@@ -154,8 +154,11 @@ func verifyLegacyDatasetHome(database, requestedHome string) error {
 	if err = rows.Err(); err != nil {
 		return legacyIdentityError(requestedHome, err)
 	}
+	// A bootstrap database can exist before the binding sidecar is written.
+	// With no recorded source paths there is no foreign dataset to mix, so it is
+	// safe to bind the empty catalog to the requested Codex home.
 	if !seen {
-		return legacyIdentityError(requestedHome, errors.New("catalog contains no recorded source paths"))
+		return nil
 	}
 	return nil
 }

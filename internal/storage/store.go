@@ -1029,9 +1029,10 @@ func boolInt(v bool) int {
 func hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 type Checkpoint struct {
-	Size, Offset int64
-	Prefix, Path string
-	State        string
+	Size, Offset, MTimeNS int64
+	Prefix, Path, Kind    string
+	State, AdapterVersion string
+	SourceSessionID       string
 }
 
 func (s *Store) Checkpoint(sourceStableID string) (Checkpoint, error) {
@@ -1040,8 +1041,37 @@ func (s *Store) Checkpoint(sourceStableID string) (Checkpoint, error) {
 		return Checkpoint{}, e
 	}
 	var c Checkpoint
-	e = s.db.QueryRow(`SELECT c.observed_size,c.complete_byte_offset,c.prefix_sha256,v.canonical_path,v.state FROM source_checkpoints c JOIN source_artifact_versions v ON v.epoch_id=c.epoch_id AND v.source_id=c.source_id WHERE c.source_id=? ORDER BY v.revision DESC LIMIT 1`, scoped(epoch, sourceStableID)).Scan(&c.Size, &c.Offset, &c.Prefix, &c.Path, &c.State)
+	e = s.db.QueryRow(`SELECT c.observed_size,c.complete_byte_offset,c.observed_mtime_ns,c.prefix_sha256,v.canonical_path,v.source_kind,v.state,c.adapter_version,a.source_session_id FROM source_checkpoints c JOIN source_artifacts a ON a.epoch_id=c.epoch_id AND a.id=c.source_id JOIN source_artifact_versions v ON v.epoch_id=c.epoch_id AND v.source_id=c.source_id WHERE c.source_id=? ORDER BY v.revision DESC LIMIT 1`, scoped(epoch, sourceStableID)).Scan(&c.Size, &c.Offset, &c.MTimeNS, &c.Prefix, &c.Path, &c.Kind, &c.State, &c.AdapterVersion, &c.SourceSessionID)
 	return c, e
+}
+
+// CheckpointsByPath supports the indexer's metadata-only startup reconciliation.
+// It selects only the latest version of each source in the active epoch so old
+// archived paths cannot make moved or replaced sources look unchanged.
+func (s *Store) CheckpointsByPath() (map[string]Checkpoint, error) {
+	epoch, _, e := s.Snapshot()
+	if e != nil {
+		return nil, e
+	}
+	rows, e := s.db.Query(`SELECT c.observed_size,c.complete_byte_offset,c.observed_mtime_ns,c.prefix_sha256,v.canonical_path,v.source_kind,v.state,c.adapter_version,a.source_session_id
+		FROM source_artifact_versions v
+		JOIN source_checkpoints c ON c.epoch_id=v.epoch_id AND c.source_id=v.source_id
+		JOIN source_artifacts a ON a.epoch_id=v.epoch_id AND a.id=v.source_id
+		WHERE v.epoch_id=?
+		AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)`, epoch)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	checkpoints := map[string]Checkpoint{}
+	for rows.Next() {
+		var checkpoint Checkpoint
+		if e = rows.Scan(&checkpoint.Size, &checkpoint.Offset, &checkpoint.MTimeNS, &checkpoint.Prefix, &checkpoint.Path, &checkpoint.Kind, &checkpoint.State, &checkpoint.AdapterVersion, &checkpoint.SourceSessionID); e != nil {
+			return nil, e
+		}
+		checkpoints[checkpoint.Path] = checkpoint
+	}
+	return checkpoints, rows.Err()
 }
 func (s *Store) HasOtherSessionSegment(sourceSessionID, sourceStableID string) bool {
 	epoch, _, err := s.Snapshot()
