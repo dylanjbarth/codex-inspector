@@ -61,8 +61,14 @@ export function AppShell({ status, children }: Props) {
     <div className="shell-content">
       <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><span className="brand-mark">CI</span><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /><RuntimeSummary status={status} /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
       <div className="shell-dataset" aria-label="Effective local homes">
-        <div><span>CODEX_HOME</span><strong title={sourceHome.path}>{sourceHome.path}</strong><Badge variant="secondary">{sourceHome.resolution === 'environment' ? 'env' : 'default'}</Badge></div>
-        <div><span>CODEX_INSPECTOR_HOME</span><strong title={inspectorHome}>{inspectorHome}</strong></div>
+        <div className="shell-dataset-item">
+          <div className="shell-dataset-label"><span>CODEX_HOME</span><Badge className="shell-dataset-source" variant="secondary">{sourceHome.resolution === 'environment' ? 'from environment' : 'using default'}</Badge></div>
+          <strong title={sourceHome.path}>{sourceHome.path}</strong>
+        </div>
+        <div className="shell-dataset-item">
+          <div className="shell-dataset-label"><span>CODEX_INSPECTOR_HOME</span></div>
+          <strong title={inspectorHome}>{inspectorHome}</strong>
+        </div>
       </div>
       {children}
     </div>
