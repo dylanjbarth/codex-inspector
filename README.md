@@ -1,5 +1,7 @@
 # Codex Inspector
 
+**[OpenAI Build Week 2026](https://openai.devpost.com/) · Developer Tools**
+
 **See how you use Codex, understand what happened, and improve what happens
 next.**
 
@@ -11,10 +13,26 @@ evidence-backed advice about your workflow.
 Your session history and Inspector data stay on your machine. There is no
 account, cloud dashboard, remote database, or sample data to configure.
 
+> [insert screenshot of the Token & Capacity dashboard here]
+>
+> _Synthetic data shown. No private Codex history is included._
+
 > [!NOTE]
 > The current release supports **macOS on Apple Silicon** and Codex CLI/host
 > `0.142.5` or newer. See the [support matrix](docs/contracts/support-matrix.md)
 > for exact compatibility details.
+
+## From session logs to an actionable answer
+
+Without Inspector, answering “where did my Codex capacity go?” means searching
+session files, connecting spawned-agent work by hand, reconstructing what
+happened turn by turn, and finding the original evidence behind a suspected
+problem.
+
+With Inspector, you can start with usage across all sessions, open the session
+responsible for that activity, separate main-session work from delegated work,
+inspect the exact turn and events, and start a GPT-5.6 review whose findings
+link back to that evidence.
 
 ## Questions Inspector helps you answer
 
@@ -30,6 +48,15 @@ Inspector connects every summary and recommendation back to the recorded
 session evidence behind it. It does not reduce your work to a single quality or
 efficiency score.
 
+## Why Inspector is different
+
+- **More than token accounting:** Usage leads directly to the sessions, turns,
+  agents, and original evidence behind it.
+- **Facts before judgment:** Normal indexing is local and repeatable. Reviews
+  use a model only when you explicitly start one.
+- **Advice you can verify:** Review findings cite recorded events instead of
+  hiding their reasoning behind an opaque score.
+
 ## What you can do
 
 ### Understand your usage
@@ -44,12 +71,20 @@ Search your sessions, follow work into spawned agents, and replay a turn in the
 order it happened. You can inspect messages, tool calls, patches, searches,
 context compactions, and token records without digging through log files.
 
+> [insert screenshot of Context Inspector with a selected turn here]
+>
+> _Synthetic data shown. No private Codex history is included._
+
 ### Improve your workflow
 
 Start an Effectiveness Review for one session or a recent period. Codex looks
 at task framing, execution, delegation, and opportunities to turn repeated work
 into reusable guidance or automation. Each finding cites the local evidence
 that supports it and suggests a concrete next step.
+
+> [insert screenshot of a completed GPT-5.6 Effectiveness Review here]
+>
+> _Synthetic data shown. No private Codex history is included._
 
 ## How it works
 
@@ -75,6 +110,38 @@ flowchart LR
 Normal indexing is local and deterministic. A review is different: it is an
 explicit Codex task and may send the evidence it reads to your configured Codex
 model service. Opening the dashboard never starts a review.
+
+## Built with Codex and GPT-5.6
+
+Codex Inspector is an OpenAI Build Week project in the Developer Tools track.
+We used Codex throughout product discovery, design, implementation, and
+verification:
+
+- An initial brainstorming and grilling session challenged the target
+  audience, product promise, privacy boundary, evidence standard, technical
+  shape, and must-ship scope.
+- Codex helped turn those decisions into the local-first architecture and the
+  connected Token & Capacity, Context Inspector, and Effectiveness Reviews
+  experience.
+- We used Codex to implement and test the indexer, dashboard, plugin, review
+  workflow, compatibility checks, and clean-install path.
+- Browser-driven design reviews helped us improve the working interface through
+  repeated implementation and verification passes.
+
+GPT-5.6 Sol at high reasoning helped shape the initial product direction and
+the Effectiveness Reviews experience. GPT-5.6 is also part of the finished
+product: reviews use Sol by default, offer Terra and Luna, and start a persisted
+Codex task with the model and reasoning level selected by the user. Each review
+is bounded to the chosen work, and its findings must cite evidence that
+Inspector can resolve back to the recorded session.
+
+Codex accelerated the work, but the team made the final product, design, scope,
+privacy, and release decisions. The original
+[Build Week plan](docs/plans/build-week-plan.md),
+[dashboard exploration](docs/brainstorming/codex-home-dashboard-metrics.md),
+[session-map exploration](docs/brainstorming/context-inspector-session-map.md),
+and [review exploration](docs/brainstorming/codex-effectiveness-reviews.md)
+preserve the decisions and tradeoffs that shaped the project.
 
 ## Install
 
@@ -208,7 +275,4 @@ pnpm build
 
 The [demo runbook](docs/demo-runbook.md) covers the complete release flow. The
 [MVP architecture](docs/architecture/mvp-architecture.md) is the implementation
-reference. The original [dashboard](docs/brainstorming/codex-home-dashboard-metrics.md),
-[session map](docs/brainstorming/context-inspector-session-map.md), and
-[effectiveness review](docs/brainstorming/codex-effectiveness-reviews.md) notes
-preserve the product decisions behind the experience.
+reference.
