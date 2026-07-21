@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "build:demo": "node scripts/clean-sites-dist.mjs && VITE_DEMO_MODE=true vite build",
-    "dev:demo": "VITE_DEMO_MODE=true vite --host 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -29,7 +27,6 @@
     "vite": "7.3.1"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
     "@eslint/js": "9.39.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
@@ -42,7 +39,6 @@
     "globals": "16.5.0",
     "jsdom": "27.4.0",
     "typescript-eslint": "8.53.0",
-    "vitest": "4.0.18",
-    "wrangler": "4.92.0"
+    "vitest": "4.0.18"
   }
 }

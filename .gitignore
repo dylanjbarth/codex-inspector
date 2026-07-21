@@ -1,7 +1,5 @@
 node_modules/
-.pnpm-store/
 web/dist/
 dist/
 .DS_Store
 .playwright-cli/
-.wrangler/
