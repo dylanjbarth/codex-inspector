@@ -19,7 +19,7 @@ func main() {
 	}
 	args := os.Args[1:]
 	if len(args) == 1 && args[0] == "--version" {
-		fmt.Println("codex-cli 0.144.1")
+		fmt.Println("codex-cli 0.145.0-alpha.18")
 		return
 	}
 	if len(args) == 3 && args[0] == "plugin" && args[1] == "list" && args[2] == "--json" {
