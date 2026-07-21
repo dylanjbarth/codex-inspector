@@ -1,0 +1,13 @@
+{
+  "name": "codex-inspector-workspace",
+  "version": "0.2.0",
+  "private": true,
+  "workspaces": [
+    "plugins/codex-inspector"
+  ],
+  "scripts": {
+    "build": "npm --workspace codex-inspector run build",
+    "inspect": "npm --workspace codex-inspector run inspect --",
+    "test": "npm --workspace codex-inspector test"
+  }
+}

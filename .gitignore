@@ -1,0 +1,6 @@
+node_modules/
+.venv/
+.gstack/
+codex-inspector-report.html
+*.tmp
+.DS_Store
