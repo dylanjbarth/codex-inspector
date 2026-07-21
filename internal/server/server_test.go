@@ -32,6 +32,12 @@ func startTestServer(t *testing.T, idle time.Duration) (proc.Metadata, home.Layo
 
 func TestAutomaticIndexCircuitBreaker(t *testing.T) {
 	s := &state{}
+	s.recordIndexResult(indexer.Progress{Stage: "finalizing", Scanned: 10, Inventoried: 10}, errors.New("candidate evidence hash validation failed"))
+	if !s.autoSuppressed || s.indexError != "catalog_evidence_validation_failed" || s.failedRuns != 1 {
+		t.Fatalf("deterministic rebuild failure was automatically retried: %#v", s)
+	}
+
+	s = &state{}
 	for i := 0; i < maxAutomaticIndexRetries; i++ {
 		s.recordIndexResult(indexer.Progress{Rebuilt: true}, nil)
 	}
@@ -289,6 +295,9 @@ func TestActivePassProgressHasDistinctDiscoveringIndexingAndFinalizingPhases(t *
 	}
 	if got := activePassProgress(true, indexer.Progress{Stage: "rebuilding", Inventoried: 10, Scanned: 4, Processed: 10}); got == nil || got.Phase != "rebuilding" || got.ScannedCount != 4 || got.RemainingCount != 6 {
 		t.Fatalf("adapter rebuild progress was not explicit: %+v", got)
+	}
+	if got := activePassProgress(true, indexer.Progress{Stage: "finalizing", Inventoried: 10, Scanned: 10}); got == nil || got.Phase != "finalizing" || got.ScannedCount != 10 || got.RemainingCount != 0 {
+		t.Fatalf("catalog activation progress was not explicit: %+v", got)
 	}
 }
 

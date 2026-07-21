@@ -408,94 +408,116 @@ func (s *Store) validateSelectors(ctx context.Context, epoch string, applied int
 	return nil
 }
 
-func (s *Store) expectedFTS(ctx context.Context, epoch string) (*sql.DB, error) {
-	expected, err := sql.Open("sqlite", ":memory:")
+func (s *Store) expectedFTS(ctx context.Context, epoch string) (*sql.DB, func(), error) {
+	file, err := os.CreateTemp(filepath.Dir(s.requested), ".fts-validation-*.sqlite")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	path := file.Name()
+	if err = file.Close(); err != nil {
+		_ = os.Remove(path)
+		return nil, nil, err
+	}
+	expected, err := sql.Open("sqlite", path)
+	if err != nil {
+		_ = os.Remove(path)
+		return nil, nil, err
+	}
+	cleanup := func() {
+		_ = expected.Close()
+		_ = removeSQLiteFamily(path)
 	}
 	expected.SetMaxOpenConns(1)
 	ddl := `CREATE TABLE event_search_documents(rowid INTEGER PRIMARY KEY,epoch_id TEXT,event_id TEXT,match_category TEXT); CREATE VIRTUAL TABLE event_search USING fts5(content,content='',contentless_delete=1,tokenize='unicode61'); CREATE TABLE session_label_search_documents(rowid INTEGER PRIMARY KEY,epoch_id TEXT,session_id TEXT,label_revision INTEGER,match_category TEXT); CREATE VIRTUAL TABLE session_label_search USING fts5(content,content='',contentless_delete=1,tokenize='unicode61');`
 	if _, err = expected.ExecContext(ctx, ddl); err != nil {
-		expected.Close()
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
-	texts := map[string]string{}
-	rows, err := s.db.QueryContext(ctx, `SELECT v.canonical_path,v.source_kind,v.byte_size,coalesce(v.mtime_ns,0) FROM source_artifact_versions v WHERE v.epoch_id=? AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)`, epoch)
+	type validationSource struct {
+		id        string
+		candidate sources.Candidate
+	}
+	validationSources := []validationSource{}
+	rows, err := s.db.QueryContext(ctx, `SELECT v.source_id,v.canonical_path,v.source_kind,v.byte_size,coalesce(v.mtime_ns,0) FROM source_artifact_versions v WHERE v.epoch_id=? AND v.state<>'failed' AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)`, epoch)
 	if err != nil {
-		expected.Close()
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	for rows.Next() {
-		var candidate sources.Candidate
-		if err = rows.Scan(&candidate.Path, &candidate.Kind, &candidate.Size, &candidate.MTimeNS); err != nil {
+		var source validationSource
+		if err = rows.Scan(&source.id, &source.candidate.Path, &source.candidate.Kind, &source.candidate.Size, &source.candidate.MTimeNS); err != nil {
 			rows.Close()
-			expected.Close()
-			return nil, err
+			cleanup()
+			return nil, nil, err
 		}
-		if candidate.Kind == "session_index" {
+		validationSources = append(validationSources, source)
+	}
+	if err = rows.Close(); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	tx, err := expected.BeginTx(ctx, nil)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	writer := phase0.NewFTSWriter(tx)
+	for _, source := range validationSources {
+		if source.candidate.Kind == "session_index" {
 			continue
 		}
-		batch, parseErr := sources.Parse(candidate, nil)
+		batch, parseErr := sources.Parse(source.candidate, nil)
 		if parseErr != nil {
-			rows.Close()
-			expected.Close()
-			return nil, parseErr
+			tx.Rollback()
+			cleanup()
+			return nil, nil, parseErr
 		}
+		texts := make(map[string]string, len(batch.Events))
 		for _, event := range batch.Events {
 			if event.SearchText != "" {
 				texts[scoped(epoch, event.ID)+"\x00"+event.SearchCategory] = event.SearchText
 			}
 		}
-	}
-	if err = rows.Close(); err != nil {
-		expected.Close()
-		return nil, err
-	}
-	tx, err := expected.BeginTx(ctx, nil)
-	if err != nil {
-		expected.Close()
-		return nil, err
-	}
-	writer := phase0.NewFTSWriter(tx)
-	rows, err = s.db.QueryContext(ctx, `SELECT rowid,event_id,match_category FROM event_search_documents ORDER BY rowid`)
-	if err != nil {
-		tx.Rollback()
-		expected.Close()
-		return nil, err
-	}
-	for rows.Next() {
-		var rowid int64
-		var eventID, category string
-		if err = rows.Scan(&rowid, &eventID, &category); err != nil {
-			rows.Close()
+		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT d.rowid,d.event_id,d.match_category FROM event_search_documents d JOIN evidence_refs r ON r.epoch_id=d.epoch_id AND r.event_id=d.event_id WHERE d.epoch_id=? AND r.source_id=? ORDER BY d.rowid`, epoch, source.id)
+		if err != nil {
 			tx.Rollback()
-			expected.Close()
-			return nil, err
+			cleanup()
+			return nil, nil, err
 		}
-		text, ok := texts[eventID+"\x00"+category]
-		if !ok {
-			rows.Close()
+		for rows.Next() {
+			var rowid int64
+			var eventID, category string
+			if err = rows.Scan(&rowid, &eventID, &category); err != nil {
+				rows.Close()
+				tx.Rollback()
+				cleanup()
+				return nil, nil, err
+			}
+			text, ok := texts[eventID+"\x00"+category]
+			if !ok {
+				rows.Close()
+				tx.Rollback()
+				cleanup()
+				return nil, nil, errors.New("candidate event FTS provenance has no source-derived text")
+			}
+			if err = writer.InsertEvent(ctx, rowid, epoch, eventID, category, text); err != nil {
+				rows.Close()
+				tx.Rollback()
+				cleanup()
+				return nil, nil, err
+			}
+		}
+		if err = rows.Close(); err != nil {
 			tx.Rollback()
-			expected.Close()
-			return nil, errors.New("candidate event FTS provenance has no source-derived text")
+			cleanup()
+			return nil, nil, err
 		}
-		if err = writer.InsertEvent(ctx, rowid, epoch, eventID, category, text); err != nil {
-			rows.Close()
-			tx.Rollback()
-			expected.Close()
-			return nil, err
-		}
-	}
-	if err = rows.Close(); err != nil {
-		tx.Rollback()
-		expected.Close()
-		return nil, err
 	}
 	rows, err = s.db.QueryContext(ctx, `SELECT d.rowid,d.session_id,d.label_revision,v.title FROM session_label_search_documents d JOIN session_label_versions v ON v.epoch_id=d.epoch_id AND v.session_id=d.session_id AND v.revision=d.label_revision ORDER BY d.rowid`)
 	if err != nil {
 		tx.Rollback()
-		expected.Close()
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	for rows.Next() {
 		var rowid, revision int64
@@ -503,26 +525,26 @@ func (s *Store) expectedFTS(ctx context.Context, epoch string) (*sql.DB, error) 
 		if err = rows.Scan(&rowid, &sessionID, &revision, &title); err != nil {
 			rows.Close()
 			tx.Rollback()
-			expected.Close()
-			return nil, err
+			cleanup()
+			return nil, nil, err
 		}
 		if err = writer.InsertSessionLabel(ctx, rowid, epoch, sessionID, int(revision), title); err != nil {
 			rows.Close()
 			tx.Rollback()
-			expected.Close()
-			return nil, err
+			cleanup()
+			return nil, nil, err
 		}
 	}
 	if err = rows.Close(); err != nil {
 		tx.Rollback()
-		expected.Close()
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	if err = tx.Commit(); err != nil {
-		expected.Close()
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
-	return expected, nil
+	return expected, cleanup, nil
 }
 
 func ftsProjection(ctx context.Context, db *sql.DB, kind string) (int, string, error) {
@@ -536,7 +558,11 @@ func ftsProjection(ctx context.Context, db *sql.DB, kind string) (int, string, e
 		return 0, "", err
 	}
 	defer db.ExecContext(context.Background(), `DROP TABLE IF EXISTS temp.`+vocab)
-	query := `SELECT v.term,v.col,v.offset,` + provenance + ` FROM temp.` + vocab + ` v LEFT JOIN ` + docs + ` d ON d.rowid=v.doc ORDER BY ` + provenance + `,v.term,v.col,v.offset`
+	// FTS5's instance vocabulary emits each term's document/column/offset rows in
+	// stable index order and can satisfy ORDER BY term directly. Ordering by every
+	// provenance column forces SQLite to materialize a corpus-sized temporary
+	// B-tree during activation without strengthening the equality check.
+	query := `SELECT v.term,v.col,v.offset,` + provenance + ` FROM temp.` + vocab + ` v LEFT JOIN ` + docs + ` d ON d.rowid=v.doc ORDER BY v.term`
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return 0, "", err
@@ -603,11 +629,11 @@ func (s *Store) validateAndActivate(ctx context.Context, expectedProjection stri
 	if projectionErr != nil || projection != expectedProjection {
 		return fail(errors.New("candidate identity/revision projection differs from candidate-derived expectation"))
 	}
-	expectedFTS, expectationErr := s.expectedFTS(ctx, epoch)
+	expectedFTS, cleanupExpectedFTS, expectationErr := s.expectedFTS(ctx, epoch)
 	if expectationErr != nil {
 		return fail(expectationErr)
 	}
-	defer expectedFTS.Close()
+	defer cleanupExpectedFTS()
 	eventCount, eventDigest, projectionErr := ftsProjection(ctx, s.db, "event")
 	if projectionErr != nil {
 		return fail(projectionErr)
@@ -1513,6 +1539,16 @@ type SessionSummary struct {
 // swapping its database file. Existing readers retain the old inode/snapshot;
 // subsequent readers see only the replacement epoch.
 func (s *Store) Rebuild(ctx context.Context, batches []facts.Batch) error {
+	return s.rebuild(ctx, batches, false)
+}
+
+// RebuildOwned is the bounded-memory rebuild path. The caller transfers the
+// batch slice to the store and must not reuse it after this call.
+func (s *Store) RebuildOwned(ctx context.Context, batches []facts.Batch) error {
+	return s.rebuild(ctx, batches, true)
+}
+
+func (s *Store) rebuild(ctx context.Context, batches []facts.Batch, releaseBatches bool) error {
 	oldEpoch, _, err := s.Snapshot()
 	if err != nil {
 		return err
@@ -1534,6 +1570,10 @@ func (s *Store) Rebuild(ctx context.Context, batches []facts.Batch) error {
 			_, _ = replacement.db.ExecContext(ctx, `UPDATE dataset_epochs SET state='failed' WHERE state='building'`)
 			return err
 		}
+	}
+	if releaseBatches {
+		clear(batches)
+		batches = nil
 	}
 	if err = replacement.ReconcileLineage(ctx); err != nil {
 		return err
@@ -1582,6 +1622,8 @@ func BuildAndActivate(ctx context.Context, requested string, batches []facts.Bat
 			return err
 		}
 	}
+	clear(batches)
+	batches = nil
 	if err = candidate.ReconcileLineage(ctx); err != nil {
 		return err
 	}

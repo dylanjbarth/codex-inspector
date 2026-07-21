@@ -101,6 +101,43 @@ func TestCandidateCorruptionCannotReplaceActiveCatalog(t *testing.T) {
 	}
 }
 
+func TestOwnedRebuildReleasesBatchesBeforeDiskBackedValidation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "inspector.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	batches := []facts.Batch{
+		validationBatch(t, "root.jsonl", "active_rollout"),
+		validationBatch(t, "descendant.jsonl", "archived_rollout"),
+	}
+	releasedBeforeValidation := false
+	validationTestHook = func(_ *sql.DB) {
+		releasedBeforeValidation = true
+		for _, batch := range batches {
+			if batch.Source.Path != "" || len(batch.Events) != 0 || len(batch.Evidence) != 0 {
+				releasedBeforeValidation = false
+			}
+		}
+	}
+	defer func() { validationTestHook = nil }()
+	if err = store.RebuildOwned(context.Background(), batches); err != nil {
+		t.Fatal(err)
+	}
+	if !releasedBeforeValidation {
+		t.Fatal("owned rebuild retained prepared facts through validation")
+	}
+	scratch, err := filepath.Glob(filepath.Join(root, ".fts-validation-*.sqlite*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scratch) != 0 {
+		t.Fatalf("FTS validation scratch files were not removed: %v", scratch)
+	}
+}
+
 func execValidation(db *sql.DB, query string, args ...any) error {
 	_, err := db.Exec(query, args...)
 	return err

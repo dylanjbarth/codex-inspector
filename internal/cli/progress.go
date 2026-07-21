@@ -53,7 +53,7 @@ func (r *syncProgressReporter) write(line string) {
 }
 
 func syncHandled(p indexer.Progress) int {
-	if p.Stage == "rebuilding" {
+	if p.Stage == "rebuilding" || p.Stage == "finalizing" {
 		return min(p.Scanned, p.Inventoried)
 	}
 	handled := p.Processed + p.Skipped + p.Failed + p.RequiresRebuild

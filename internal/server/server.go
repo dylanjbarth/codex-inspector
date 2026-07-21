@@ -95,6 +95,9 @@ func activePassProgress(indexing bool, p indexer.Progress) *activeIndexPass {
 	if p.Stage == "rebuilding" {
 		phase = "rebuilding"
 		remaining = max(0, p.Inventoried-p.Scanned)
+	} else if p.Stage == "finalizing" {
+		phase = "finalizing"
+		remaining = 0
 	} else if p.Inventoried > 0 {
 		phase = "indexing"
 		if handled >= p.Inventoried {
@@ -469,8 +472,16 @@ func (s *state) startIndex(force bool) string {
 // an unforeseen rebuild trigger from keeping the process busy indefinitely.
 func (s *state) recordIndexResult(p indexer.Progress, err error) {
 	if err != nil {
-		s.indexError = "index_failed"
+		s.indexError = indexFailureCode(p, err)
 		s.failedRuns++
+		// Rebuild failures after the source preparation pass are deterministic for
+		// the same inventory. Leaving queue markers in place is intentional, but
+		// they must not cause the ticker to replay the identical expensive rebuild.
+		// A manual sync clears this suppression and provides an explicit retry.
+		if p.Stage == "rebuilding" || p.Stage == "finalizing" {
+			s.autoSuppressed = true
+			return
+		}
 		if s.failedRuns >= maxAutomaticIndexRetries {
 			s.autoSuppressed = true
 			s.indexError = "index_retry_suppressed"
@@ -487,6 +498,30 @@ func (s *state) recordIndexResult(p indexer.Progress, err error) {
 		return
 	}
 	s.rebuiltRuns = 0
+}
+
+func indexFailureCode(p indexer.Progress, err error) string {
+	if p.Stage != "rebuilding" && p.Stage != "finalizing" {
+		return "index_failed"
+	}
+	message := err.Error()
+	for _, failure := range []struct{ contains, code string }{
+		{"schema metadata", "catalog_schema_validation_failed"},
+		{"epoch metadata", "catalog_epoch_validation_failed"},
+		{"foreign key validation", "catalog_foreign_key_validation_failed"},
+		{"integrity validation", "catalog_integrity_validation_failed"},
+		{"revisions are not gap-free", "catalog_revision_validation_failed"},
+		{"identity/revision projection", "catalog_projection_validation_failed"},
+		{"FTS token/provenance projection", "catalog_search_validation_failed"},
+		{"evidence source unavailable", "catalog_evidence_source_unavailable"},
+		{"evidence hash validation", "catalog_evidence_validation_failed"},
+		{"identity/cardinality validation", "catalog_cardinality_validation_failed"},
+	} {
+		if strings.Contains(message, failure.contains) {
+			return failure.code
+		}
+	}
+	return "catalog_activation_failed"
 }
 
 func (s *state) metricCatalog(w http.ResponseWriter, r *http.Request) {

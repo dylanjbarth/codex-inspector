@@ -103,19 +103,22 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		labels := sessionLabels(inventory)
 		p.Stage = "rebuilding"
 		notify(cfg, p)
-		batches, buildErr := inventoryBatches(ctx, inventory, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews, func(scanned int) {
+		batches, failed, buildErr := inventoryBatches(ctx, inventory, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews, false, func(scanned int) {
 			p.Scanned = scanned
 			notify(cfg, p)
 		})
 		if buildErr != nil {
 			return p, buildErr
 		}
+		p.Stage = "finalizing"
+		notify(cfg, p)
 		if buildErr = storage.BuildAndActivate(ctx, indexPath, batches); buildErr != nil {
 			return p, buildErr
 		}
 		store, err = storage.Open(indexPath)
 		if err == nil {
-			p.Processed = p.Inventoried
+			p.Failed = failed
+			p.Processed = p.Inventoried - failed
 			for _, markerPath := range markerPaths {
 				if os.Remove(markerPath) == nil {
 					p.QueueConsumed++
@@ -145,15 +148,20 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		p.Stage = "rebuilding"
 		p.Scanned = 0
 		notify(cfg, p)
-		if err = rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, func(scanned int) {
+		var failed int
+		if failed, err = rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, true, func(scanned int) {
 			p.Scanned = scanned
+			notify(cfg, p)
+		}, func() {
+			p.Stage = "finalizing"
 			notify(cfg, p)
 		}); err != nil {
 			p.Failed++
 			p.FailureReasons["rebuild_failed"]++
 			return p, err
 		}
-		p.Processed = p.Inventoried
+		p.Failed = failed
+		p.Processed = p.Inventoried - failed
 		p.Rebuilt = true
 		for _, markerPath := range markerPaths {
 			if os.Remove(markerPath) == nil {
@@ -348,17 +356,22 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		p.Stage = "rebuilding"
 		p.Scanned = 0
 		notify(cfg, p)
-		if err := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, func(scanned int) {
+		failed, rebuildErr := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, false, func(scanned int) {
 			p.Scanned = scanned
 			notify(cfg, p)
-		}); err != nil {
+		}, func() {
+			p.Stage = "finalizing"
+			notify(cfg, p)
+		})
+		if rebuildErr != nil {
 			p.Failed++
 			p.FailureReasons["rebuild_failed"]++
 			if firstFailure == nil {
-				firstFailure = err
+				firstFailure = rebuildErr
 			}
 		} else {
-			p.Processed = p.Inventoried
+			p.Failed = failed
+			p.Processed = p.Inventoried - failed
 			p.Skipped = 0
 			p.RequiresRebuild = 0
 			p.Rebuilt = true
@@ -369,14 +382,14 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			firstFailure = err
 		}
 	}
-	if p.Failed == 0 {
+	if p.Failed == 0 || p.Rebuilt {
 		for _, path := range markerPaths {
 			if os.Remove(path) == nil {
 				p.QueueConsumed++
 			}
 		}
 	}
-	if p.Failed > 0 {
+	if p.Failed > 0 && !p.Rebuilt {
 		notify(cfg, p)
 		return p, fmt.Errorf("%d sources failed: %v", p.Failed, firstFailure)
 	}
@@ -384,16 +397,23 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	return p, nil
 }
 
-func rebuildInventory(ctx context.Context, store *storage.Store, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string, onScan func(int)) error {
-	batches, err := inventoryBatches(ctx, candidates, labels, proofs, spawning, reviewsRoot, onScan)
+func rebuildInventory(ctx context.Context, store *storage.Store, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string, tolerateSourceFailures bool, onScan func(int), onPrepared func()) (int, error) {
+	batches, failed, err := inventoryBatches(ctx, candidates, labels, proofs, spawning, reviewsRoot, tolerateSourceFailures, onScan)
 	if err != nil {
-		return err
+		return failed, fmt.Errorf("prepare replacement catalog: %w", err)
 	}
-	return store.Rebuild(ctx, batches)
+	if onPrepared != nil {
+		onPrepared()
+	}
+	if err = store.RebuildOwned(ctx, batches); err != nil {
+		return failed, fmt.Errorf("activate replacement catalog: %w", err)
+	}
+	return failed, nil
 }
 
-func inventoryBatches(ctx context.Context, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string, onScan func(int)) ([]facts.Batch, error) {
+func inventoryBatches(ctx context.Context, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string, tolerateSourceFailures bool, onScan func(int)) ([]facts.Batch, int, error) {
 	rawBatches := make([]facts.Batch, 0, len(candidates))
+	failed := 0
 	for _, candidate := range candidates {
 		var batch facts.Batch
 		var err error
@@ -405,7 +425,15 @@ func inventoryBatches(ctx context.Context, candidates []sources.Candidate, label
 			classifyReview(&batch, reviewsRoot)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("rebuild parse %s: %w", candidate.Path, err)
+			if !tolerateSourceFailures {
+				return nil, failed, err
+			}
+			// A replacement catalog must retain the same source-level failure
+			// tolerance as an incremental pass. One malformed or concurrently
+			// unreadable JSONL is recorded diagnostically instead of making adapter
+			// upgrades impossible for the entire corpus.
+			batch = failedSourceBatch(candidate, "parse_failed")
+			failed++
 		}
 		rawBatches = append(rawBatches, batch)
 		if onScan != nil {
@@ -413,17 +441,32 @@ func inventoryBatches(ctx context.Context, candidates []sources.Candidate, label
 		}
 	}
 	if err := normalizeResumedSessions(rawBatches); err != nil {
-		return nil, err
+		return nil, failed, err
 	}
 	batches := make([]facts.Batch, 0, len(rawBatches))
 	for _, batch := range rawBatches {
-		chunks, err := splitBatches(batch)
+		chunks, quarantined, err := rebuildChunks(batch, tolerateSourceFailures)
 		if err != nil {
-			return nil, err
+			return nil, failed, err
+		}
+		if quarantined {
+			failed++
 		}
 		batches = append(batches, chunks...)
 	}
-	return batches, nil
+	return batches, failed, nil
+}
+
+func rebuildChunks(batch facts.Batch, tolerateSourceFailures bool) ([]facts.Batch, bool, error) {
+	chunks, err := splitBatches(batch)
+	if err == nil {
+		return chunks, false, nil
+	}
+	if !tolerateSourceFailures {
+		return nil, false, err
+	}
+	candidate := sources.Candidate{Path: batch.Source.Path, Kind: batch.Source.Kind, Size: batch.Source.Size, MTimeNS: batch.Source.MTimeNS}
+	return []facts.Batch{failedSourceBatch(candidate, "normalization_failed")}, true, nil
 }
 
 func normalizeResumedSessions(batches []facts.Batch) error {
@@ -684,11 +727,15 @@ func classifyFailure(err error) string {
 	}
 }
 func storeFailed(ctx context.Context, store *storage.Store, c sources.Candidate, reason string) error {
-	sum := sha256.Sum256([]byte(c.Kind + ":" + c.Path))
-	id := hex.EncodeToString(sum[:])
-	b := facts.Batch{Source: facts.Source{ID: "source:" + id, SessionID: "unresolved:" + id[:24], SegmentFingerprint: id, Kind: c.Kind, Path: c.Path, Size: c.Size, MTimeNS: c.MTimeNS, CompleteOffset: 0, CompleteOrdinal: 0, PrefixSHA256: emptySHA256, AdapterVersion: sources.AdapterVersion, State: "failed", StateReason: reason}}
+	b := failedSourceBatch(c, reason)
 	_, err := store.Apply(ctx, b, "source_failed")
 	return err
+}
+
+func failedSourceBatch(c sources.Candidate, reason string) facts.Batch {
+	sum := sha256.Sum256([]byte(c.Kind + ":" + c.Path))
+	id := hex.EncodeToString(sum[:])
+	return facts.Batch{Source: facts.Source{ID: "source:" + id, SessionID: "unresolved:" + id[:24], SegmentFingerprint: id, Kind: c.Kind, Path: c.Path, Size: c.Size, MTimeNS: c.MTimeNS, CompleteOffset: 0, CompleteOrdinal: 0, PrefixSHA256: emptySHA256, AdapterVersion: sources.AdapterVersion, State: "failed", StateReason: reason}}
 }
 func classifyReview(b *facts.Batch, reviewsRoot string) {
 	if b.Session == nil || b.Project == nil {

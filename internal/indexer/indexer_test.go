@@ -191,15 +191,22 @@ func TestCheckpointAdapterUpgradeReprocessesUnchangedSource(t *testing.T) {
 	if err = store.Close(); err != nil {
 		t.Fatal(err)
 	}
+	// Adapter upgrades replace the whole catalog, but one malformed source must
+	// remain a source-level diagnostic rather than aborting and retrying the
+	// deterministic rebuild forever.
+	badPath := filepath.Join(codex, "sessions", "2026", "07", "01", "rollout-bad.jsonl")
+	if err = os.WriteFile(badPath, []byte("{not-json}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	progress, err := Run(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !progress.Rebuilt || progress.Processed != progress.Inventoried || progress.Skipped != 0 {
+	if !progress.Rebuilt || progress.Processed+progress.Failed != progress.Inventoried || progress.Failed != 1 || progress.Skipped != 0 {
 		t.Fatalf("adapter upgrade did not rebuild unchanged source: progress=%#v", progress)
 	}
-	sawStart, sawComplete := false, false
+	sawStart, sawComplete, sawFinalizing := false, false, false
 	for _, update := range reported {
 		if update.Stage == "rebuilding" && update.Scanned == 0 {
 			sawStart = true
@@ -207,9 +214,26 @@ func TestCheckpointAdapterUpgradeReprocessesUnchangedSource(t *testing.T) {
 		if update.Stage == "rebuilding" && update.Scanned == update.Inventoried {
 			sawComplete = true
 		}
+		if update.Stage == "finalizing" && update.Scanned == update.Inventoried {
+			sawFinalizing = true
+		}
 	}
-	if !sawStart || !sawComplete {
+	if !sawStart || !sawComplete || !sawFinalizing {
 		t.Fatalf("adapter rebuild did not publish scan progress: %#v", reported)
+	}
+}
+
+func TestRebuildQuarantinesSourceThatExceedsTransactionBound(t *testing.T) {
+	batch := facts.Batch{
+		Source: facts.Source{Path: "/tmp/oversized.jsonl", Kind: "active_rollout", Size: 9 << 20, MTimeNS: 1},
+		Events: []facts.Event{{Kind: "task_complete", PayloadLength: (8 << 20) + 1}},
+	}
+	chunks, quarantined, err := rebuildChunks(batch, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !quarantined || len(chunks) != 1 || chunks[0].Source.State != "failed" || chunks[0].Source.StateReason != "normalization_failed" {
+		t.Fatalf("oversized rebuild source was not quarantined: quarantined=%t chunks=%#v", quarantined, chunks)
 	}
 }
 
