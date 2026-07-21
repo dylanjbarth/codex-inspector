@@ -394,7 +394,7 @@ type usageRow struct {
 
 func calculate(ctx context.Context, db *sql.DB, epoch string, rev int64, q Query, now time.Time) (Result, error) {
 	rows, err := db.QueryContext(ctx, `WITH sv AS (SELECT v.* FROM session_versions v WHERE v.epoch_id=? AND v.revision=(SELECT max(x.revision) FROM session_versions x WHERE x.epoch_id=v.epoch_id AND x.session_id=v.session_id AND x.revision<=?))
-	SELECT t.completed_at,t.model,t.reasoning_effort,CASE WHEN sv.purpose='inspector_review' THEN 'inspector_review' WHEN sv.purpose='spawned' THEN 'descendant' WHEN sv.purpose='user' AND sv.session_id=sv.root_work_unit_id THEN 'user_root_direct' ELSE 'other_orphan' END,sv.root_work_unit_id,u.input_tokens,u.cached_input_tokens,u.output_tokens,u.reasoning_output_tokens,u.total_tokens,u.residual_tokens,u.fidelity
+	SELECT t.completed_at,coalesce(t.model,''),coalesce(t.reasoning_effort,''),CASE WHEN sv.purpose='inspector_review' THEN 'inspector_review' WHEN sv.purpose='spawned' THEN 'descendant' WHEN sv.purpose='user' AND sv.session_id=sv.root_work_unit_id THEN 'user_root_direct' ELSE 'other_orphan' END,coalesce(sv.root_work_unit_id,''),u.input_tokens,u.cached_input_tokens,u.output_tokens,u.reasoning_output_tokens,u.total_tokens,u.residual_tokens,u.fidelity
 	FROM turns t JOIN sv ON sv.session_id=t.session_id LEFT JOIN turn_usage u ON u.epoch_id=t.epoch_id AND u.turn_id=t.id AND u.formula_version=1
 	LEFT JOIN sv rootv ON rootv.session_id=sv.root_work_unit_id WHERE t.epoch_id=? AND t.state='completed' AND t.commit_revision<=? AND (?='' OR t.completed_at>=?) AND (?='' OR t.completed_at<?)
 	AND (json_array_length(?)=0 OR rootv.project_id IN (SELECT value FROM json_each(?))) AND (json_array_length(?)=0 OR t.model IN (SELECT value FROM json_each(?))) AND (json_array_length(?)=0 OR t.reasoning_effort IN (SELECT value FROM json_each(?)))`, epoch, rev, epoch, rev, q.Start, q.Start, q.End, q.End, jsonList(q.ProjectIDs), jsonList(q.ProjectIDs), jsonList(q.Models), jsonList(q.Models), jsonList(q.ReasoningEfforts), jsonList(q.ReasoningEfforts))
@@ -736,10 +736,9 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 	})
 	out := make([]CapacitySeries, 0, len(order))
 	for _, k := range order {
-		series := *groups[k]
-		series.Points = downsampleCapacityPoints(series.Points, MaxCapacityPoints)
-		out = append(out, series)
+		out = append(out, *groups[k])
 	}
+	out = downsampleCapacitySeries(out, MaxCapacityPoints)
 	if err = rows.Err(); err != nil {
 		return nil, nil, Coverage{}, nil, err
 	}
@@ -749,6 +748,87 @@ func capacity(ctx context.Context, db *sql.DB, e string, r int64, q Query, now t
 		excluded["incomplete_capacity_observation"] = eligible - observedCount
 	}
 	return latest, out, cov, excluded, nil
+}
+
+// downsampleCapacitySeries enforces one response-wide point budget. Applying
+// the limit independently to every reset series can still produce a multi-MiB
+// response when a time range spans many reset boundaries.
+func downsampleCapacitySeries(series []CapacitySeries, limit int) []CapacitySeries {
+	total := 0
+	for _, item := range series {
+		total += len(item.Points)
+	}
+	if total <= limit {
+		return series
+	}
+	if limit <= 0 {
+		return nil
+	}
+
+	allocations := make([]int, len(series))
+	base, excess := 0, 0
+	for i, item := range series {
+		switch len(item.Points) {
+		case 0:
+		case 1:
+			allocations[i] = 1
+		default:
+			allocations[i] = 2
+		}
+		base += allocations[i]
+		excess += len(item.Points) - allocations[i]
+	}
+	if base > limit {
+		base = 0
+		for i, item := range series {
+			allocations[i] = 0
+			if len(item.Points) > 0 && base < limit {
+				allocations[i] = 1
+				base++
+			}
+		}
+	}
+
+	remaining := limit - base
+	type remainder struct {
+		index int
+		value float64
+	}
+	remainders := make([]remainder, 0, len(series))
+	if remaining > 0 && excess > 0 {
+		initialRemaining := remaining
+		for i, item := range series {
+			available := len(item.Points) - allocations[i]
+			if available <= 0 {
+				continue
+			}
+			exact := float64(initialRemaining) * float64(available) / float64(excess)
+			extra := min(available, int(math.Floor(exact)))
+			allocations[i] += extra
+			remaining -= extra
+			remainders = append(remainders, remainder{index: i, value: exact - float64(extra)})
+		}
+		sort.SliceStable(remainders, func(i, j int) bool { return remainders[i].value > remainders[j].value })
+		for _, candidate := range remainders {
+			if remaining == 0 {
+				break
+			}
+			if allocations[candidate.index] < len(series[candidate.index].Points) {
+				allocations[candidate.index]++
+				remaining--
+			}
+		}
+	}
+
+	out := make([]CapacitySeries, 0, len(series))
+	for i, item := range series {
+		if allocations[i] == 0 {
+			continue
+		}
+		item.Points = downsampleCapacityPoints(item.Points, allocations[i])
+		out = append(out, item)
+	}
+	return out
 }
 
 // downsampleCapacityPoints applies Largest-Triangle-Three-Buckets sampling so

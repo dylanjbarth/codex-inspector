@@ -97,7 +97,6 @@
     "reasoning": { "type": "string", "minLength": 1, "maxLength": 200 },
     "evidence": {
       "type": "array",
-      "maxItems": 10000,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -107,7 +106,7 @@
           "sourceId": { "$ref": "#/$defs/id" },
           "sourcePrefixSha256": { "$ref": "#/$defs/sha256" },
           "eventFingerprint": { "$ref": "#/$defs/sha256" },
-          "adapterVersion": { "const": "rollout-jsonl/codex-structural/v5" },
+          "adapterVersion": { "type": "string", "minLength": 1, "maxLength": 200 },
           "recordOrdinal": { "type": "integer", "minimum": 0 },
           "byteStart": { "type": "integer", "minimum": 0 },
           "byteEnd": { "type": "integer", "minimum": 0 },

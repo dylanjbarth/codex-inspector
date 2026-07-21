@@ -42,9 +42,6 @@ func buildManifest(ctx context.Context, db *sql.DB, epoch string, revision int64
 	if err != nil {
 		return Manifest{}, SourceByteCounts{}, IndexedCoverage{}, ProjectSummary{}, nil, err
 	}
-	if len(evidence) > 10000 {
-		return Manifest{}, SourceByteCounts{}, IndexedCoverage{}, ProjectSummary{}, nil, ErrScopeTooLarge
-	}
 	if len(evidence) == 0 || len(sources) == 0 {
 		return Manifest{}, SourceByteCounts{}, IndexedCoverage{}, ProjectSummary{}, nil, ErrScopeEmpty
 	}
@@ -125,7 +122,7 @@ func capacityMetrics(ctx context.Context, db *sql.DB, epoch string, revision int
 		Resets              int64
 	}
 	read := func(where string, args ...any) ([]point, error) {
-		q := `SELECT c.observed_at,c.limit_id,c.window_minutes,c.used_percent,c.remaining_percent,c.resets_at FROM capacity_observations c JOIN events e ON e.epoch_id=c.epoch_id AND e.id=c.event_id WHERE c.epoch_id=? AND e.commit_revision<=? AND c.window_minutes IS NOT NULL AND c.used_percent IS NOT NULL AND c.resets_at IS NOT NULL` + where + ` ORDER BY c.observed_at,c.id LIMIT 2001`
+		q := `SELECT c.observed_at,c.limit_id,c.window_minutes,c.used_percent,c.remaining_percent,c.resets_at FROM capacity_observations c JOIN events e ON e.epoch_id=c.epoch_id AND e.id=c.event_id WHERE c.epoch_id=? AND e.commit_revision<=? AND c.window_minutes IS NOT NULL AND c.used_percent IS NOT NULL AND c.resets_at IS NOT NULL` + where + ` ORDER BY c.observed_at,c.id`
 		all := []any{epoch, revision}
 		all = append(all, args...)
 		rows, err := db.QueryContext(ctx, q, all...)
@@ -164,9 +161,6 @@ func capacityMetrics(ctx context.Context, db *sql.DB, epoch string, revision int
 		if err != nil {
 			return nil, nil, "", err
 		}
-	}
-	if len(latestRows) > 2000 || len(drawRows) > 2000 {
-		return nil, nil, "", ErrScopeTooLarge
 	}
 	value := func(p point) map[string]any {
 		m := map[string]any{"observedAt": p.ObservedAt, "limitId": p.LimitID, "windowMinutes": p.Window, "usedPercent": p.Used, "resetsAt": p.Resets}

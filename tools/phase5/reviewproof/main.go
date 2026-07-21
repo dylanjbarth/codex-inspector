@@ -62,7 +62,7 @@ func main() {
 	deadline := time.Now().Add(5 * time.Minute)
 	var detail reviews.Detail
 	for time.Now().Before(deadline) {
-		detail, err = manager.Detail(context.Background(), plan.ManifestPreview.ReviewID)
+		detail, err = manager.Detail(context.Background(), plan.Review.ReviewID)
 		if err == nil && (detail.Run.Status == "complete" || detail.Run.Status == "failed" || detail.Run.Status == "unrenderable") {
 			break
 		}

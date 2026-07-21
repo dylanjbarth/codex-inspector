@@ -887,8 +887,7 @@ export interface components {
             sourceId: components["schemas"]["OpaqueId"];
             sourcePrefixSha256: string;
             eventFingerprint: string;
-            /** @constant */
-            adapterVersion: "rollout-jsonl/codex-structural/v5";
+            adapterVersion: string;
             recordOrdinal: number;
             byteStart?: number;
             byteEnd?: number;
@@ -952,14 +951,24 @@ export interface components {
             projectCount: number;
             projects: components["schemas"]["ReviewProjectSummaryItem"][];
         };
-        ReviewPlan: components["schemas"]["Snapshot"] & {
+        ReviewSpec: {
+            reviewId: components["schemas"]["OpaqueId"];
+            datasetEpoch: components["schemas"]["OpaqueId"];
+            indexRevision: number;
+            scope: components["schemas"]["ReviewScope"];
+            projectName?: string;
+            model: string;
+            reasoning: string;
+            focus?: string;
+        };
+        ReviewPlan: {
+            /** @constant */
+            schemaVersion: 3;
+            datasetEpoch: components["schemas"]["OpaqueId"];
+            appliedRevision: number;
             planId: components["schemas"]["OpaqueId"];
-            manifestPreview: components["schemas"]["ReviewManifestPreview"];
+            review: components["schemas"]["ReviewSpec"];
             launchPrompt: string;
-            estimatedInputTokens: number | null;
-            sourceByteCounts: components["schemas"]["ReviewSourceByteCounts"];
-            indexedTimeCoverage: components["schemas"]["IndexedCoverage"];
-            projectSummary: components["schemas"]["ReviewProjectSummary"];
         };
         LaunchReviewRequest: {
             planId: components["schemas"]["OpaqueId"];
@@ -988,7 +997,7 @@ export interface components {
             completedAt?: components["schemas"]["Timestamp"];
             threadId?: components["schemas"]["OpaqueId"];
             /** @constant */
-            launchPromptVersion?: "inspector.review-launch/v1";
+            launchPromptVersion?: "inspector.review-launch/v2";
             pid?: number;
             exitCode?: number;
             command: string[];
@@ -996,11 +1005,14 @@ export interface components {
             diagnostics: string[];
             failureCode?: string;
             failureMessage?: string;
+            review?: components["schemas"]["ReviewSpec"];
         };
         ReviewCitationState: components["schemas"]["EvidenceAvailability"] & {
             evidenceId: components["schemas"]["OpaqueId"];
             sourcePrefixSha256: string;
             eventFingerprint: string;
+            rootSessionId: components["schemas"]["OpaqueId"];
+            turnId: components["schemas"]["OpaqueId"];
         };
         ReviewFinding: {
             findingId: components["schemas"]["OpaqueId"];
@@ -1038,7 +1050,7 @@ export interface components {
         };
         ReviewDetail: {
             summary: components["schemas"]["ReviewSummary"];
-            manifest: components["schemas"]["ReviewManifestPreview"];
+            review: components["schemas"]["ReviewSpec"];
             run: components["schemas"]["ReviewRun"];
             /** @enum {unknown} */
             reportState: "absent" | "pending" | "accepted" | "invalid" | "unrenderable";

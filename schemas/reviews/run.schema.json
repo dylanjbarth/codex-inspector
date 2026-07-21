@@ -13,7 +13,7 @@
     "startedAt": { "type": "string", "format": "date-time" },
     "completedAt": { "type": "string", "format": "date-time" },
     "threadId": { "$ref": "#/$defs/id" },
-    "launchPromptVersion": { "const": "inspector.review-launch/v1" },
+    "launchPromptVersion": { "const": "inspector.review-launch/v2" },
     "pid": { "type": "integer", "minimum": 1 },
     "exitCode": { "type": "integer" },
     "command": {
@@ -28,7 +28,22 @@
       "items": { "type": "string", "maxLength": 500 }
     },
     "failureCode": { "type": "string", "maxLength": 100 },
-    "failureMessage": { "type": "string", "maxLength": 2000 }
+    "failureMessage": { "type": "string", "maxLength": 2000 },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewId", "datasetEpoch", "indexRevision", "scope", "model", "reasoning"],
+      "properties": {
+        "reviewId": { "$ref": "#/$defs/id" },
+        "datasetEpoch": { "$ref": "#/$defs/id" },
+        "indexRevision": { "type": "integer", "minimum": 1 },
+        "scope": { "$ref": "#/$defs/scope" },
+        "projectName": { "type": "string", "maxLength": 1000 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "reasoning": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "focus": { "type": "string", "maxLength": 2000 }
+      }
+    }
   },
   "allOf": [
     {
@@ -45,6 +60,12 @@
     }
   ],
   "$defs": {
-    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" }
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+    "scope": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "rootSessionId"], "properties": { "kind": { "const": "single_session" }, "rootSessionId": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "start", "end", "timezone"], "properties": { "kind": { "const": "time_period" }, "start": { "type": "string", "format": "date-time" }, "end": { "type": "string", "format": "date-time" }, "timezone": { "type": "string", "minLength": 1 }, "projectId": { "$ref": "#/$defs/id" } } }
+      ]
+    }
   }
 }

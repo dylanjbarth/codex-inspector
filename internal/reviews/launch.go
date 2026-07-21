@@ -2,6 +2,7 @@ package reviews
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dylanjbarth/codex-inspector/internal/storage"
 	reviewschemas "github.com/dylanjbarth/codex-inspector/schemas/reviews"
 )
 
@@ -23,7 +25,7 @@ func (m *Manager) Launch(ctx context.Context, planID string, confirmed bool) (Su
 	if !ok {
 		return Summary{}, ErrPlanUnavailable
 	}
-	reviewID := plan.ManifestPreview.ReviewID
+	reviewID := plan.Review.ReviewID
 	m.mu.Lock()
 	if m.active[reviewID] {
 		m.mu.Unlock()
@@ -47,13 +49,6 @@ func (m *Manager) Launch(ctx context.Context, planID string, confirmed bool) (Su
 	if err := os.Chmod(dir, 0700); err != nil {
 		return Summary{}, err
 	}
-	manifestBytes, err := json.MarshalIndent(plan.ManifestPreview, "", "  ")
-	if err != nil {
-		return Summary{}, err
-	}
-	if err = atomicWrite(filepath.Join(dir, "manifest.json"), append(manifestBytes, '\n'), 0600); err != nil {
-		return Summary{}, err
-	}
 	schemaBytes, err := reviewschemasRead("report.schema.json")
 	if err != nil {
 		return Summary{}, err
@@ -62,16 +57,17 @@ func (m *Manager) Launch(ctx context.Context, planID string, confirmed bool) (Su
 		return Summary{}, err
 	}
 	args := []string{"exec", "--json", "--sandbox", "workspace-write", "--skip-git-repo-check", "-C", dir}
-	if plan.ManifestPreview.Model != "configured-default" {
-		args = append(args, "--model", plan.ManifestPreview.Model)
+	if plan.Review.Model != "configured-default" {
+		args = append(args, "--model", plan.Review.Model)
 	}
-	if plan.ManifestPreview.Reasoning != "configured-default" {
-		reasoningJSON, _ := json.Marshal(plan.ManifestPreview.Reasoning)
+	if plan.Review.Reasoning != "configured-default" {
+		reasoningJSON, _ := json.Marshal(plan.Review.Reasoning)
 		args = append(args, "-c", "model_reasoning_effort="+string(reasoningJSON))
 	}
-	args = append(args, LaunchPrompt)
+	args = append(args, plan.LaunchPrompt)
 	now := m.now().UTC().Format(time.RFC3339Nano)
-	run := Run{SchemaVersion: SchemaVersion, ReviewID: reviewID, Status: "planned", CreatedAt: now, Command: append([]string{m.codex}, args...), Diagnostics: []string{}}
+	review := plan.Review
+	run := Run{SchemaVersion: SchemaVersion, ReviewID: reviewID, Status: "planned", CreatedAt: now, Command: append([]string{m.codex}, args...), Diagnostics: []string{}, Review: &review}
 	if err = m.writeRun(dir, run); err != nil {
 		return Summary{}, err
 	}
@@ -99,7 +95,7 @@ func (m *Manager) Launch(ctx context.Context, planID string, confirmed bool) (Su
 		_ = cmd.Process.Kill()
 		return Summary{}, err
 	}
-	go m.monitor(ctx, dir, plan.ManifestPreview, run, cmd, stdout)
+	go m.monitor(ctx, dir, plan.Review, run, cmd, stdout)
 	failed = false
 	return Summary{reviewID, run.Status, run.CreatedAt, ""}, nil
 }
@@ -115,7 +111,7 @@ type decodedEvent struct {
 	err   error
 }
 
-func (m *Manager) monitor(ctx context.Context, dir string, manifest Manifest, run Run, cmd *exec.Cmd, stdout io.ReadCloser) {
+func (m *Manager) monitor(ctx context.Context, dir string, spec ReviewSpec, run Run, cmd *exec.Cmd, stdout io.ReadCloser) {
 	defer func() { m.mu.Lock(); delete(m.active, run.ReviewID); m.mu.Unlock() }()
 	events := make(chan decodedEvent, 1)
 	go func() {
@@ -173,7 +169,7 @@ func (m *Manager) monitor(ctx context.Context, dir string, manifest Manifest, ru
 			processErr = err
 		case <-tick.C:
 			if !accepted && run.ThreadID != "" {
-				if report, b, hash, err := m.validReport(filepath.Join(dir, "review.json"), manifest); err == nil {
+				if report, b, hash, err := m.validReport(filepath.Join(dir, "review.json"), spec); err == nil {
 					inserted, acceptErr := m.accept(run.ReviewID, b, hash)
 					if acceptErr == nil {
 						if !inserted {
@@ -210,7 +206,7 @@ func (m *Manager) monitor(ctx context.Context, dir string, manifest Manifest, ru
 			run.Status = "failed"
 			run.FailureCode = "missing_thread_started"
 			run.FailureMessage = "Codex exited without a resumable persisted session ID."
-		} else if _, reportBytes, hash, err := m.validReport(filepath.Join(dir, "review.json"), manifest); err == nil {
+		} else if _, reportBytes, hash, err := m.validReport(filepath.Join(dir, "review.json"), spec); err == nil {
 			if _, e := m.accept(run.ReviewID, reportBytes, hash); e == nil {
 				run.Status = "complete"
 				run.AcceptedReportSHA256 = hash
@@ -223,7 +219,7 @@ func (m *Manager) monitor(ctx context.Context, dir string, manifest Manifest, ru
 		} else {
 			run.Status = "unrenderable"
 			run.FailureCode = "report_invalid"
-			run.FailureMessage = "review.json does not satisfy the frozen report contract."
+			run.FailureMessage = "review.json does not satisfy the report contract or selected scope."
 		}
 		run.CompletedAt = m.now().UTC().Format(time.RFC3339Nano)
 	}
@@ -246,7 +242,7 @@ func (m *Manager) changed(id, status string) {
 	}
 }
 
-func (m *Manager) validReport(path string, manifest Manifest) (Report, []byte, string, error) {
+func (m *Manager) validReport(path string, spec ReviewSpec) (Report, []byte, string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return Report{}, nil, "", err
@@ -269,21 +265,50 @@ func (m *Manager) validReport(path string, manifest Manifest) (Report, []byte, s
 	if err = strictJSON(b, &report); err != nil {
 		return Report{}, nil, "", err
 	}
-	if report.ReviewID != manifest.ReviewID || report.SchemaVersion != SchemaVersion || report.Scope.Kind != manifest.Scope.Kind || report.Scope.DatasetEpoch != manifest.DatasetEpoch || report.Scope.IndexRevision != manifest.IndexRevision {
-		return Report{}, nil, "", errors.New("report identity does not match manifest")
+	if report.ReviewID != spec.ReviewID || report.SchemaVersion != SchemaVersion || report.Scope.Kind != spec.Scope.Kind || report.Scope.DatasetEpoch != spec.DatasetEpoch || report.Scope.IndexRevision != spec.IndexRevision {
+		return Report{}, nil, "", errors.New("report identity does not match review parameters")
 	}
-	allowed := map[string]bool{}
-	for _, e := range manifest.Evidence {
-		allowed[e.EvidenceID] = true
+	store, err := storage.Open(filepath.Join(m.layout.Root, "inspector.db"))
+	if err != nil {
+		return Report{}, nil, "", err
 	}
+	defer store.Close()
 	for _, f := range report.Findings {
 		for _, id := range f.Citations {
-			if !allowed[id] {
-				return Report{}, nil, "", fmt.Errorf("citation %s is outside manifest", id)
+			if ok, checkErr := citationBelongsToScope(context.Background(), store.DB(), spec, id); checkErr != nil {
+				return Report{}, nil, "", checkErr
+			} else if !ok {
+				return Report{}, nil, "", fmt.Errorf("citation %s is outside the selected scope", id)
 			}
 		}
 	}
 	return report, b, hashBytes(b), nil
+}
+
+func citationBelongsToScope(ctx context.Context, db *sql.DB, spec ReviewSpec, evidenceID string) (bool, error) {
+	query := selectedSessionsCTE + `SELECT count(*) FROM evidence_refs r
+	 JOIN events e ON e.epoch_id=r.epoch_id AND e.id=r.event_id
+	 JOIN turns t ON t.epoch_id=e.epoch_id AND t.id=e.turn_id
+	 JOIN sv ON sv.epoch_id=t.epoch_id AND sv.session_id=t.session_id
+	 JOIN sv root ON root.epoch_id=sv.epoch_id AND root.session_id=sv.root_work_unit_id
+	 WHERE r.epoch_id=? AND r.id=? AND e.commit_revision<=? AND t.commit_revision<=? AND t.state='completed' AND sv.purpose<>'inspector_review'`
+	args := []any{spec.DatasetEpoch, spec.IndexRevision, spec.DatasetEpoch, evidenceID, spec.IndexRevision, spec.IndexRevision}
+	if spec.Scope.Kind == "single_session" {
+		query += ` AND sv.root_work_unit_id=?`
+		args = append(args, spec.Scope.RootSessionID)
+	} else {
+		query += ` AND t.completed_at>=? AND t.completed_at<?`
+		args = append(args, spec.Scope.Start, spec.Scope.End)
+		if spec.Scope.ProjectID != "" {
+			query += ` AND root.project_id=?`
+			args = append(args, spec.Scope.ProjectID)
+		}
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return false, err
+	}
+	return count == 1, nil
 }
 
 func ResumeCommand(threadID string) string { return "codex resume " + threadID }

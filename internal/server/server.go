@@ -909,15 +909,13 @@ func (s *state) reviewPlan(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, reviews.ErrScopeEmpty):
 			s.problem(w, 409, "review_scope_empty", "No eligible completed turns exist in this scope")
 		case errors.Is(err, reviews.ErrScopeTooLarge):
-			s.problem(w, 413, "review_scope_too_large", "Review scope exceeds the frozen manifest bounds")
+			s.problem(w, 413, "review_scope_too_large", "Review scope is too large")
 		default:
 			s.problem(w, 500, "review_plan_failed", "Review plan could not be created")
 		}
 		return
 	}
-	if !s.writeBounded(w, plan, 2*1024*1024) {
-		s.problem(w, 413, "review_plan_too_large", "Review plan exceeds the bounded response")
-	}
+	s.write(w, plan)
 }
 
 func (s *state) launchReview(w http.ResponseWriter, r *http.Request) {

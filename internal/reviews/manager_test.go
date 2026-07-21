@@ -91,17 +91,7 @@ func appendSourceState(t *testing.T, store *storage.Store, state string) int64 {
 	return revision
 }
 
-func TestManifestScopeMarshalsNoDescendantsAsEmptyArray(t *testing.T) {
-	b, err := json.Marshal(ManifestScope{Kind: "single_session", RootSessionID: "root-only", AppliedRevision: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), `"descendantSessionIds":[]`) {
-		t.Fatalf("single-session manifest must encode no descendants as an empty array: %s", b)
-	}
-}
-
-func TestPlanFreezesCompleteSingleAndTimeScopes(t *testing.T) {
+func TestPlanBuildsPromptFromSingleAndTimeScopes(t *testing.T) {
 	layout, store := indexedFixture(t)
 	m, err := New(layout, "/missing", "", nil)
 	if err != nil {
@@ -115,14 +105,12 @@ func TestPlanFreezesCompleteSingleAndTimeScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.ManifestPreview.IncludedSessionIDs) != 2 || len(plan.ManifestPreview.IncludedTurnIDs) != 3 || len(plan.ManifestPreview.Evidence) == 0 || len(plan.ManifestPreview.Sources) != 2 {
-		t.Fatalf("incomplete plan: sessions=%d turns=%d evidence=%d sources=%d", len(plan.ManifestPreview.IncludedSessionIDs), len(plan.ManifestPreview.IncludedTurnIDs), len(plan.ManifestPreview.Evidence), len(plan.ManifestPreview.Sources))
-	}
-	if plan.ManifestPreview.Scope.RootSessionID != pageRoot || plan.ManifestPreview.ReportDestination != "./review.json" || !strings.Contains(plan.LaunchPrompt, "$codex-inspector:review-session") {
+	if plan.SchemaVersion != 3 || plan.Review.Scope.RootSessionID != pageRoot || plan.Review.ReviewID == "" || !strings.Contains(plan.LaunchPrompt, "$codex-inspector:review-session") || !strings.Contains(plan.LaunchPrompt, pageRoot) || !strings.Contains(plan.LaunchPrompt, "do not expect a precomputed manifest") {
 		t.Fatalf("contract missing: %+v", plan)
 	}
-	if plan.EstimatedInputTokens == nil || *plan.EstimatedInputTokens < 1 || plan.SourceByteCounts.IncludedBytes < 1 || plan.ProjectSummary.ProjectCount != 1 {
-		t.Fatalf("preview missing: %+v", plan)
+	encoded, err := json.Marshal(plan)
+	if err != nil || len(encoded) > 16*1024 || strings.Contains(string(encoded), "evidenceId") || strings.Contains(string(encoded), "manifestPreview") {
+		t.Fatalf("prompt-first preview is unexpectedly large or evidence-bearing: bytes=%d err=%v", len(encoded), err)
 	}
 	timeReq := PlanRequest{Scope: Scope{Kind: "time_period", Start: "2026-07-01T00:00:00Z", End: "2026-07-02T00:00:00Z", Timezone: "America/Chicago"}, Model: "gpt-demo", ReasoningEffort: "medium"}
 	var projectID string
@@ -134,15 +122,8 @@ func TestPlanFreezesCompleteSingleAndTimeScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(timePlan.ManifestPreview.IncludedTurnIDs) != 3 || timePlan.ManifestPreview.Scope.Timezone != "America/Chicago" || timePlan.ManifestPreview.Scope.ProjectID != projectID || timePlan.ProjectSummary.ProjectCount != 1 || timePlan.ProjectSummary.Projects[0].ProjectID != projectID || timePlan.ProjectSummary.Projects[0].TurnCount != 3 {
-		t.Fatalf("time scope=%+v", timePlan.ManifestPreview.Scope)
-	}
-	for _, sessionID := range timePlan.ManifestPreview.IncludedSessionIDs {
-		var includedRootProject string
-		err = store.DB().QueryRow(`WITH sv AS (SELECT v.* FROM session_versions v WHERE v.epoch_id=? AND v.revision=(SELECT max(x.revision) FROM session_versions x WHERE x.epoch_id=v.epoch_id AND x.session_id=v.session_id AND x.revision<=?)) SELECT coalesce(root.project_id,'') FROM sv JOIN sv root ON root.session_id=sv.root_work_unit_id WHERE sv.session_id=?`, timePlan.DatasetEpoch, timePlan.AppliedRevision, sessionID).Scan(&includedRootProject)
-		if err != nil || includedRootProject != projectID {
-			t.Fatalf("included session %s root project=%s err=%v", sessionID, includedRootProject, err)
-		}
+	if timePlan.Review.Scope.Timezone != "America/Chicago" || timePlan.Review.Scope.ProjectID != projectID || timePlan.Review.ProjectName == "" || !strings.Contains(timePlan.LaunchPrompt, projectID) || !strings.Contains(timePlan.LaunchPrompt, timePlan.Review.ProjectName) {
+		t.Fatalf("time scope=%+v prompt=%s", timePlan.Review, timePlan.LaunchPrompt)
 	}
 	timeReq.Scope.ProjectID = "project-guessed"
 	if _, err = m.Plan(context.Background(), store, timeReq); !errors.Is(err, ErrInvalidRequest) {
@@ -154,55 +135,6 @@ func TestPlanFreezesCompleteSingleAndTimeScopes(t *testing.T) {
 	}
 	if _, err = m.Plan(context.Background(), store, baseRequest(reviewRoot)); !errors.Is(err, ErrScopeEmpty) && !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("Review-created root was eligible: %v", err)
-	}
-}
-
-func TestPlanCoverageUsesPinnedSourceInventoryStates(t *testing.T) {
-	layout, store := indexedFixture(t)
-	m, err := New(layout, "/missing", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var root string
-	if err = store.DB().QueryRow(`SELECT id FROM sessions WHERE source_session_id='root-001'`).Scan(&root); err != nil {
-		t.Fatal(err)
-	}
-	_, baseline, err := store.Snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	request := baseRequest(root)
-	request.RequestedRevision = baseline
-	complete, err := m.Plan(context.Background(), store, request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if complete.Coverage.Fidelity != "exact" || complete.Coverage.Observed != complete.Coverage.Eligible {
-		t.Fatalf("complete coverage=%+v gaps=%v", complete.Coverage, complete.ManifestPreview.CoverageGaps)
-	}
-	for _, state := range []string{"discovered", "indexing", "unsupported", "failed", "requires_rebuild"} {
-		revision := appendSourceState(t, store, state)
-		request.RequestedRevision = revision
-		plan, planErr := m.Plan(context.Background(), store, request)
-		if planErr != nil {
-			t.Fatal(planErr)
-		}
-		if plan.Coverage.Fidelity != "derived" || plan.Coverage.Reason == "" || len(plan.ManifestPreview.CoverageGaps) == 0 {
-			t.Fatalf("state %s coverage=%+v gaps=%v", state, plan.Coverage, plan.ManifestPreview.CoverageGaps)
-		}
-		joined := strings.Join(plan.ManifestPreview.CoverageGaps, " ")
-		expected := map[string]string{"discovered": "had not started", "indexing": "still indexing", "unsupported": "unsupported", "failed": "failed indexing", "requires_rebuild": "required a rebuild"}[state]
-		if !strings.Contains(joined, expected) {
-			t.Fatalf("state %s missing diagnostic: %s", state, joined)
-		}
-	}
-	request.RequestedRevision = baseline
-	pinned, err := m.Plan(context.Background(), store, request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if pinned.Coverage.Fidelity != "exact" || pinned.AppliedRevision != baseline {
-		t.Fatalf("newer inventory leaked into pinned plan: %+v", pinned.Coverage)
 	}
 }
 
@@ -221,9 +153,19 @@ func writeFakeCodex(t *testing.T, dir, report string, exit int, overwrite string
 }
 
 func reportJSON(p Plan, citation string) string {
-	v := map[string]any{"schemaVersion": SchemaVersion, "reviewId": p.ManifestPreview.ReviewID, "scope": map[string]any{"kind": p.ManifestPreview.Scope.Kind, "summary": "Fake review scope.", "datasetEpoch": p.DatasetEpoch, "indexRevision": p.AppliedRevision}, "model": "gpt-demo", "reasoning": "high", "completedAt": "2026-07-18T12:00:00Z", "summary": "A concise fake report.", "findings": []any{map[string]any{"findingId": "finding-1", "kind": "opportunity", "lens": "task_framing_and_steering", "title": "State the test first", "observation": "The task began before its acceptance test was stated.", "impact": "This can increase rework.", "support": "directly_observed", "evidenceSummary": "The cited fake event locates the observation.", "citations": []string{citation}, "recommendation": "State the acceptance test first.", "actionPrompt": "Draft acceptance criteria; do not execute them."}}}
+	v := map[string]any{"schemaVersion": SchemaVersion, "reviewId": p.Review.ReviewID, "scope": map[string]any{"kind": p.Review.Scope.Kind, "summary": "Fake review scope.", "datasetEpoch": p.DatasetEpoch, "indexRevision": p.AppliedRevision}, "model": "gpt-demo", "reasoning": "high", "completedAt": "2026-07-18T12:00:00Z", "summary": "A concise fake report.", "findings": []any{map[string]any{"findingId": "finding-1", "kind": "opportunity", "lens": "task_framing_and_steering", "title": "State the test first", "observation": "The task began before its acceptance test was stated.", "impact": "This can increase rework.", "support": "directly_observed", "evidenceSummary": "The cited fake event locates the observation.", "citations": []string{citation}, "recommendation": "State the acceptance test first.", "actionPrompt": "Draft acceptance criteria; do not execute them."}}}
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func firstEvidenceID(t *testing.T, store *storage.Store, root string) string {
+	t.Helper()
+	var id string
+	err := store.DB().QueryRow(`SELECT r.id FROM evidence_refs r JOIN events e ON e.epoch_id=r.epoch_id AND e.id=r.event_id JOIN turns t ON t.epoch_id=e.epoch_id AND t.id=e.turn_id JOIN session_versions v ON v.epoch_id=t.epoch_id AND v.session_id=t.session_id WHERE v.root_work_unit_id=? ORDER BY t.completed_at,e.record_ordinal LIMIT 1`, root).Scan(&id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func waitStatus(t *testing.T, m *Manager, id, want string) Detail {
@@ -253,7 +195,8 @@ func TestLaunchRequiresConfirmationCapturesThreadAndAcceptsFirstValidReport(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	valid := reportJSON(plan, plan.ManifestPreview.Evidence[0].EvidenceID)
+	evidenceID := firstEvidenceID(t, store, root)
+	valid := reportJSON(plan, evidenceID)
 	overwrite := strings.Replace(valid, "A concise fake report.", "A later overwrite that must not win.", 1)
 	fake := writeFakeCodex(t, t.TempDir(), valid, 0, overwrite)
 	m, err := New(layout, fake, "", nil)
@@ -283,16 +226,18 @@ func TestLaunchRequiresConfirmationCapturesThreadAndAcceptsFirstValidReport(t *t
 	if len(detail.AcceptedReport.FindingsRendered) != 1 || detail.AcceptedReport.FindingsRendered[0].Citations[0].EvidenceID == "" {
 		t.Fatal("citation did not resolve")
 	}
+	if _, err = os.Stat(filepath.Join(layout.Reviews, summary.ReviewID, "manifest.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("new review unexpectedly wrote manifest.json: %v", err)
+	}
 	if ResumeCommand(detail.Run.ThreadID) != "codex resume thread-demo" || DeepLink(detail.Run.ThreadID) != "codex://threads/thread-demo" {
 		t.Fatal("handoff mismatch")
 	}
-	citedSource := detail.Manifest.Evidence[0].SourceID
-	for _, source := range detail.Manifest.Sources {
-		if source.SourceID == citedSource {
-			if err = os.Remove(source.Locator); err != nil {
-				t.Fatal(err)
-			}
-		}
+	var citedPath string
+	if err = store.DB().QueryRow(`SELECT v.canonical_path FROM evidence_refs r JOIN source_artifact_versions v ON v.epoch_id=r.epoch_id AND v.source_id=r.source_id WHERE r.id=? ORDER BY v.revision DESC LIMIT 1`, evidenceID).Scan(&citedPath); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(citedPath); err != nil {
+		t.Fatal(err)
 	}
 	afterMissing, err := m.Detail(context.Background(), summary.ReviewID)
 	if err != nil {

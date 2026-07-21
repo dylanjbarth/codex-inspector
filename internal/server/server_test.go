@@ -92,7 +92,7 @@ func TestReviewPlanHandlerFrozenContractAndConfirmationGate(t *testing.T) {
 	if err = store.DB().QueryRow(`SELECT id FROM projects LIMIT 1`).Scan(&projectID); err != nil {
 		t.Fatal(err)
 	}
-	epoch, baselineRevision, err := store.Snapshot()
+	_, baselineRevision, err := store.Snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,8 +121,8 @@ func TestReviewPlanHandlerFrozenContractAndConfirmationGate(t *testing.T) {
 		t.Fatalf("plan violates frozen OpenAPI: %v\n%s", err, recorder.Body.String())
 	}
 	planMap := plan.(map[string]any)
-	if planMap["coverage"].(map[string]any)["fidelity"] != "exact" {
-		t.Fatalf("complete source inventory was not exact: %s", recorder.Body.String())
+	if _, hasManifest := planMap["manifestPreview"]; hasManifest || !strings.Contains(planMap["launchPrompt"].(string), "do not expect a precomputed manifest") || recorder.Body.Len() > 16*1024 {
+		t.Fatalf("review preview was not prompt-first: %s", recorder.Body.String())
 	}
 	planID := planMap["planId"].(string)
 	timeBody, _ := json.Marshal(map[string]any{"scope": map[string]any{"kind": "time_period", "start": "2026-07-01T00:00:00Z", "end": "2026-07-02T00:00:00Z", "timezone": "UTC", "projectId": projectID}, "model": "configured-default", "reasoningEffort": "high", "requestedRevision": baselineRevision})
@@ -135,53 +135,15 @@ func TestReviewPlanHandlerFrozenContractAndConfirmationGate(t *testing.T) {
 	if err = json.Unmarshal(timeRecorder.Body.Bytes(), &timePlan); err != nil {
 		t.Fatal(err)
 	}
-	manifest := timePlan["manifestPreview"].(map[string]any)
-	scope := manifest["scope"].(map[string]any)
-	projects := timePlan["projectSummary"].(map[string]any)["projects"].([]any)
-	if scope["projectId"] != projectID || len(projects) != 1 || projects[0].(map[string]any)["projectId"] != projectID || len(manifest["includedSessionIds"].([]any)) != 2 || len(manifest["includedTurnIds"].([]any)) != 3 {
-		t.Fatalf("canonical project did not reach frozen plan: %s", timeRecorder.Body.String())
+	review := timePlan["review"].(map[string]any)
+	scope := review["scope"].(map[string]any)
+	if scope["projectId"] != projectID || review["projectName"] == "" || !strings.Contains(timePlan["launchPrompt"].(string), projectID) {
+		t.Fatalf("canonical project did not reach prompt: %s", timeRecorder.Body.String())
 	}
 	if err = doc.Components.Schemas["ReviewPlan"].Value.VisitJSON(timePlan); err != nil {
 		t.Fatalf("project plan violates frozen OpenAPI: %v\n%s", err, timeRecorder.Body.String())
 	}
 
-	store, err = storage.Open(filepath.Join(layout.Root, "inspector.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sourceID string
-	if err = store.DB().QueryRow(`SELECT source_id FROM source_artifact_versions WHERE epoch_id=? AND source_kind<>'session_index' ORDER BY revision DESC LIMIT 1`, epoch).Scan(&sourceID); err != nil {
-		t.Fatal(err)
-	}
-	partialRevision := baselineRevision + 1
-	tx, err := store.DB().Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = tx.Exec(`INSERT INTO index_revisions(epoch_id,revision,committed_at,reason) VALUES(?,?,?,'inventory')`, epoch, partialRevision, time.Now().UTC().Format(time.RFC3339Nano)); err == nil {
-		_, err = tx.Exec(`INSERT INTO source_artifact_versions(epoch_id,source_id,revision,source_kind,canonical_path,inode,byte_size,mtime_ns,detected_codex_version,adapter_version,state,state_reason,source_evidence_availability,availability_observed_at)
-		 SELECT epoch_id,source_id,?,source_kind,canonical_path,inode,byte_size,mtime_ns,detected_codex_version,adapter_version,'indexing','synthetic indexing state',source_evidence_availability,availability_observed_at
-		 FROM source_artifact_versions WHERE epoch_id=? AND source_id=? ORDER BY revision DESC LIMIT 1`, partialRevision, epoch, sourceID)
-	}
-	if err != nil {
-		_ = tx.Rollback()
-		t.Fatal(err)
-	}
-	if err = tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	store.Close()
-	partialBody, _ := json.Marshal(map[string]any{"scope": map[string]any{"kind": "single_session", "rootSessionId": rootID}, "model": "configured-default", "reasoningEffort": "high", "requestedRevision": partialRevision})
-	partialRecorder := httptest.NewRecorder()
-	s.reviewPlan(partialRecorder, httptest.NewRequest(http.MethodPost, "/v1/review-plans", bytes.NewReader(partialBody)))
-	if partialRecorder.Code != 200 {
-		t.Fatalf("partial plan=%d %s", partialRecorder.Code, partialRecorder.Body.String())
-	}
-	var partialPlan map[string]any
-	_ = json.Unmarshal(partialRecorder.Body.Bytes(), &partialPlan)
-	if partialPlan["coverage"].(map[string]any)["fidelity"] != "derived" || !strings.Contains(partialRecorder.Body.String(), "still indexing") {
-		t.Fatalf("partial inventory was not visible: %s", partialRecorder.Body.String())
-	}
 	launch := httptest.NewRecorder()
 	request = httptest.NewRequest(http.MethodPost, "/v1/reviews", strings.NewReader(`{"planId":"`+planID+`","confirmed":false}`))
 	s.launchReview(launch, request)
@@ -416,7 +378,7 @@ func phase6FakeCodex(t *testing.T, root string) string {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "phase6-fake-codex")
-	script := "#!/bin/sh\nGO_WANT_PHASE6_CODEX_HELPER=1 exec " + phase6ShellQuote(executable) + " -test.run '^TestPhase6FakeCodexProcess$'\n"
+	script := "#!/bin/sh\nGO_WANT_PHASE6_CODEX_HELPER=1 exec " + phase6ShellQuote(executable) + " -test.run '^TestPhase6FakeCodexProcess$' \"$@\"\n"
 	if err = os.WriteFile(path, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -427,22 +389,40 @@ func TestPhase6FakeCodexProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_PHASE6_CODEX_HELPER") != "1" {
 		return
 	}
-	manifestBytes, err := os.ReadFile("manifest.json")
-	if err != nil {
+	prompt := os.Args[len(os.Args)-1]
+	value := func(label string) string {
+		prefix := "- " + label + ": "
+		for _, line := range strings.Split(prompt, "\n") {
+			if strings.HasPrefix(line, prefix) {
+				return strings.TrimPrefix(line, prefix)
+			}
+		}
+		return ""
+	}
+	reviewID, inspectorHome, epoch, rootID := value("Review ID"), value("Inspector home"), value("Dataset epoch"), value("Root session ID")
+	var revision int64
+	_, _ = fmt.Sscan(value("Applied index revision"), &revision)
+	if reviewID == "" || inspectorHome == "" || epoch == "" || rootID == "" || revision < 1 {
 		os.Exit(10)
 	}
-	var manifest reviews.Manifest
-	if err = json.Unmarshal(manifestBytes, &manifest); err != nil || len(manifest.Evidence) == 0 {
+	store, err := storage.Open(filepath.Join(inspectorHome, "inspector.db"))
+	if err != nil {
+		os.Exit(11)
+	}
+	defer store.Close()
+	var evidenceID string
+	err = store.DB().QueryRow(`SELECT r.id FROM evidence_refs r JOIN events e ON e.epoch_id=r.epoch_id AND e.id=r.event_id JOIN turns t ON t.epoch_id=e.epoch_id AND t.id=e.turn_id JOIN session_versions sv ON sv.epoch_id=t.epoch_id AND sv.session_id=t.session_id AND sv.revision=(SELECT max(x.revision) FROM session_versions x WHERE x.epoch_id=sv.epoch_id AND x.session_id=sv.session_id AND x.revision<=?) WHERE r.epoch_id=? AND sv.root_work_unit_id=? AND e.commit_revision<=? ORDER BY t.completed_at,e.record_ordinal LIMIT 1`, revision, epoch, rootID, revision).Scan(&evidenceID)
+	if err != nil {
 		os.Exit(11)
 	}
 	report := reviews.Report{
 		SchemaVersion: reviews.SchemaVersion,
-		ReviewID:      manifest.ReviewID,
+		ReviewID:      reviewID,
 		Scope: reviews.ReportScope{
-			Kind:          manifest.Scope.Kind,
+			Kind:          "single_session",
 			Summary:       "Synthetic Phase 6 end-to-end scope.",
-			DatasetEpoch:  manifest.DatasetEpoch,
-			IndexRevision: manifest.IndexRevision,
+			DatasetEpoch:  epoch,
+			IndexRevision: revision,
 		},
 		Model:       "gpt-synthetic",
 		Reasoning:   "high",
@@ -453,11 +433,11 @@ func TestPhase6FakeCodexProcess(t *testing.T) {
 			Kind:            "strength",
 			Lens:            "reusable_leverage",
 			Title:           "The evidence path remains reusable",
-			Observation:     "The synthetic task used the frozen manifest evidence reference.",
+			Observation:     "The synthetic task searched the pinned local index from the launch parameters.",
 			Impact:          "The Review can return to the same Context Inspector evidence.",
 			Support:         "directly_observed",
-			EvidenceSummary: "The citation is one of the manifest-authorized evidence IDs.",
-			Citations:       []string{manifest.Evidence[0].EvidenceID},
+			EvidenceSummary: "The citation was discovered within the selected root scope.",
+			Citations:       []string{evidenceID},
 			Recommendation:  "Keep the evidence-linked workflow.",
 		}},
 	}
@@ -632,12 +612,12 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	}
 	validate("ReviewPlan", planBody)
 	var reviewPlan struct {
-		PlanID          string `json:"planId"`
-		ManifestPreview struct {
+		PlanID string `json:"planId"`
+		Review struct {
 			ReviewID string `json:"reviewId"`
-		} `json:"manifestPreview"`
+		} `json:"review"`
 	}
-	if err = json.Unmarshal(planBody, &reviewPlan); err != nil || reviewPlan.PlanID == "" || reviewPlan.ManifestPreview.ReviewID == "" {
+	if err = json.Unmarshal(planBody, &reviewPlan); err != nil || reviewPlan.PlanID == "" || reviewPlan.Review.ReviewID == "" || bytes.Contains(planBody, []byte("manifestPreview")) {
 		t.Fatalf("invalid review plan: %s", planBody)
 	}
 	launchRequest, _ := json.Marshal(map[string]any{"planId": reviewPlan.PlanID, "confirmed": true})
@@ -648,7 +628,7 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	var detailBody []byte
 	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		response, detailBody = req(t, meta, "GET", "/v1/reviews/"+reviewPlan.ManifestPreview.ReviewID, nil, headers)
+		response, detailBody = req(t, meta, "GET", "/v1/reviews/"+reviewPlan.Review.ReviewID, nil, headers)
 		if response.StatusCode == 200 && bytes.Contains(detailBody, []byte(`"status":"complete"`)) {
 			break
 		}

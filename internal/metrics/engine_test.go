@@ -200,6 +200,19 @@ func TestRecordedTokensKeepKnownPartialSumLabeledPartial(t *testing.T) {
 	}
 }
 
+func TestRecordedTokensTolerateMissingTurnMetadata(t *testing.T) {
+	s := indexedSyntheticWith(t, func(b []byte) []byte {
+		return []byte(strings.Replace(string(b), `,"model":"gpt-fake","effort":"high"`, "", 1))
+	})
+	got, err := metrics.New(8).Query(context.Background(), s, metrics.Query{MetricKeys: []string{"recorded_tokens"}, Timezone: "UTC", Grain: "day"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Results[0].Value != int64(500) {
+		t.Fatalf("recorded tokens=%#v", got.Results[0].Value)
+	}
+}
+
 func TestFrozenBucketBoundAndWallClockStaleness(t *testing.T) {
 	s := indexedSynthetic(t)
 	engine := metrics.New(8)
