@@ -157,7 +157,15 @@ func TestPluginShimDiagnosticsAreAtomicPrivateRateLimitedAndPayloadFree(t *testi
 	}
 }
 func TestSkillsAndMarketplaceMetadata(t *testing.T) {
-	for _, skill := range []string{"setup", "open-dashboard", "inspect-session", "review-session"} {
+	expectedSkills := []string{"open-dashboard", "inspect-session", "review-session"}
+	entries, err := os.ReadDir(root("plugin", "codex-inspector", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != len(expectedSkills) {
+		t.Fatalf("unexpected skill count: got %d, want %d", len(entries), len(expectedSkills))
+	}
+	for _, skill := range expectedSkills {
 		b, err := os.ReadFile(root("plugin", "codex-inspector", "skills", skill, "SKILL.md"))
 		if err != nil {
 			t.Fatal(err)
@@ -165,6 +173,9 @@ func TestSkillsAndMarketplaceMetadata(t *testing.T) {
 		if !strings.Contains(string(b), "name: "+skill) {
 			t.Fatalf("bad skill %s", skill)
 		}
+	}
+	if _, err := os.Stat(root("plugin", "codex-inspector", "skills", "setup")); !os.IsNotExist(err) {
+		t.Fatalf("setup must not be exposed as a standalone skill: %v", err)
 	}
 	for _, path := range [][]string{{".agents", "plugins", "marketplace.json"}, {"marketplace", "release.json"}} {
 		b, err := os.ReadFile(root(path...))

@@ -171,7 +171,7 @@ The plugin owns:
 
 - the plugin manifest and marketplace presentation;
 - lifecycle hook definitions;
-- setup, open-dashboard, inspect-session, and review-session skills;
+- open-dashboard, inspect-session, and review-session skills;
 - the fixed Effectiveness Review rubric and instructions;
 - the required CLI compatibility range;
 - user-facing installation and upgrade guidance.
@@ -191,7 +191,7 @@ The CLI installer does not install another copy of the plugin hooks.
 
 Marketplace installation alone is not assumed to install a binary or modify `PATH`.
 
-When the CLI is unavailable, the plugin setup skill provides a prompt that asks Codex to:
+When the CLI is unavailable, the plugin's open-dashboard skill asks Codex to:
 
 1. confirm that the user is on a supported macOS architecture;
 2. download a plugin-compatible binary from GitHub Releases;
@@ -942,7 +942,7 @@ Deliver:
 
 1. Go module and React/Vite/pnpm workspace.
 2. Plugin manifest, local development marketplace entry, and release marketplace metadata needed for the clean-install demo.
-3. Initial setup/open/inspect/review skills.
+3. Initial open/inspect/review skills, with first-run setup handled by open-dashboard.
 4. Plugin-owned hook shim and definitions using the frozen hook-marker contract and non-blocking missing-CLI behavior.
 5. GitHub Release packaging for the one supported demo macOS artifact with its checksum.
 6. `version`, `doctor`, `status`, `sync`, and `open` command skeletons.

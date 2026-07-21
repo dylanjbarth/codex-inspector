@@ -217,15 +217,52 @@ export function buildDemoMetrics(request: any = {}) {
   const grain = request.grain === 'hour' ? 'hour' : 'day'
   const bucketMs = grain === 'hour' ? 3600000 : dayMs
   const buckets = new Map<number, TokenBreakdown>()
+  const cachedBuckets = new Map<number, TokenBreakdown>()
+  const modelReasoningBuckets = new Map<number, Map<string, { model: string; reasoningEffort: string; tokens: number; uncachedTokens: number; cachedTokens: number }>>()
   selected.forEach((session, index) => {
     const startedAt = Date.parse(session.startedAt)
     const bucketStart = grain === 'hour'
       ? Math.floor(startedAt / bucketMs) * bucketMs
       : Date.UTC(new Date(startedAt).getUTCFullYear(), new Date(startedAt).getUTCMonth(), new Date(startedAt).getUTCDate())
-    buckets.set(bucketStart, sumBreakdowns([buckets.get(bucketStart) ?? { userRootDirect: 0, descendant: 0, inspectorReview: 0, otherOrphan: 0 }, breakdowns[index]]))
+    const breakdown = breakdowns[index]
+    const cachedShare = session.model === 'gpt-5.6-sol' ? .34 : .24
+    const cached = {
+      userRootDirect: Math.round(breakdown.userRootDirect * cachedShare),
+      descendant: Math.round(breakdown.descendant * cachedShare),
+      inspectorReview: Math.round(breakdown.inspectorReview * cachedShare),
+      otherOrphan: Math.round(breakdown.otherOrphan * cachedShare),
+    }
+    buckets.set(bucketStart, sumBreakdowns([buckets.get(bucketStart) ?? { userRootDirect: 0, descendant: 0, inspectorReview: 0, otherOrphan: 0 }, breakdown]))
+    cachedBuckets.set(bucketStart, sumBreakdowns([cachedBuckets.get(bucketStart) ?? { userRootDirect: 0, descendant: 0, inspectorReview: 0, otherOrphan: 0 }, cached]))
+    const series = modelReasoningBuckets.get(bucketStart) ?? new Map()
+    const seriesKey = `${session.model}\u0000${session.reasoning}`
+    const tokens = Object.values(breakdown).reduce((sum, value) => sum + value, 0)
+    const cachedTokens = Object.values(cached).reduce((sum, value) => sum + value, 0)
+    const current = series.get(seriesKey) ?? { model: session.model, reasoningEffort: session.reasoning, tokens: 0, uncachedTokens: 0, cachedTokens: 0 }
+    current.tokens += tokens
+    current.cachedTokens += cachedTokens
+    current.uncachedTokens += tokens - cachedTokens
+    series.set(seriesKey, current)
+    modelReasoningBuckets.set(bucketStart, series)
   })
   const overTime = [...buckets.entries()].sort(([a], [b]) => a - b).map(([bucketStart, byKind]) => ({
-    bucketStart: new Date(bucketStart).toISOString(), bucketEnd: new Date(bucketStart + bucketMs).toISOString(), timezone: request.timezone ?? 'UTC', grain, byKind,
+    bucketStart: new Date(bucketStart).toISOString(),
+    bucketEnd: new Date(bucketStart + bucketMs).toISOString(),
+    timezone: request.timezone ?? 'UTC',
+    grain,
+    byKind,
+    byKindCached: cachedBuckets.get(bucketStart) ?? { userRootDirect: 0, descendant: 0, inspectorReview: 0, otherOrphan: 0 },
+    byKindUncached: sumBreakdowns([
+      byKind,
+      Object.fromEntries(Object.entries(cachedBuckets.get(bucketStart) ?? {}).map(([key, value]) => [key, -value])) as TokenBreakdown,
+    ]),
+  }))
+  const modelReasoningOverTime = [...modelReasoningBuckets.entries()].sort(([a], [b]) => a - b).map(([bucketStart, series]) => ({
+    bucketStart: new Date(bucketStart).toISOString(),
+    bucketEnd: new Date(bucketStart + bucketMs).toISOString(),
+    timezone: request.timezone ?? 'UTC',
+    grain,
+    series: [...series.values()].sort((a, b) => b.tokens - a.tokens),
   }))
   const composition = selected.reduce((sum, session, index) => {
     const amount = Object.values(breakdowns[index]).reduce((total, value) => total + value, 0)
@@ -257,6 +294,7 @@ export function buildDemoMetrics(request: any = {}) {
     { ...meta, key: 'recorded_tokens', value: total },
     { ...meta, key: 'recorded_tokens_by_kind', value: byKind },
     { ...meta, key: 'recorded_tokens_over_time', value: overTime },
+    { ...meta, key: 'recorded_tokens_by_model_reasoning_over_time', value: modelReasoningOverTime },
     { ...meta, key: 'token_composition', value: composition },
     { ...meta, key: 'top_root_sessions_by_tokens', value: roots },
     { ...meta, key: 'latest_capacity_observation', value: [{ observedAt: now, limitId: 'codex', windowMinutes: 300, usedPercent: 38, remainingPercent: 62, resetsAt: '2026-07-22T05:00:00Z', stale: false }, { observedAt: now, limitId: 'codex', windowMinutes: 10080, usedPercent: 64, remainingPercent: 36, resetsAt: '2026-07-27T00:00:00Z', stale: false }] },

@@ -21,13 +21,15 @@ const FormulaVersion = 1
 const MaxBuckets = 2000
 const MaxCapacitySeries = 100
 const MaxCapacityPoints = 2000
+const MaxModelReasoningSeries = 200
+const MaxModelReasoningPoints = 10000
 const MaxFilterProjects = 200
 const MaxFilterModels = 100
 const MaxFilterReasoningEfforts = 20
 
 var ErrResponseTooLarge = errors.New("metric_response_too_large")
 
-var Keys = []string{"recorded_tokens", "recorded_tokens_by_kind", "recorded_tokens_over_time", "token_composition", "top_root_sessions_by_tokens", "latest_capacity_observation", "capacity_drawdown"}
+var Keys = []string{"recorded_tokens", "recorded_tokens_by_kind", "recorded_tokens_over_time", "recorded_tokens_by_model_reasoning_over_time", "token_composition", "top_root_sessions_by_tokens", "latest_capacity_observation", "capacity_drawdown"}
 
 type Query struct {
 	MetricKeys        []string `json:"metricKeys"`
@@ -72,7 +74,15 @@ type Totals struct{ UserRootDirect, Descendant, InspectorReview, OtherOrphan int
 type Composition struct{ UncachedInput, CachedInput, VisibleOutput, ReasoningOutput, Residual int64 }
 type Bucket struct {
 	BucketStart, BucketEnd, Timezone, Grain string
-	ByKind                                  Totals
+	ByKind, ByKindUncached, ByKindCached    Totals
+}
+type ModelReasoningUsage struct {
+	Model, ReasoningEffort               string
+	Tokens, UncachedTokens, CachedTokens int64
+}
+type ModelReasoningBucket struct {
+	BucketStart, BucketEnd, Timezone, Grain string
+	Series                                  []ModelReasoningUsage
 }
 type Root struct {
 	RootSessionID                                   string
@@ -115,7 +125,13 @@ func (c Composition) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]int64{"uncachedInput": c.UncachedInput, "cachedInput": c.CachedInput, "visibleOutput": c.VisibleOutput, "reasoningOutput": c.ReasoningOutput, "residual": c.Residual})
 }
 func (b Bucket) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{"bucketStart": b.BucketStart, "bucketEnd": b.BucketEnd, "timezone": b.Timezone, "grain": b.Grain, "byKind": b.ByKind})
+	return json.Marshal(map[string]any{"bucketStart": b.BucketStart, "bucketEnd": b.BucketEnd, "timezone": b.Timezone, "grain": b.Grain, "byKind": b.ByKind, "byKindUncached": b.ByKindUncached, "byKindCached": b.ByKindCached})
+}
+func (u ModelReasoningUsage) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{"model": u.Model, "reasoningEffort": u.ReasoningEffort, "tokens": u.Tokens, "uncachedTokens": u.UncachedTokens, "cachedTokens": u.CachedTokens})
+}
+func (b ModelReasoningBucket) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{"bucketStart": b.BucketStart, "bucketEnd": b.BucketEnd, "timezone": b.Timezone, "grain": b.Grain, "series": b.Series})
 }
 func (r Root) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{"rootSessionId": r.RootSessionID, "inclusiveTokens": r.InclusiveTokens, "directTokens": r.DirectTokens, "descendantTokens": r.DescendantTokens})
@@ -331,8 +347,8 @@ func Options(ctx context.Context, store *storage.Store, requestedRevision int64)
 }
 
 func validate(q *Query) error {
-	if len(q.MetricKeys) < 1 || len(q.MetricKeys) > 7 {
-		return errors.New("metricKeys must contain 1 to 7 metrics")
+	if len(q.MetricKeys) < 1 || len(q.MetricKeys) > len(Keys) {
+		return fmt.Errorf("metricKeys must contain 1 to %d metrics", len(Keys))
 	}
 	known := map[string]bool{}
 	for _, k := range Keys {
@@ -427,11 +443,15 @@ func calculate(ctx context.Context, db *sql.DB, epoch string, rev int64, q Query
 	eligible := 0
 	observed := 0
 	compositionObserved := 0
+	cacheBreakdownObserved := 0
 	exclusions := map[string]int{}
 	var totals Totals
 	var comp Composition
 	roots := map[string]*Root{}
 	buckets := map[string]*Bucket{}
+	modelReasoningBuckets := map[string]*ModelReasoningBucket{}
+	modelReasoningSeries := map[string]bool{}
+	modelReasoningPoints := 0
 	loc, _ := time.LoadLocation(q.Timezone)
 	for _, x := range all {
 		if !kindAllowed(x.kind) {
@@ -476,6 +496,48 @@ func calculate(ctx context.Context, db *sql.DB, epoch string, rev int64, q Query
 			buckets[bk] = bb
 		}
 		addTotal(&bb.ByKind, x.kind, x.total.Int64)
+		cacheBreakdownAvailable := x.cached.Valid && x.cached.Int64 >= 0 && x.cached.Int64 <= x.total.Int64
+		if cacheBreakdownAvailable {
+			cacheBreakdownObserved++
+			addTotal(&bb.ByKindCached, x.kind, x.cached.Int64)
+			addTotal(&bb.ByKindUncached, x.kind, x.total.Int64-x.cached.Int64)
+		}
+		model := x.timeModel
+		if model == "" {
+			model = "Unknown model"
+		}
+		effort := x.effort
+		if effort == "" {
+			effort = "Unspecified"
+		}
+		seriesKey := model + "\x00" + effort
+		modelReasoningSeries[seriesKey] = true
+		mb := modelReasoningBuckets[bk]
+		if mb == nil {
+			mb = &ModelReasoningBucket{BucketStart: bk, BucketEnd: end.Format(time.RFC3339), Timezone: q.Timezone, Grain: q.Grain}
+			modelReasoningBuckets[bk] = mb
+		}
+		found := false
+		for i := range mb.Series {
+			if mb.Series[i].Model == model && mb.Series[i].ReasoningEffort == effort {
+				mb.Series[i].Tokens += x.total.Int64
+				if cacheBreakdownAvailable {
+					mb.Series[i].CachedTokens += x.cached.Int64
+					mb.Series[i].UncachedTokens += x.total.Int64 - x.cached.Int64
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			usage := ModelReasoningUsage{Model: model, ReasoningEffort: effort, Tokens: x.total.Int64}
+			if cacheBreakdownAvailable {
+				usage.CachedTokens = x.cached.Int64
+				usage.UncachedTokens = x.total.Int64 - x.cached.Int64
+			}
+			mb.Series = append(mb.Series, usage)
+			modelReasoningPoints++
+		}
 	}
 	cov := coverageFor(observed, eligible, "some eligible completed turns lack usable recorded usage", "no eligible completed turn has usable recorded usage")
 	if eligible == 0 {
@@ -497,6 +559,10 @@ func calculate(ctx context.Context, db *sql.DB, epoch string, rev int64, q Query
 	if len(orderedBuckets) > MaxBuckets {
 		return Result{}, ErrResponseTooLarge
 	}
+	if len(modelReasoningSeries) > MaxModelReasoningSeries || modelReasoningPoints > MaxModelReasoningPoints {
+		return Result{}, ErrResponseTooLarge
+	}
+	orderedModelReasoningBuckets := sortModelReasoningBuckets(modelReasoningBuckets)
 	orderedRoots := sortRoots(roots)
 	latest, series, capacityCoverage, capacityExclusions, capErr := capacity(ctx, db, epoch, rev, q, now)
 	if capErr != nil {
@@ -515,6 +581,14 @@ func calculate(ctx context.Context, db *sql.DB, epoch string, rev int64, q Query
 			value = totals
 		case "recorded_tokens_over_time":
 			value = orderedBuckets
+			m.Coverage = coverageFor(cacheBreakdownObserved, eligible, "some eligible completed turns lack recorded cache breakdowns", "no eligible completed turn has a recorded cache breakdown")
+			m.Fidelity = m.Coverage.Fidelity
+			m.ExclusionReasons = map[string]int{"missing_cache_breakdown": eligible - cacheBreakdownObserved}
+		case "recorded_tokens_by_model_reasoning_over_time":
+			value = orderedModelReasoningBuckets
+			m.Coverage = coverageFor(cacheBreakdownObserved, eligible, "some eligible completed turns lack recorded cache breakdowns", "no eligible completed turn has a recorded cache breakdown")
+			m.Fidelity = m.Coverage.Fidelity
+			m.ExclusionReasons = map[string]int{"missing_cache_breakdown": eligible - cacheBreakdownObserved}
 		case "token_composition":
 			value = comp
 			m.Coverage = coverageFor(compositionObserved, eligible, "some eligible completed turns lack complete, reconcilable token components", "no eligible completed turn has complete, reconcilable token components")
@@ -619,6 +693,25 @@ func sortBuckets(m map[string]*Bucket) []Bucket {
 	out := make([]Bucket, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, *m[k])
+	}
+	return out
+}
+func sortModelReasoningBuckets(m map[string]*ModelReasoningBucket) []ModelReasoningBucket {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sortStrings(keys)
+	out := make([]ModelReasoningBucket, 0, len(keys))
+	for _, k := range keys {
+		bucket := *m[k]
+		sort.Slice(bucket.Series, func(i, j int) bool {
+			if bucket.Series[i].Model != bucket.Series[j].Model {
+				return bucket.Series[i].Model < bucket.Series[j].Model
+			}
+			return bucket.Series[i].ReasoningEffort < bucket.Series[j].ReasoningEffort
+		})
+		out = append(out, bucket)
 	}
 	return out
 }

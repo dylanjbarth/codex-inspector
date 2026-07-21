@@ -1695,15 +1695,23 @@ func sessionSearchFTSQuery(query string) string {
 }
 
 func (s *Store) SessionsPage(revision int64, query, projectID string, offset, limit int) (string, int64, []SessionSummary, error) {
+	epoch, revision, _, sessions, err := s.SessionCandidatesPage(revision, query, projectID, offset, limit)
+	return epoch, revision, sessions, err
+}
+
+// SessionCandidatesPage finds one bounded page of root sessions and reports
+// the exact number of matches. Keeping the count and page in one statement
+// avoids walking every candidate in Go before the caller can render page one.
+func (s *Store) SessionCandidatesPage(revision int64, query, projectID string, offset, limit int) (string, int64, int, []SessionSummary, error) {
 	epoch, latest, e := s.Snapshot()
 	if e != nil {
-		return "", 0, nil, e
+		return "", 0, 0, nil, e
 	}
 	if revision == 0 {
 		revision = latest
 	}
 	if revision > latest || revision < 1 || !s.hasRevision(epoch, revision) {
-		return "", 0, nil, errors.New("revision_unavailable")
+		return "", 0, 0, nil, errors.New("revision_unavailable")
 	}
 	if limit <= 0 {
 		limit = 50
@@ -1720,34 +1728,47 @@ func (s *Store) SessionsPage(revision int64, query, projectID string, offset, li
 		SELECT v.* FROM session_versions v WHERE v.epoch_id=? AND v.revision=(SELECT max(x.revision) FROM session_versions x WHERE x.epoch_id=v.epoch_id AND x.session_id=v.session_id AND x.revision<=?)
 	), labels AS (
 		SELECT l.* FROM session_label_versions l WHERE l.epoch_id=? AND l.revision=(SELECT max(x.revision) FROM session_label_versions x WHERE x.epoch_id=l.epoch_id AND x.session_id=l.session_id AND x.revision<=?)
-	)
-	SELECT r.id,r.source_session_id,rv.root_work_unit_id,rv.purpose,coalesce(rl.title,''),coalesce(rv.earliest_proven_start,''),count(t.id)
-	FROM sessions r JOIN sv rv ON rv.session_id=r.id AND rv.root_work_unit_id=r.id
-	JOIN sv cv ON cv.root_work_unit_id=r.id JOIN sessions c ON c.id=cv.session_id
-	LEFT JOIN labels rl ON rl.session_id=r.id
-	LEFT JOIN turns t ON t.session_id=c.id AND t.state='completed' AND t.commit_revision<=?
-	LEFT JOIN projects p ON p.id=cv.project_id AND p.created_revision<=?
-	WHERE r.epoch_id=? AND r.created_revision<=? AND (?='' OR EXISTS(SELECT 1 FROM sv pv WHERE pv.root_work_unit_id=r.id AND pv.project_id=?)) AND (?='' OR r.id=? OR r.source_session_id=? OR EXISTS(
-		SELECT 1 FROM turns st
-		JOIN events ev ON ev.epoch_id=st.epoch_id AND ev.turn_id=st.id
+	), matching_sessions AS (
+		SELECT DISTINCT st.session_id
+		FROM event_search
+		JOIN event_search_documents d ON d.rowid=event_search.rowid AND d.epoch_id=? AND d.match_category='message'
+		JOIN events ev ON ev.epoch_id=d.epoch_id AND ev.id=d.event_id AND ev.commit_revision<=?
 		JOIN messages msg ON msg.epoch_id=ev.epoch_id AND msg.event_id=ev.id AND msg.role='user'
-		JOIN event_search_documents d ON d.epoch_id=ev.epoch_id AND d.event_id=ev.id AND d.match_category='message'
-		JOIN event_search ON event_search.rowid=d.rowid
-		WHERE st.epoch_id=r.epoch_id AND st.session_id=r.id AND st.commit_revision<=? AND ev.commit_revision<=? AND event_search MATCH ?))
-	GROUP BY r.id HAVING count(t.id)>0 ORDER BY max(t.completed_at) DESC,r.id LIMIT ? OFFSET ?`, epoch, revision, epoch, revision, revision, revision, epoch, revision, projectID, projectID, query, query, query, revision, revision, fts, limit, offset)
+		JOIN turns st ON st.epoch_id=ev.epoch_id AND st.id=ev.turn_id AND st.commit_revision<=?
+		WHERE ?<>'' AND event_search MATCH ?
+	), roots AS (
+		SELECT r.id,r.source_session_id,rv.root_work_unit_id,rv.purpose,coalesce(rl.title,'') title,coalesce(rv.earliest_proven_start,'') started_at,count(t.id) completed_turns,max(t.completed_at) latest_completed
+		FROM sessions r JOIN sv rv ON rv.session_id=r.id AND rv.root_work_unit_id=r.id
+		JOIN sv cv ON cv.root_work_unit_id=r.id JOIN sessions c ON c.id=cv.session_id
+		LEFT JOIN labels rl ON rl.session_id=r.id
+		LEFT JOIN turns t ON t.epoch_id=r.epoch_id AND t.session_id=c.id AND t.state='completed' AND t.commit_revision<=?
+		WHERE r.epoch_id=? AND r.created_revision<=? AND (?='' OR EXISTS(SELECT 1 FROM sv pv WHERE pv.root_work_unit_id=r.id AND pv.project_id=?)) AND (?='' OR r.id=? OR r.source_session_id=? OR r.id IN (SELECT session_id FROM matching_sessions))
+		GROUP BY r.id HAVING count(t.id)>0
+	)
+	SELECT page.id,page.source_session_id,page.root_work_unit_id,page.purpose,page.title,page.started_at,page.completed_turns,totals.total
+	FROM (SELECT count(*) total FROM roots) totals
+	LEFT JOIN (SELECT * FROM roots ORDER BY latest_completed DESC,id LIMIT ? OFFSET ?) page ON true`, epoch, revision, epoch, revision, epoch, revision, revision, query, fts, revision, epoch, revision, projectID, projectID, query, query, query, limit, offset)
 	if e != nil {
-		return "", 0, nil, e
+		return "", 0, 0, nil, e
 	}
 	defer rows.Close()
 	var out []SessionSummary
+	total := 0
 	for rows.Next() {
 		var x SessionSummary
-		if e = rows.Scan(&x.ID, &x.SourceSessionID, &x.RootWorkUnitID, &x.Purpose, &x.Title, &x.StartedAt, &x.CompletedTurns); e != nil {
-			return "", 0, nil, e
+		var id, sourceSessionID, rootWorkUnitID, purpose, title, startedAt sql.NullString
+		var completedTurns sql.NullInt64
+		if e = rows.Scan(&id, &sourceSessionID, &rootWorkUnitID, &purpose, &title, &startedAt, &completedTurns, &total); e != nil {
+			return "", 0, 0, nil, e
 		}
+		if !id.Valid {
+			continue
+		}
+		x.ID, x.SourceSessionID, x.RootWorkUnitID, x.Purpose = id.String, sourceSessionID.String, rootWorkUnitID.String, purpose.String
+		x.Title, x.StartedAt, x.CompletedTurns = title.String, startedAt.String, int(completedTurns.Int64)
 		out = append(out, x)
 	}
-	return epoch, revision, out, rows.Err()
+	return epoch, revision, total, out, rows.Err()
 }
 
 func (s *Store) hasRevision(epoch string, revision int64) bool {
