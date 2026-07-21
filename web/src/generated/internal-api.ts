@@ -658,6 +658,7 @@ export interface components {
         };
         SessionSummary: {
             sessionId: components["schemas"]["OpaqueId"];
+            rawSessionId: string;
             rootWorkUnitId: components["schemas"]["OpaqueId"];
             /** @enum {unknown} */
             purpose: "user" | "spawned" | "inspector_review" | "other" | "orphan";
@@ -672,8 +673,16 @@ export interface components {
             directTokens?: number | null;
             descendantTokens?: number | null;
         };
+        UnavailableSessionSource: {
+            rawSessionId: string;
+            /** @enum {unknown} */
+            state: "unsupported" | "failed" | "requires_rebuild";
+            reason: string;
+            detectedVersion: string;
+        };
         SessionPage: components["schemas"]["Snapshot"] & {
             items: components["schemas"]["SessionSummary"][];
+            unavailableExactMatches?: components["schemas"]["UnavailableSessionSource"][];
             nextCursor?: string;
         };
         MapNode: {

@@ -27,6 +27,7 @@ type Coverage struct {
 
 type SessionSummary struct {
 	SessionID          string         `json:"sessionId"`
+	RawSessionID       string         `json:"rawSessionId"`
 	RootWorkUnitID     string         `json:"rootWorkUnitId"`
 	Purpose            string         `json:"purpose"`
 	Title              string         `json:"title,omitempty"`
@@ -41,18 +42,26 @@ type SessionSummary struct {
 	DescendantTokens   *int64         `json:"descendantTokens"`
 }
 
+type UnavailableSessionSource struct {
+	RawSessionID    string `json:"rawSessionId"`
+	State           string `json:"state"`
+	Reason          string `json:"reason"`
+	DetectedVersion string `json:"detectedVersion"`
+}
+
 type MatchSnippet struct {
 	Category string `json:"category"`
 	Text     string `json:"text"`
 }
 
 type SessionPage struct {
-	SchemaVersion   int              `json:"schemaVersion"`
-	DatasetEpoch    string           `json:"datasetEpoch"`
-	AppliedRevision int64            `json:"appliedRevision"`
-	Coverage        Coverage         `json:"coverage"`
-	Items           []SessionSummary `json:"-"`
-	NextCursor      string           `json:"nextCursor,omitempty"`
+	SchemaVersion   int                        `json:"schemaVersion"`
+	DatasetEpoch    string                     `json:"datasetEpoch"`
+	AppliedRevision int64                      `json:"appliedRevision"`
+	Coverage        Coverage                   `json:"coverage"`
+	Items           []SessionSummary           `json:"-"`
+	Unavailable     []UnavailableSessionSource `json:"-"`
+	NextCursor      string                     `json:"nextCursor,omitempty"`
 }
 
 type RootTurn struct {
@@ -168,6 +177,10 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 		limit = 200
 	}
 	eligibleOverride, nextCursorOverride := -1, ""
+	unavailable, err := r.unavailableExactSessionMatch(ctx, epoch, revision, query)
+	if err != nil {
+		return SessionPage{}, err
+	}
 	if strings.TrimSpace(query) != "" && len(rootIDs) == 0 {
 		candidateIDs := make([]string, 0, 200)
 		for candidateOffset := 0; ; candidateOffset += 200 {
@@ -193,10 +206,10 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 		rootIDs = candidateIDs[offset:end]
 		offset = 0
 		if len(rootIDs) == 0 {
-			return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: []SessionSummary{}}, nil
+			return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: []SessionSummary{}, Unavailable: unavailable}, nil
 		}
 	}
-	sessionQuery := latestSessions + `SELECT root.id,rv.purpose,coalesce(l.title,''),coalesce(p.canonical_identity,''),coalesce(min(t.started_at),''),count(t.id),coalesce(max(t.completed_at),max(t.terminal_at),''),count(DISTINCT member.session_id)-1
+	sessionQuery := latestSessions + `SELECT root.id,root.source_session_id,rv.purpose,coalesce(l.title,''),coalesce(p.canonical_identity,''),coalesce(min(t.started_at),''),count(t.id),coalesce(max(t.completed_at),max(t.terminal_at),''),count(DISTINCT member.session_id)-1
 		FROM sessions root JOIN sv rv ON rv.session_id=root.id AND rv.root_work_unit_id=root.id
 		LEFT JOIN labels l ON l.session_id=root.id
 		LEFT JOIN projects p ON p.epoch_id=rv.epoch_id AND p.id=rv.project_id
@@ -219,7 +232,7 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	all := make([]SessionSummary, 0)
 	for rows.Next() {
 		var item SessionSummary
-		if err = rows.Scan(&item.SessionID, &item.Purpose, &item.Title, &item.Project, &item.StartedAt, &item.CompletedTurns, &item.LatestCompleted, &item.DescendantSessions); err != nil {
+		if err = rows.Scan(&item.SessionID, &item.RawSessionID, &item.Purpose, &item.Title, &item.Project, &item.StartedAt, &item.CompletedTurns, &item.LatestCompleted, &item.DescendantSessions); err != nil {
 			return SessionPage{}, err
 		}
 		item.RootWorkUnitID = item.SessionID
@@ -247,7 +260,10 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 		all[index].DescendantTokens = totals[all[index].SessionID].descendant
 	}
 	if eligibleOverride >= 0 {
-		return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: all, NextCursor: nextCursorOverride}, nil
+		if len(all) > 0 {
+			unavailable = nil
+		}
+		return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: all, Unavailable: unavailable, NextCursor: nextCursorOverride}, nil
 	}
 	eligible := len(all)
 	if offset > eligible {
@@ -257,11 +273,43 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	if end > eligible {
 		end = eligible
 	}
-	page := SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligible, Eligible: eligible}, Items: all[offset:end]}
+	page := SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligible, Eligible: eligible}, Items: all[offset:end], Unavailable: unavailable}
 	if end < eligible {
 		page.NextCursor = intString(end)
 	}
 	return page, nil
+}
+
+func (r Repository) unavailableExactSessionMatch(ctx context.Context, epoch string, revision int64, rawQuery string) ([]UnavailableSessionSource, error) {
+	rawQuery = strings.TrimSpace(rawQuery)
+	if rawQuery == "" {
+		return nil, nil
+	}
+	rows, err := r.Store.DB().QueryContext(ctx, `SELECT a.source_session_id,v.state,coalesce(v.state_reason,'unspecified'),coalesce(v.detected_codex_version,'unknown')
+		FROM source_artifacts a
+		JOIN source_artifact_versions v ON v.epoch_id=a.epoch_id AND v.source_id=a.id
+		WHERE a.epoch_id=? AND a.source_session_id=? AND a.created_revision<=?
+		AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id AND x.revision<=?)
+		AND v.state IN ('unsupported','failed','requires_rebuild')
+		ORDER BY v.revision DESC,a.id LIMIT 4`, epoch, rawQuery, revision, revision)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]UnavailableSessionSource, 0, 1)
+	seen := map[string]bool{}
+	for rows.Next() {
+		var item UnavailableSessionSource
+		if err = rows.Scan(&item.RawSessionID, &item.State, &item.Reason, &item.DetectedVersion); err != nil {
+			return nil, err
+		}
+		key := item.RawSessionID + "\x00" + item.State + "\x00" + item.Reason + "\x00" + item.DetectedVersion
+		if !seen[key] {
+			seen[key] = true
+			items = append(items, item)
+		}
+	}
+	return items, rows.Err()
 }
 
 type sessionTokenTotals struct {

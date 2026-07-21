@@ -717,6 +717,9 @@ func (s *state) sessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := map[string]any{"schemaVersion": page.SchemaVersion, "datasetEpoch": page.DatasetEpoch, "appliedRevision": page.AppliedRevision, "coverage": page.Coverage, "items": page.Items}
+	if len(page.Unavailable) > 0 {
+		response["unavailableExactMatches"] = page.Unavailable
+	}
 	if page.NextCursor != "" {
 		response["nextCursor"] = page.NextCursor
 	}
