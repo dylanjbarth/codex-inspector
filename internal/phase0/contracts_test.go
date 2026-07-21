@@ -619,6 +619,9 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	assertSchemaRequired(t, doc.Components.Schemas, "CapacityPoint", "observedAt", "limitId", "windowMinutes", "usedPercent", "remainingPercent", "resetsAt", "stale")
 	assertSchemaRequired(t, doc.Components.Schemas, "SessionMap", "rootSessionId", "nodes", "edges", "rootTurns", "spawnTopology")
 	assertSchemaRequired(t, doc.Components.Schemas, "RootTurn", "turnId", "ordinal", "state", "startedAt")
+	if properties, _ := doc.Components.Schemas["MapTurn"]["properties"].(map[string]any); properties["promptPreview"] == nil {
+		t.Error("MapTurn is missing its optional exact prompt preview")
+	}
 	assertSchemaRequired(t, doc.Components.Schemas, "SpawnTurnTopology", "parentSessionId", "childSessionId", "spawnTurnId", "edgeKind", "ordinal")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewManifestPreview", "schemaVersion", "reviewId", "createdAt", "datasetEpoch", "indexRevision", "scope", "includedSessionIds", "includedTurnIds", "sources", "aggregateMetrics", "coverageGaps", "evidenceRules", "rubric", "model", "reasoning", "evidence", "reportDestination", "reportSchema", "limits")
 	assertSchemaRequired(t, doc.Components.Schemas, "ManifestEvidence", "evidenceId", "sourceId", "sourcePrefixSha256", "eventFingerprint", "availability", "availabilityObservedAt", "availabilityRevision")
@@ -635,10 +638,10 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewCitationState", "evidenceId", "sourcePrefixSha256", "eventFingerprint", "rootSessionId", "turnId")
 	assertSchemaRequired(t, doc.Components.Schemas, "RevisionAvailableData", "schemaVersion", "datasetEpoch", "revision", "fullRefreshRequired")
 	metricItems, ok := doc.Components.Schemas["MetricItem"]["oneOf"].([]any)
-	if !ok || len(metricItems) != 7 {
-		t.Fatalf("MetricItem variants = %d, want all seven", len(metricItems))
+	if !ok || len(metricItems) != 8 {
+		t.Fatalf("MetricItem variants = %d, want all eight", len(metricItems))
 	}
-	wantMetricRefs := map[string]bool{"#/components/schemas/RecordedTokensMetric": true, "#/components/schemas/RecordedTokensByKindMetric": true, "#/components/schemas/RecordedTokensOverTimeMetric": true, "#/components/schemas/TokenCompositionMetric": true, "#/components/schemas/TopRootSessionsMetric": true, "#/components/schemas/LatestCapacityMetric": true, "#/components/schemas/CapacityDrawdownMetric": true}
+	wantMetricRefs := map[string]bool{"#/components/schemas/RecordedTokensMetric": true, "#/components/schemas/RecordedTokensByKindMetric": true, "#/components/schemas/RecordedTokensOverTimeMetric": true, "#/components/schemas/RecordedTokensByModelReasoningOverTimeMetric": true, "#/components/schemas/TokenCompositionMetric": true, "#/components/schemas/TopRootSessionsMetric": true, "#/components/schemas/LatestCapacityMetric": true, "#/components/schemas/CapacityDrawdownMetric": true}
 	for _, item := range metricItems {
 		object, _ := item.(map[string]any)
 		ref, _ := object["$ref"].(string)
@@ -650,7 +653,7 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	if len(wantMetricRefs) != 0 {
 		t.Errorf("MetricItem missing variants: %v", wantMetricRefs)
 	}
-	for _, name := range []string{"RecordedTokensMetric", "RecordedTokensByKindMetric", "RecordedTokensOverTimeMetric", "TokenCompositionMetric", "TopRootSessionsMetric", "LatestCapacityMetric", "CapacityDrawdownMetric"} {
+	for _, name := range []string{"RecordedTokensMetric", "RecordedTokensByKindMetric", "RecordedTokensOverTimeMetric", "RecordedTokensByModelReasoningOverTimeMetric", "TokenCompositionMetric", "TopRootSessionsMetric", "LatestCapacityMetric", "CapacityDrawdownMetric"} {
 		allOf, _ := doc.Components.Schemas[name]["allOf"].([]any)
 		if len(allOf) == 0 {
 			t.Errorf("%s does not inherit exact metric metadata", name)

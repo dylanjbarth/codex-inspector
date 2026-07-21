@@ -67,6 +67,7 @@ type MapTurn struct {
 	TurnID          string  `json:"turnId"`
 	SessionID       string  `json:"sessionId"`
 	SessionKind     string  `json:"sessionKind"`
+	PromptPreview   string  `json:"promptPreview,omitempty"`
 	Ordinal         int     `json:"ordinal"`
 	State           string  `json:"state"`
 	StartedAt       string  `json:"startedAt"`
@@ -114,10 +115,20 @@ type SessionMap struct {
 }
 
 type LedgerItem struct {
-	EventID    string `json:"eventId"`
-	EvidenceID string `json:"evidenceId"`
-	Kind       string `json:"kind"`
-	ObservedAt string `json:"observedAt"`
+	EventID     string `json:"eventId"`
+	EvidenceID  string `json:"evidenceId"`
+	Kind        string `json:"kind"`
+	ObservedAt  string `json:"observedAt"`
+	Actor       string `json:"actor"`
+	Family      string `json:"family"`
+	MessageRole string `json:"messageRole,omitempty"`
+	CallID      string `json:"callId,omitempty"`
+	ToolPhase   string `json:"toolPhase,omitempty"`
+	ToolName    string `json:"toolName,omitempty"`
+	ToolFamily  string `json:"toolFamily,omitempty"`
+	Status      string `json:"status,omitempty"`
+	ExitCode    *int64 `json:"exitCode,omitempty"`
+	DurationMS  *int64 `json:"durationMs,omitempty"`
 }
 
 type LedgerPage struct {
@@ -417,6 +428,10 @@ func ftsSearchQuery(query string) string {
 }
 
 func sourceMatchSnippet(path string, start, end int64, expectedHash, category, query string) string {
+	return boundedMatchSnippet(sourceRecordText(path, start, end, expectedHash, category), query, 240)
+}
+
+func sourceRecordText(path string, start, end int64, expectedHash, category string) string {
 	if start < 0 || end <= start || end-start > 2*1024*1024 {
 		return ""
 	}
@@ -447,7 +462,7 @@ func sourceMatchSnippet(path string, start, end int64, expectedHash, category, q
 			text = readableBlocks(record.Payload["output"])
 		}
 	}
-	return boundedMatchSnippet(text, query, 240)
+	return text
 }
 
 func readableBlocks(raw json.RawMessage) string {
@@ -799,7 +814,75 @@ func (r Repository) mapTurns(ctx context.Context, epoch string, revision int64, 
 		}
 		out = append(out, turn)
 	}
-	return out, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, err
+	}
+	previews, err := r.mapTurnPromptPreviews(ctx, epoch, revision, ids, placeholders)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].PromptPreview = previews[out[i].TurnID]
+	}
+	return out, nil
+}
+
+func (r Repository) mapTurnPromptPreviews(ctx context.Context, epoch string, revision int64, sessionIDs []string, placeholders string) (map[string]string, error) {
+	args := make([]any, 0, len(sessionIDs)+3)
+	args = append(args, epoch, revision, revision)
+	for _, id := range sessionIDs {
+		args = append(args, id)
+	}
+	rows, err := r.Store.DB().QueryContext(ctx, `SELECT e.turn_id,v.canonical_path,e.byte_start,e.byte_end,e.content_sha256
+		FROM events e
+		JOIN turns t ON t.epoch_id=e.epoch_id AND t.id=e.turn_id
+		JOIN messages m ON m.epoch_id=e.epoch_id AND m.event_id=e.id AND m.role='user' AND m.readable=1
+		JOIN source_segments sg ON sg.epoch_id=e.epoch_id AND sg.id=e.segment_id
+		JOIN evidence_refs er ON er.epoch_id=e.epoch_id AND er.event_id=e.id
+		JOIN source_artifact_versions v ON v.epoch_id=er.epoch_id AND v.source_id=er.source_id
+		WHERE e.epoch_id=? AND e.commit_revision<=?
+		AND v.revision=(SELECT max(vx.revision) FROM source_artifact_versions vx WHERE vx.epoch_id=v.epoch_id AND vx.source_id=v.source_id AND vx.revision<=?)
+		AND t.session_id IN (`+placeholders+`)
+		ORDER BY e.turn_id,sg.source_order_key,e.record_ordinal,e.semantic_phase`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	previews := make(map[string]string)
+	for rows.Next() {
+		var turnID, path, digest string
+		var start, end int64
+		if err = rows.Scan(&turnID, &path, &start, &end, &digest); err != nil {
+			return nil, err
+		}
+		if previews[turnID] != "" {
+			continue
+		}
+		text := sourceRecordText(path, start, end, digest, "message")
+		if !meaningfulPrompt(text) {
+			continue
+		}
+		previews[turnID] = boundedMatchSnippet(text, "", 160)
+	}
+	return previews, rows.Err()
+}
+
+func meaningfulPrompt(text string) bool {
+	value := strings.TrimSpace(text)
+	if value == "" {
+		return false
+	}
+	lower := strings.ToLower(value)
+	return !strings.HasPrefix(lower, "<environment_context") &&
+		!strings.HasPrefix(lower, "<system") &&
+		!strings.HasPrefix(lower, "<developer") &&
+		!strings.HasPrefix(lower, "<image") &&
+		!strings.HasPrefix(lower, `{"cwd"`) &&
+		!strings.HasPrefix(lower, `{'cwd'`) &&
+		!strings.HasPrefix(lower, "the following is the codex agent history")
 }
 
 type mapTurnCounts struct {
@@ -892,7 +975,17 @@ func (r Repository) Ledger(ctx context.Context, revision int64, rootSessionID, t
 	if err != nil {
 		return LedgerPage{}, err
 	}
-	rows, err := r.Store.DB().QueryContext(ctx, `SELECT e.id,r.id,e.event_kind,e.observed_at FROM events e JOIN source_segments sg ON sg.epoch_id=e.epoch_id AND sg.id=e.segment_id JOIN evidence_refs r ON r.epoch_id=e.epoch_id AND r.event_id=e.id WHERE e.epoch_id=? AND e.turn_id=? AND e.commit_revision<=? ORDER BY sg.source_order_key,e.record_ordinal,e.semantic_phase LIMIT ? OFFSET ?`, epoch, turnID, revision, limit+1, offset)
+	rows, err := r.Store.DB().QueryContext(ctx, `SELECT e.id,r.id,e.event_kind,e.observed_at,
+		coalesce(m.role,''),coalesce(tc.source_call_id,''),coalesce(tc.semantic_phase,''),
+		coalesce(tc.tool_name,''),coalesce(tc.tool_family,''),coalesce(tc.status,''),tc.exit_code,tc.duration_ms
+		FROM events e
+		JOIN source_segments sg ON sg.epoch_id=e.epoch_id AND sg.id=e.segment_id
+		CROSS JOIN evidence_refs r
+		LEFT JOIN messages m ON m.epoch_id=e.epoch_id AND m.event_id=e.id
+		LEFT JOIN tool_calls tc ON tc.epoch_id=e.epoch_id AND tc.event_id=e.id
+		WHERE e.epoch_id=? AND e.turn_id=? AND e.commit_revision<=?
+		AND r.epoch_id=e.epoch_id AND r.event_id=e.id
+		ORDER BY sg.source_order_key,e.record_ordinal,e.semantic_phase LIMIT ? OFFSET ?`, epoch, turnID, revision, limit+1, offset)
 	if err != nil {
 		return LedgerPage{}, err
 	}
@@ -900,9 +993,17 @@ func (r Repository) Ledger(ctx context.Context, revision int64, rootSessionID, t
 	items := []LedgerItem{}
 	for rows.Next() {
 		var x LedgerItem
-		if err = rows.Scan(&x.EventID, &x.EvidenceID, &x.Kind, &x.ObservedAt); err != nil {
+		var exitCode, durationMS sql.NullInt64
+		if err = rows.Scan(&x.EventID, &x.EvidenceID, &x.Kind, &x.ObservedAt, &x.MessageRole, &x.CallID, &x.ToolPhase, &x.ToolName, &x.ToolFamily, &x.Status, &exitCode, &durationMS); err != nil {
 			return LedgerPage{}, err
 		}
+		if exitCode.Valid {
+			x.ExitCode = &exitCode.Int64
+		}
+		if durationMS.Valid {
+			x.DurationMS = &durationMS.Int64
+		}
+		x.Actor, x.Family = ledgerClassification(x)
 		items = append(items, x)
 	}
 	if len(items) == 0 {
@@ -915,6 +1016,39 @@ func (r Repository) Ledger(ctx context.Context, revision int64, rootSessionID, t
 		page.Coverage.Observed = limit
 	}
 	return page, rows.Err()
+}
+
+func ledgerClassification(item LedgerItem) (string, string) {
+	switch item.MessageRole {
+	case "user":
+		return "user", "message"
+	case "assistant":
+		return "agent", "message"
+	case "tool":
+		return "tool", "message"
+	case "system", "developer":
+		return "runtime", "message"
+	}
+	if item.CallID != "" {
+		if item.ToolPhase == "result" {
+			if item.ExitCode != nil && *item.ExitCode != 0 || item.Status == "failed" || item.Status == "error" {
+				return "tool", "error"
+			}
+			return "tool", "tool"
+		}
+		return "agent", "tool"
+	}
+	kind := strings.ToLower(item.Kind)
+	if strings.Contains(kind, "error") || strings.Contains(kind, "failed") {
+		return "runtime", "error"
+	}
+	if strings.Contains(kind, "compact") {
+		return "runtime", "compaction"
+	}
+	if strings.Contains(kind, "reasoning") || strings.Contains(kind, "agent") {
+		return "agent", "agent"
+	}
+	return "runtime", "runtime"
 }
 
 func (r Repository) EvidenceKind(ctx context.Context, revision int64, evidenceID string) (string, error) {

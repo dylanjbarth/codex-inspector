@@ -134,6 +134,12 @@ func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 	if rootTurn == nil || rootTurn.DirectTokens == nil || *rootTurn.DirectTokens != 1200 || rootTurn.InclusiveTokens == nil || *rootTurn.InclusiveTokens != 1200 || descendantTurn == nil || descendantTurn.DirectTokens == nil || *descendantTurn.DirectTokens != 500 || descendantTurn.InclusiveTokens == nil || *descendantTurn.InclusiveTokens != 500 {
 		t.Fatalf("turn-level causal topology is incomplete: root=%#v descendant=%#v all=%#v", rootTurn, descendantTurn, result.Turns)
 	}
+	if rootTurn.PromptPreview != "Create the fake widget." {
+		t.Fatalf("root turn did not receive its exact bounded user prompt: %#v", rootTurn)
+	}
+	if descendantTurn.PromptPreview != "" {
+		t.Fatalf("a descendant without a recorded user instruction must retain the fallback label: %#v", descendantTurn)
+	}
 	if rootTurn.ToolCount != 1 || rootTurn.ErrorCount != 0 || rootTurn.CompactionCount != 1 {
 		t.Fatalf("turn activity aggregates changed while avoiding the fact-table cross product: %#v", rootTurn)
 	}
@@ -152,13 +158,26 @@ func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 		}
 	}
 	var compactionEvidence string
+	var userMessageClassified, toolRequestClassified, toolResultClassified bool
 	for _, item := range ledger.Items {
 		if item.Kind == "compacted" {
 			compactionEvidence = item.EvidenceID
 		}
+		if item.Kind == "message" && item.MessageRole == "user" && item.Actor == "user" && item.Family == "message" {
+			userMessageClassified = true
+		}
+		if item.CallID != "" && item.ToolPhase == "request" && item.Actor == "agent" && item.Family == "tool" && item.ToolName != "" {
+			toolRequestClassified = true
+		}
+		if item.CallID != "" && item.ToolPhase == "result" && item.Actor == "tool" && item.Family == "tool" {
+			toolResultClassified = true
+		}
 	}
 	if compactionEvidence == "" {
 		t.Fatal("exact recorded compaction evidence is absent")
+	}
+	if !userMessageClassified || !toolRequestClassified || !toolResultClassified {
+		t.Fatalf("ledger navigation metadata is incomplete: %#v", ledger.Items)
 	}
 	kind, err := repository.EvidenceKind(context.Background(), page.AppliedRevision, compactionEvidence)
 	if err != nil || kind != "compacted" {

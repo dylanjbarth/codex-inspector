@@ -55,9 +55,10 @@ bounded event buffer.
 Status is not a generic section map. It returns concrete process, Codex CLI,
 plugin/protocol compatibility, index/schema/database/count/watermark, and
 seven-hook marker/diagnostic fields. Metric query results are a discriminated
-union covering all seven frozen formulas, including fidelity, coverage,
-exclusion reasons, contribution and root identities, time buckets, token
-composition/residual, and capacity window/reset/staleness state.
+union covering all eight dashboard formulas, including fidelity, coverage,
+exclusion reasons, contribution and root identities, time buckets,
+model/reasoning groups, token composition/residual, and capacity
+window/reset/staleness state.
 
 Metric filter options are part of the generated `MetricCatalog` response, not
 an extension field on one metric definition. The generated response closes
@@ -83,7 +84,11 @@ database/source error text.
 
 Session maps include ordered root turns plus explicit child-to-spawn-turn
 topology. Root-turn responses expose only completed or terminal turns, never
-active/provisional state. Review plan previews use the complete frozen manifest
+active/provisional state. A map turn may include a 160-character
+`promptPreview` resolved from the first meaningful, readable user message in
+that turn. The preview is omitted unless its source record still matches the
+indexed content hash; it is not persisted as a second copy of message content.
+Review plan previews use the complete frozen manifest
 contract and include source byte counts, indexed time coverage, and a concrete
 project/session/turn summary.
 Review detail returns the concrete manifest and run state together with the

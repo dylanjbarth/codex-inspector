@@ -802,6 +802,7 @@ func TestSQLiteSchemaV2LatestQueryPlans(t *testing.T) {
 		{"session", `EXPLAIN QUERY PLAN SELECT * FROM session_versions INDEXED BY session_versions_latest WHERE epoch_id='epoch-1' AND session_id='child-001' AND revision<=2 ORDER BY revision DESC LIMIT 1`, "session_versions_latest"},
 		{"label", `EXPLAIN QUERY PLAN SELECT * FROM session_label_versions INDEXED BY session_label_versions_latest WHERE epoch_id='epoch-1' AND session_id='child-001' AND revision<=2 ORDER BY revision DESC LIMIT 1`, "session_label_versions_latest"},
 		{"coverage", `EXPLAIN QUERY PLAN SELECT * FROM coverage_observation_versions INDEXED BY coverage_observation_versions_latest WHERE epoch_id='epoch-1' AND scope_kind='session' AND scope_id='child-001' AND field_key='usage' AND revision<=2 ORDER BY revision DESC LIMIT 1`, "coverage_observation_versions_latest"},
+		{"tool event", `EXPLAIN QUERY PLAN SELECT * FROM tool_calls INDEXED BY tool_calls_event WHERE epoch_id='epoch-1' AND event_id='event-1'`, "tool_calls_event"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

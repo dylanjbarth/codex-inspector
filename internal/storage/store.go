@@ -127,6 +127,12 @@ func (s *Store) migrate() error {
 		}
 		return fmt.Errorf("unsupported index schema: %d: %w", v, e)
 	}
+	// Older schema-v2 snapshots predate the event-oriented tool-call lookup.
+	// Keep this additive migration idempotent so existing derived indexes become
+	// fast without forcing a full source rebuild.
+	if _, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS tool_calls_event ON tool_calls(epoch_id, event_id)`); err != nil {
+		return fmt.Errorf("ensure tool-call event index: %w", err)
+	}
 	return nil
 }
 func openBuilding(path, requested, catalog string) (*Store, error) {

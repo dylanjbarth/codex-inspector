@@ -138,6 +138,34 @@ func TestOwnedRebuildReleasesBatchesBeforeDiskBackedValidation(t *testing.T) {
 	}
 }
 
+func TestOpenRestoresToolCallEventIndexForExistingSchemaV2Snapshot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inspector.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.DB().Exec(`DROP INDEX tool_calls_event`); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var indexes int
+	if err = store.DB().QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='index' AND name='tool_calls_event'`).Scan(&indexes); err != nil {
+		t.Fatal(err)
+	}
+	if indexes != 1 {
+		t.Fatalf("tool_calls_event index was not restored: %d", indexes)
+	}
+}
+
 func execValidation(db *sql.DB, query string, args ...any) error {
 	_, err := db.Exec(query, args...)
 	return err

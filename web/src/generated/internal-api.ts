@@ -470,7 +470,7 @@ export interface components {
         };
         MetricDefinition: {
             /** @enum {unknown} */
-            key: "recorded_tokens" | "recorded_tokens_by_kind" | "recorded_tokens_over_time" | "token_composition" | "top_root_sessions_by_tokens" | "latest_capacity_observation" | "capacity_drawdown";
+            key: "recorded_tokens" | "recorded_tokens_by_kind" | "recorded_tokens_over_time" | "recorded_tokens_by_model_reasoning_over_time" | "token_composition" | "top_root_sessions_by_tokens" | "latest_capacity_observation" | "capacity_drawdown";
             /** @constant */
             formulaVersion: 1;
             /** @enum {unknown} */
@@ -550,6 +550,23 @@ export interface components {
             /** @enum {unknown} */
             grain: "hour" | "day" | "week" | "month";
             byKind: components["schemas"]["ContributionTotals"];
+            byKindUncached: components["schemas"]["ContributionTotals"];
+            byKindCached: components["schemas"]["ContributionTotals"];
+        };
+        ModelReasoningTokenUsage: {
+            model: string;
+            reasoningEffort: string;
+            tokens: number;
+            uncachedTokens: number;
+            cachedTokens: number;
+        };
+        ModelReasoningTimeBucket: {
+            bucketStart: components["schemas"]["Timestamp"];
+            bucketEnd: components["schemas"]["Timestamp"];
+            timezone: string;
+            /** @enum {unknown} */
+            grain: "hour" | "day" | "week" | "month";
+            series: components["schemas"]["ModelReasoningTokenUsage"][];
         };
         RootTokenContribution: {
             rootSessionId: components["schemas"]["OpaqueId"];
@@ -605,6 +622,17 @@ export interface components {
              */
             key: "RecordedTokensOverTimeMetric";
         };
+        RecordedTokensByModelReasoningOverTimeMetric: components["schemas"]["MetricMetadata"] & {
+            /** @constant */
+            key: "recorded_tokens_by_model_reasoning_over_time";
+            value: components["schemas"]["ModelReasoningTimeBucket"][];
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "RecordedTokensByModelReasoningOverTimeMetric";
+        };
         TokenCompositionMetric: components["schemas"]["MetricMetadata"] & {
             /** @constant */
             key: "token_composition";
@@ -649,7 +677,7 @@ export interface components {
              */
             key: "CapacityDrawdownMetric";
         };
-        MetricItem: components["schemas"]["RecordedTokensMetric"] | components["schemas"]["RecordedTokensByKindMetric"] | components["schemas"]["RecordedTokensOverTimeMetric"] | components["schemas"]["TokenCompositionMetric"] | components["schemas"]["TopRootSessionsMetric"] | components["schemas"]["LatestCapacityMetric"] | components["schemas"]["CapacityDrawdownMetric"];
+        MetricItem: components["schemas"]["RecordedTokensMetric"] | components["schemas"]["RecordedTokensByKindMetric"] | components["schemas"]["RecordedTokensOverTimeMetric"] | components["schemas"]["RecordedTokensByModelReasoningOverTimeMetric"] | components["schemas"]["TokenCompositionMetric"] | components["schemas"]["TopRootSessionsMetric"] | components["schemas"]["LatestCapacityMetric"] | components["schemas"]["CapacityDrawdownMetric"];
         MetricResult: components["schemas"]["Snapshot"] & {
             results: components["schemas"]["MetricItem"][];
         };
@@ -705,6 +733,7 @@ export interface components {
             sessionId: components["schemas"]["OpaqueId"];
             /** @enum {unknown} */
             sessionKind: "root" | "descendant" | "fork" | "orphan";
+            promptPreview?: string;
             ordinal: number;
             /** @enum {unknown} */
             state: "completed" | "aborted" | "interrupted" | "reconciled_truncated";
@@ -740,6 +769,20 @@ export interface components {
                 evidenceId: components["schemas"]["OpaqueId"];
                 kind: string;
                 observedAt: components["schemas"]["Timestamp"];
+                /** @enum {unknown} */
+                actor: "user" | "runtime" | "agent" | "tool";
+                /** @enum {unknown} */
+                family: "message" | "tool" | "runtime" | "agent" | "compaction" | "error";
+                /** @enum {unknown} */
+                messageRole?: "user" | "assistant" | "system" | "developer" | "tool";
+                callId?: string;
+                /** @enum {unknown} */
+                toolPhase?: "request" | "result";
+                toolName?: string;
+                toolFamily?: string;
+                status?: string;
+                exitCode?: number;
+                durationMs?: number;
             }[];
             nextCursor?: string;
         };

@@ -388,6 +388,9 @@ CREATE TABLE tool_calls (
   FOREIGN KEY (epoch_id, event_id) REFERENCES events(epoch_id, id)
 );
 
+CREATE INDEX tool_calls_event
+  ON tool_calls(epoch_id, event_id);
+
 CREATE TRIGGER tool_event_parent_insert
 BEFORE INSERT ON tool_calls
 BEGIN
