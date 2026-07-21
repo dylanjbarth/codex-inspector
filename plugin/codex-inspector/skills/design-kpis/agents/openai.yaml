@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design KPIs"
+  short_description: "Define KPIs, drivers, guardrails, and scorecards"
+  default_prompt: "Use $design-kpis to define an evidence-backed KPI framework from Codex Inspector data."

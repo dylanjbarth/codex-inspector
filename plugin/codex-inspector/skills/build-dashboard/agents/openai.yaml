@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Dashboard"
+  short_description: "Open source-backed Codex Inspector dashboards"
+  default_prompt: "Use $build-dashboard to open and inspect my Codex Inspector dashboard."

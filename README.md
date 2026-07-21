@@ -177,6 +177,22 @@ Context Inspector, and Effectiveness Review flow. The
 release evidence and deeper test commands. Exact compatibility details are in
 the [support matrix](docs/contracts/support-matrix.md).
 
+### Analytical skills
+
+The plugin includes source-backed workflows for data-quality assessment,
+dashboard use, report building, reusable data context, KPI design, analytical
+validation, and quantitative visualization. These skills use Inspector's
+versioned metrics, coverage, provenance, and frozen Review evidence rather than
+recalculating results from raw Codex files:
+
+- `$codex-inspector:analyze-data-quality`
+- `$codex-inspector:build-dashboard`
+- `$codex-inspector:build-report`
+- `$codex-inspector:create-data-context`
+- `$codex-inspector:design-kpis`
+- `$codex-inspector:validate-data`
+- `$codex-inspector:visualize-data`
+
 ## Privacy
 
 Inspector runs locally and does not upload its index or source logs merely by

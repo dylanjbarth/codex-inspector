@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visualize Data"
+  short_description: "Design and QA quantitative Inspector charts"
+  default_prompt: "Use $visualize-data to design an accurate visualization from Codex Inspector metrics."

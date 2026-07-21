@@ -157,13 +157,35 @@ func TestPluginShimDiagnosticsAreAtomicPrivateRateLimitedAndPayloadFree(t *testi
 	}
 }
 func TestSkillsAndMarketplaceMetadata(t *testing.T) {
-	for _, skill := range []string{"setup", "open-dashboard", "inspect-session", "review-session"} {
+	skills := []string{
+		"setup",
+		"open-dashboard",
+		"inspect-session",
+		"review-session",
+		"analyze-data-quality",
+		"build-dashboard",
+		"build-report",
+		"create-data-context",
+		"design-kpis",
+		"validate-data",
+		"visualize-data",
+	}
+	for _, skill := range skills {
 		b, err := os.ReadFile(root("plugin", "codex-inspector", "skills", skill, "SKILL.md"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(b), "name: "+skill) {
 			t.Fatalf("bad skill %s", skill)
+		}
+	}
+	for _, skill := range skills[4:] {
+		b, err := os.ReadFile(root("plugin", "codex-inspector", "skills", skill, "agents", "openai.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), "display_name:") || !strings.Contains(string(b), "$"+skill) {
+			t.Fatalf("bad skill interface metadata %s", skill)
 		}
 	}
 	for _, path := range [][]string{{".agents", "plugins", "marketplace.json"}, {"marketplace", "release.json"}} {
