@@ -1,0 +1,22 @@
+name: release
+on:
+  push:
+    tags: ['v0.1.*']
+permissions:
+  contents: write
+jobs:
+  macos-arm64:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.26.0' }
+      - uses: pnpm/action-setup@v4
+        with: { version: '10.28.0', run_install: true }
+      - run: scripts/phase1/build-web.sh
+      - run: scripts/phase1/package-macos.sh dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/codex-inspector-darwin-arm64
+            dist/codex-inspector-darwin-arm64.sha256

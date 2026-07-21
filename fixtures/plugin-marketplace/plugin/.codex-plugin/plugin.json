@@ -1,0 +1,7 @@
+{
+  "name": "codex-inspector",
+  "version": "0.0.1",
+  "description": "Phase 0 contract proof; not the product plugin.",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

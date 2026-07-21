@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-inspector.local/schemas/reviews/report-v1.json",
+  "title": "Codex Inspector Review Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reviewId", "scope", "model", "reasoning", "completedAt", "summary", "findings"],
+  "properties": {
+    "schemaVersion": { "const": "inspector.review/v1" },
+    "reviewId": { "$ref": "#/$defs/id" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "summary", "datasetEpoch", "indexRevision"],
+      "properties": {
+        "kind": { "enum": ["single_session", "time_period"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "datasetEpoch": { "$ref": "#/$defs/id" },
+        "indexRevision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "reasoning": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "findings": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["findingId", "kind", "lens", "title", "observation", "impact", "support", "evidenceSummary", "citations", "recommendation"],
+        "properties": {
+          "findingId": { "$ref": "#/$defs/id" },
+          "kind": { "enum": ["strength", "opportunity"] },
+          "lens": { "enum": ["task_framing_and_steering", "execution_efficiency", "delegation_and_workflow", "reusable_leverage"] },
+          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "observation": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "impact": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "support": { "enum": ["directly_observed", "strongly_supported", "worth_investigating"] },
+          "evidenceSummary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "citations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/id" }
+          },
+          "recommendation": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "actionPrompt": { "type": "string", "maxLength": 8000 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" }
+  }
+}

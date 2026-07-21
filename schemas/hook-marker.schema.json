@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-inspector.local/schemas/hook-marker-v1.json",
+  "title": "Codex Inspector hook marker v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "protocolVersion", "eventKind", "sessionId", "observedAt"],
+  "properties": {
+    "schemaVersion": { "const": "inspector.hook-marker/v1" },
+    "protocolVersion": { "const": 1 },
+    "eventKind": { "enum": ["session_start", "user_prompt_submit", "pre_compact", "post_compact", "subagent_start", "subagent_stop", "turn_stop"] },
+    "sessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "turnId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "subagentId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "transcriptPath": { "type": ["string", "null"], "maxLength": 4096 },
+    "observedAt": { "type": "string", "format": "date-time" }
+  }
+}

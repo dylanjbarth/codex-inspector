@@ -10,7 +10,9 @@
 - Preserve combined, root-session, and descendant-agent attribution for additive measures.
 - Apply one global relative-time range and global project, model, reasoning, and session-kind filters to the dashboard.
 - Present recorded capacity utilization, remaining percentage, reset timing, and freshness descriptively without a health judgment.
+- Render the capacity hero as one Codex 7-day limit observation. Keep other limit identities and windows out of the hero; they remain available to capacity history.
 - Make token-intensive root sessions the primary route from aggregate analysis into the Context inspector.
+- Keep token-intensive rows grouped by user-initiated root: show project/task/opaque ID, active interval, agent-tree size, direct-versus-spawned tokens, and both context and review actions in one scan line.
 - Treat a dashboard as a saved **view**. Templates and blank canvases are starting points for view creation, not peers of Add widget.
 - Consolidate the view picker, New view, global time, collapsed filters, and Edit view into one header.
 - Put Add widget, drag-and-drop rearrangement, and Done inside an explicit edit mode for the current view.
@@ -24,6 +26,11 @@
 - Use a stable absolute token scale, minimap, fit/zoom controls, and manual branch collapsing so active updates do not reflow completed work.
 - Stream newly indexed active-session events into the open workspace without a full page refresh; preserve selection and viewport, and follow automatically only when Follow live is enabled.
 - Make the chronological event ledger the primary turn detail. Do not invoke Codex to generate default summaries or judgments.
+- Make a deterministic Story view the ledger default while preserving Raw events as a complete chronological fallback.
+- Classify ledger records by actor before event kind: You, Runtime, Agent, and Tool. Treat recorded system/developer inputs and lifecycle state as Runtime rather than user-authored input.
+- Pair normalized tool requests and results by source call ID into one expandable step, retaining direct selection and deep links for each underlying event.
+- Put request, runtime, tool, compaction, and response landmarks above the ledger, with All, Messages, Tools, Runtime, and Errors filters plus local search.
+- Support J/K step traversal, T/Shift+T tool traversal, E error traversal, and slash-to-search without replacing semantic buttons or visible focus behavior.
 - Align a stacked categorized context-accumulation rail with ledger events. Reserve Context seen by Codex for model-call boundaries and label intermediate state reconstructed.
 - Make compactions first-class map and ledger events with exact recorded before/after comparison when source coverage permits.
 - Show exact recorded event content without Inspector-added redaction, using bounded previews and explicit full/raw-content actions for large payloads.

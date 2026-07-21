@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "inspector.normalized-cohort-fixtures/v2",
+  "privacy": "structure preserved; non-discriminator leaf values canonicalized",
+  "fixtures": [
+    {
+      "version": "0.142.5",
+      "sourceKind": "active_rollout",
+      "file": "codex-0-142-5.jsonl",
+      "recordCount": 73,
+      "structuralFingerprint": "5cd60097d26201c20817558874c5e0a52abce997219b566b7f4aad9afbd3c00a",
+      "normalizedSha256": "49cffb019cb45de5418b54e0e2521dfc59467766efa44ba85768332d5ae9748b",
+      "completedTurnCount": 2,
+      "evidenceCount": 73,
+      "recordedTokens": 17420,
+      "lineageKind": "root",
+      "lineageProof": "not_applicable"
+    },
+    {
+      "version": "0.144.0-alpha.4",
+      "sourceKind": "active_rollout",
+      "file": "codex-0-144-0-alpha-4.jsonl",
+      "recordCount": 12,
+      "structuralFingerprint": "b434297aba8b7172310f606b9da106605e1fcb24263c59a01296ef63d65d97e6",
+      "normalizedSha256": "d1cbb646467724344516184693a8fb83a944fe115721e053bd1d2a51a2be574f",
+      "completedTurnCount": 1,
+      "evidenceCount": 12,
+      "recordedTokens": 1430,
+      "lineageKind": "spawned",
+      "lineageProof": "canonicalized_link_between_real_local_sources",
+      "parent": {
+        "version": "0.142.5",
+        "sourceKind": "active_rollout",
+        "file": "codex-0-144-0-alpha-4-parent.jsonl",
+        "recordCount": 73,
+        "structuralFingerprint": "5cd60097d26201c20817558874c5e0a52abce997219b566b7f4aad9afbd3c00a",
+        "normalizedSha256": "d1a701235812d10b4af09964128e782dd51e9fc9dab007434412bae1b04e35f7",
+        "completedTurnCount": 2,
+        "evidenceCount": 73,
+        "recordedTokens": 17420
+      }
+    },
+    {
+      "version": "0.145.0-alpha.18",
+      "sourceKind": "active_rollout",
+      "file": "codex-0-145-0-alpha-18.jsonl",
+      "recordCount": 13,
+      "structuralFingerprint": "4f94e2c7706820db22115f0492ec64326530af2a6709588399d6e97b71934ef4",
+      "normalizedSha256": "aa00b993bf8a33d4d351ea78ef80e1c32f463b1751c248186265a9880677da82",
+      "completedTurnCount": 1,
+      "evidenceCount": 13,
+      "recordedTokens": 1560,
+      "lineageKind": "spawned",
+      "lineageProof": "canonicalized_link_between_real_local_sources",
+      "parent": {
+        "version": "0.142.5",
+        "sourceKind": "active_rollout",
+        "file": "codex-0-145-0-alpha-18-parent.jsonl",
+        "recordCount": 73,
+        "structuralFingerprint": "5cd60097d26201c20817558874c5e0a52abce997219b566b7f4aad9afbd3c00a",
+        "normalizedSha256": "8996ffa016855fa5fb26eab4bd72ddd566dc45a9be54e5ecdc5b6dd8aaf4676b",
+        "completedTurnCount": 2,
+        "evidenceCount": 73,
+        "recordedTokens": 17420
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"session_id":"fake-session","turn_id":"fake-turn","transcript_path":"/fake/rollout.jsonl","cwd":"/fake/project","hook_event_name":"PreCompact","model":"gpt-fake","trigger":"auto"}

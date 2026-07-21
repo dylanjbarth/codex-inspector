@@ -1,0 +1,1 @@
+{"session_id":"fake-session","transcript_path":"/fake/rollout.jsonl","cwd":"/fake/project","hook_event_name":"SubagentStart","model":"gpt-fake","permission_mode":"default","agent_id":"fake-agent","agent_type":"worker"}

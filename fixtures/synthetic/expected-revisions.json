@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "pinnedRevisionOne": {
+    "appliedRevision": 1,
+    "sourceKind": "active_rollout",
+    "sourcePath": "/fake/active/root.jsonl",
+    "sessionTitle": "Old fake title",
+    "rootWorkUnitId": "child-001",
+    "purpose": "other",
+    "titleMatches": [
+      "old"
+    ],
+    "evidenceFactRevision": 1,
+    "evidenceAvailability": "source_missing",
+    "availabilityObservedAt": "2026-07-18T00:02:01Z",
+    "availabilityRevision": 2,
+    "coverageFidelity": "exact",
+    "coverageObserved": 1,
+    "coverageEligible": 1
+  },
+  "pinnedRevisionTwo": {
+    "appliedRevision": 2,
+    "sourceKind": "archived_rollout",
+    "sourcePath": "/fake/archive/root.jsonl",
+    "sessionTitle": "New fake title",
+    "rootWorkUnitId": "root-001",
+    "purpose": "spawned",
+    "titleMatches": [
+      "new"
+    ],
+    "evidenceFactRevision": 1,
+    "evidenceAvailability": "source_missing",
+    "availabilityObservedAt": "2026-07-18T00:02:01Z",
+    "availabilityRevision": 2,
+    "coverageFidelity": "unavailable",
+    "coverageObserved": 0,
+    "coverageEligible": 1
+  },
+  "crossSegmentResumeTokens": 800,
+  "nullTurnBeforeWatermarkAccepted": true,
+  "nullTurnAfterWatermarkRejected": true,
+  "childRevisionInheritanceEnforced": true,
+  "evidenceFingerprintsValidated": true,
+  "provisionalTurnRejected": true,
+  "v1RequiresRebuild": true,
+  "v2EpochSwapValidated": true,
+  "orderedSourceKeys": [
+    "01784332800000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "01784332800000000000:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "01784332801000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "orderedTurnKeys": [
+    "01784332800000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:00000000000000000002",
+    "01784332800000000000:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:00000000000000000001",
+    "01784332801000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:00000000000000000001"
+  ],
+  "orderedEventKeys": [
+    "01784332800000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:00000000000000000001:message",
+    "01784332800000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:00000000000000000001:tool_result",
+    "01784332800000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:00000000000000000002:message",
+    "01784332800000000000:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:00000000000000000001:message"
+  ],
+  "projectDisplayNames": {
+    "cwd": "scratch",
+    "git_remote": "Codex-Inspector",
+    "git_root": "repository"
+  }
+}

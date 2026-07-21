@@ -1,0 +1,12 @@
+{
+  "name": "codex-inspector-phase0",
+  "interface": { "displayName": "Codex Inspector Phase 0" },
+  "plugins": [
+    {
+      "name": "codex-inspector",
+      "source": { "source": "local", "path": "./plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

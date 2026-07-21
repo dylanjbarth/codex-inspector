@@ -1,0 +1,10 @@
+{
+  "marketplace": "dylanjbarth/codex-inspector@v0.1.0",
+  "manifest": ".agents/plugins/marketplace.json",
+  "plugin": "codex-inspector@codex-inspector-development",
+  "cliRelease": "https://github.com/dylanjbarth/codex-inspector/releases/tag/v0.1.0",
+  "artifact": "codex-inspector-darwin-arm64",
+  "checksum": "codex-inspector-darwin-arm64.sha256",
+  "protocolVersion": 1,
+  "cliRange": ">=0.1.0 <0.2.0"
+}

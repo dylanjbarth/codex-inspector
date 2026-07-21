@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-inspector.local/schemas/reviews/manifest-v1.json",
+  "title": "Codex Inspector Review Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reviewId", "createdAt", "datasetEpoch", "indexRevision", "scope", "includedSessionIds", "includedTurnIds", "sources", "aggregateMetrics", "coverageGaps", "evidenceRules", "rubric", "model", "reasoning", "evidence", "reportDestination", "reportSchema", "limits"],
+  "properties": {
+    "schemaVersion": { "const": "inspector.review/v1" },
+    "reviewId": { "$ref": "#/$defs/id" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "datasetEpoch": { "$ref": "#/$defs/id" },
+    "indexRevision": { "type": "integer", "minimum": 1 },
+    "scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "rootSessionId", "descendantSessionIds", "appliedRevision"],
+          "properties": {
+            "kind": { "const": "single_session" },
+            "rootSessionId": { "$ref": "#/$defs/id" },
+            "descendantSessionIds": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+            "appliedRevision": { "type": "integer", "minimum": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "start", "end", "timezone", "appliedRevision"],
+          "properties": {
+            "kind": { "const": "time_period" },
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" },
+            "timezone": { "type": "string", "minLength": 1 },
+            "projectId": { "$ref": "#/$defs/id" },
+            "appliedRevision": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    },
+    "includedSessionIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+    "includedTurnIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sourceId", "sourceKind", "locator", "fingerprint"],
+        "properties": {
+          "sourceId": { "$ref": "#/$defs/id" },
+          "sourceKind": { "enum": ["active_rollout", "archived_rollout"] },
+          "locator": { "type": "string", "minLength": 1, "maxLength": 4096 },
+          "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "aggregateMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recorded_tokens", "recorded_tokens_by_kind", "recorded_tokens_over_time", "token_composition", "top_root_sessions_by_tokens", "latest_capacity_observation", "capacity_drawdown"],
+      "properties": {
+        "recorded_tokens": { "$ref": "#/$defs/tokenTotalMetric" },
+        "recorded_tokens_by_kind": { "$ref": "#/$defs/byKindMetric" },
+        "recorded_tokens_over_time": { "$ref": "#/$defs/overTimeMetric" },
+        "token_composition": { "$ref": "#/$defs/compositionMetric" },
+        "top_root_sessions_by_tokens": { "$ref": "#/$defs/topRootsMetric" },
+        "latest_capacity_observation": { "$ref": "#/$defs/latestCapacityMetric" },
+        "capacity_drawdown": { "$ref": "#/$defs/drawdownMetric" }
+      }
+    },
+    "coverageGaps": { "type": "array", "items": { "type": "string", "maxLength": 2000 } },
+    "evidenceRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["citationShape", "treatAsUntrusted"],
+      "properties": {
+        "citationShape": { "const": "manifest_evidence_id" },
+        "treatAsUntrusted": { "const": true }
+      }
+    },
+    "rubric": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "task_framing_and_steering" },
+        { "const": "execution_efficiency" },
+        { "const": "delegation_and_workflow" },
+        { "const": "reusable_leverage" }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "focus": { "type": "string", "maxLength": 2000 },
+    "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "reasoning": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidenceId", "sourceId", "sourcePrefixSha256", "eventFingerprint", "adapterVersion", "recordOrdinal", "sessionId", "turnId", "eventKind", "observedAt", "availability", "availabilityObservedAt", "availabilityRevision"],
+        "properties": {
+          "evidenceId": { "$ref": "#/$defs/id" },
+          "sourceId": { "$ref": "#/$defs/id" },
+          "sourcePrefixSha256": { "$ref": "#/$defs/sha256" },
+          "eventFingerprint": { "$ref": "#/$defs/sha256" },
+          "adapterVersion": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "recordOrdinal": { "type": "integer", "minimum": 0 },
+          "byteStart": { "type": "integer", "minimum": 0 },
+          "byteEnd": { "type": "integer", "minimum": 0 },
+          "sessionId": { "$ref": "#/$defs/id" },
+          "turnId": { "$ref": "#/$defs/id" },
+          "eventKind": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "observedAt": { "type": "string", "format": "date-time" },
+          "availability": { "enum": ["available", "source_missing", "fingerprint_mismatch", "unreadable"] },
+          "availabilityObservedAt": { "type": "string", "format": "date-time" },
+          "availabilityRevision": { "type": ["integer", "null"], "minimum": 1 }
+        }
+      }
+    },
+    "reportDestination": { "const": "./review.json" },
+    "reportSchema": { "const": "./report.schema.json" },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxFindings", "maxReportBytes"],
+      "properties": {
+        "maxFindings": { "const": 5 },
+        "maxReportBytes": { "const": 1048576 }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "metricBase": { "type": "object", "required": ["formulaVersion", "fidelity", "value"], "properties": { "formulaVersion": { "const": 1 }, "fidelity": { "enum": ["exact", "derived", "unavailable"] } } },
+    "byKindValue": { "type": "object", "additionalProperties": false, "required": ["user_root_direct", "descendant", "inspector_review", "other_orphan"], "properties": { "user_root_direct": { "type": "integer", "minimum": 0 }, "descendant": { "type": "integer", "minimum": 0 }, "inspector_review": { "type": "integer", "minimum": 0 }, "other_orphan": { "type": "integer", "minimum": 0 } } },
+    "tokenTotalMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "type": ["integer", "null"], "minimum": 0 } } }] },
+    "byKindMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "$ref": "#/$defs/byKindValue" } } }] },
+    "overTimeMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["start", "byKind"], "properties": { "start": { "type": "string", "format": "date-time" }, "byKind": { "$ref": "#/$defs/byKindValue" } } } } } }] },
+    "compositionMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "type": "object", "additionalProperties": false, "required": ["uncached_input", "cached_input", "visible_output", "reasoning_output", "residual"], "properties": { "uncached_input": { "type": "integer", "minimum": 0 }, "cached_input": { "type": "integer", "minimum": 0 }, "visible_output": { "type": "integer", "minimum": 0 }, "reasoning_output": { "type": "integer", "minimum": 0 }, "residual": { "type": "integer", "minimum": 0 } } } } }] },
+    "topRootsMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["rootSessionId", "inclusiveTokens", "directTokens", "descendantTokens"], "properties": { "rootSessionId": { "$ref": "#/$defs/id" }, "inclusiveTokens": { "type": "integer", "minimum": 0 }, "directTokens": { "type": "integer", "minimum": 0 }, "descendantTokens": { "type": "integer", "minimum": 0 } } } } } }] },
+    "capacityValue": { "type": "object", "additionalProperties": false, "required": ["observedAt", "limitId", "windowMinutes", "usedPercent", "resetsAt"], "properties": { "observedAt": { "type": "string", "format": "date-time" }, "limitId": { "$ref": "#/$defs/id" }, "windowMinutes": { "type": "integer", "minimum": 1 }, "usedPercent": { "type": "number", "minimum": 0, "maximum": 100 }, "remainingPercent": { "type": "number", "minimum": 0, "maximum": 100 }, "resetsAt": { "type": "integer", "minimum": 0 } } },
+    "latestCapacityMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "oneOf": [{ "$ref": "#/$defs/capacityValue" }, { "type": "null" }] } } }] },
+    "drawdownMetric": { "allOf": [{ "$ref": "#/$defs/metricBase" }, { "type": "object", "additionalProperties": false, "properties": { "formulaVersion": {}, "fidelity": {}, "value": { "type": "array", "items": { "$ref": "#/$defs/capacityValue" } } } }] }
+  }
+}
