@@ -236,20 +236,20 @@ func (r Repository) matches(ctx context.Context, epoch string, revision int64, r
 		if id != rootID {
 			prefix = "descendant"
 		}
-		if strings.Contains(strings.ToLower(sourceID), q) {
+		if containsAllSearchTerms(sourceID, q) {
 			categories[prefix+": session ID"] = true
 		}
-		if strings.Contains(strings.ToLower(title), q) {
+		if containsAllSearchTerms(title, q) {
 			categories[prefix+": title"] = true
 		}
-		if strings.Contains(strings.ToLower(project+" "+aliases), q) {
+		if containsAllSearchTerms(project+" "+aliases, q) {
 			categories[prefix+": project or working directory"] = true
 		}
 	}
 	if err = rows.Close(); err != nil {
 		return nil, nil, err
 	}
-	fts := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
+	fts := ftsSearchQuery(query)
 	rows, err = r.Store.DB().QueryContext(ctx, latestSessions+`SELECT s.id,d.match_category,v.canonical_path,e.byte_start,e.byte_end,e.content_sha256
 		FROM sv JOIN turns t ON t.session_id=sv.session_id AND t.commit_revision<=?
 		JOIN events e ON e.epoch_id=t.epoch_id AND e.turn_id=t.id AND e.commit_revision<=?
@@ -295,6 +295,33 @@ func (r Repository) matches(ctx context.Context, epoch string, revision int64, r
 	}
 	sort.Strings(out)
 	return out, snippets, err
+}
+
+func searchTerms(query string) []string {
+	return strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+}
+
+func containsAllSearchTerms(value, query string) bool {
+	haystack := strings.ToLower(value)
+	terms := searchTerms(query)
+	if len(terms) == 0 {
+		return false
+	}
+	for _, term := range terms {
+		if !strings.Contains(haystack, term) {
+			return false
+		}
+	}
+	return true
+}
+
+func ftsSearchQuery(query string) string {
+	terms := searchTerms(query)
+	quoted := make([]string, 0, len(terms))
+	for _, term := range terms {
+		quoted = append(quoted, `"`+strings.ReplaceAll(term, `"`, `""`)+`"`)
+	}
+	return strings.Join(quoted, " AND ")
 }
 
 func sourceMatchSnippet(path string, start, end int64, expectedHash, category, query string) string {
@@ -357,7 +384,16 @@ func boundedMatchSnippet(text, query string, limit int) string {
 		return text
 	}
 	start := 0
-	if at := strings.Index(strings.ToLower(text), strings.ToLower(strings.TrimSpace(query))); at > 0 {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	at := strings.Index(strings.ToLower(text), needle)
+	if at < 0 {
+		for _, term := range searchTerms(query) {
+			if at = strings.Index(strings.ToLower(text), term); at >= 0 {
+				break
+			}
+		}
+	}
+	if at > 0 {
 		start = utf8.RuneCountInString(text[:at]) - limit/3
 		if start < 0 {
 			start = 0
