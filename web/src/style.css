@@ -330,3 +330,28 @@ h1,h2,h3,h4,.discovery-results h3,.discovery-result h3,.finding-title h3{font-fa
 .accepted-report .citations a{color:#3f49b5;font-weight:600}
 .accepted-report .citations span{border-color:#81b99f;background:#edf8f2;color:#176344;font-weight:650}
 @media(prefers-reduced-motion:reduce){.ledger article{scroll-behavior:auto}.ledger-loading-more svg{animation:none}}
+
+/* Keep every primary route on one stable canvas, independent of sidebar state. */
+.app-shell{
+  --shell-sidebar-width:250px;
+  --shell-sidebar-collapsed-width:72px;
+  --shell-content-max-width:1440px;
+  grid-template-columns:var(--shell-sidebar-width) minmax(0,1fr);
+}
+.app-shell.collapsed{
+  grid-template-columns:var(--shell-sidebar-collapsed-width) minmax(0,1fr);
+}
+.app-shell.collapsed .shell-content{
+  padding-right:calc(34px + var(--shell-sidebar-width) - var(--shell-sidebar-collapsed-width));
+}
+.shell-dataset,
+.dashboard-page,
+.inspector-shell,
+.inspector-shell:has(>.discovery),
+.reviews-shell{
+  width:100%;
+  max-width:var(--shell-content-max-width);
+}
+@media(max-width:900px){
+  .app-shell.collapsed .shell-content{padding:0 18px 28px}
+}
