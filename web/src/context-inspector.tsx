@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import {ArrowRight,LoaderCircle} from 'lucide-react'
-import {fetchEvidence,fetchLedger,fetchRecordedContext,fetchSessionMap,fetchSessionMetadata,fetchSessions,type EvidenceChunk,type LedgerPage,type RecordedContext,type SessionMap,type SessionPage} from './api'
+import {fetchEvidence,fetchLedger,fetchSessionMap,fetchSessionMetadata,fetchSessions,type EvidenceChunk,type LedgerPage,type SessionMap,type SessionPage} from './api'
 import {navigate} from './navigation'
 
 type Props={revision:number;available:number|null;onApply:()=>Promise<void>}
@@ -24,7 +23,75 @@ const sessionTitle=(item:SessionPage['items'][number])=>usableTitle(item.title)|
 const matchLabel=(value:string)=>{const [scope,field]=value.split(':').map(part=>part.trim());if(!field)return value==='root session'?'Recent root session':kindLabel(value);return `${scope==='descendant'?'Spawned agent':'Root session'} matched ${field}`}
 const sessionDuration=(item:SessionPage['items'][number])=>{if(!item.startedAt||!item.latestCompleted)return '';const elapsed=new Date(item.latestCompleted).getTime()-new Date(item.startedAt).getTime();if(!Number.isFinite(elapsed)||elapsed<0)return '';const minutes=Math.max(1,Math.round(elapsed/60000));return minutes<60?`${minutes} min`:`${Math.floor(minutes/60)} hr ${minutes%60?`${minutes%60} min`:''}`.trim()}
 function Highlight({text,query}:{text:string;query:string}){const needles=[...new Set(query.trim().split(/\s+/).filter(Boolean).map(value=>value.toLowerCase()))];if(!needles.length)return <>{text}</>;const expression=needles.sort((a,b)=>b.length-a.length).map(value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),bits=text.split(new RegExp(`(${expression})`,'ig'));return <>{bits.map((part,index)=>needles.includes(part.toLowerCase())?<mark key={index}>{part}</mark>:<React.Fragment key={index}>{part}</React.Fragment>)}</>}
-function EvidenceView({kind,observedAt,raw}:{kind:string;observedAt:string;raw:string}){let record:any;try{record=JSON.parse(raw)}catch{/* Exact record remains available below. */}const payload=record?.payload&&typeof record.payload==='object'?record.payload:{},type=typeof payload.type==='string'?payload.type:kind,label=kindLabel(type);const content=Array.isArray(payload.content)?payload.content.map((block:any)=>typeof block?.text==='string'?block.text:'').filter(Boolean).join('\n'):typeof payload.message==='string'?payload.message:typeof payload.last_agent_message==='string'?payload.last_agent_message:'';const toolName=typeof payload.name==='string'?payload.name:'';const toolInput=typeof payload.input==='string'?payload.input:typeof payload.arguments==='string'?payload.arguments:'';const toolOutput=typeof payload.output==='string'?payload.output:Array.isArray(payload.output)?payload.output.map((block:any)=>typeof block?.text==='string'?block.text:'').filter(Boolean).join('\n'):'';const description=type==='message'?`Recorded ${payload.role||'unknown-role'} message.`:type.includes('tool')||type.includes('function_call')?'Recorded tool activity.':type.includes('reasoning')?'Recorded reasoning summary; Inspector does not reconstruct omitted reasoning.':type.includes('token')||type.includes('rate')?'Recorded token or rate-limit observation.':type.includes('spawn')||type.includes('return')?'Recorded lineage event.':type.includes('compact')?'Recorded compaction event; no before/after reconstruction is claimed.':'Recorded lifecycle evidence.';return <div className="formatted-evidence"><div><span className="section-label">{label}</span><time>{new Date(observedAt).toLocaleString()}</time></div><h3>{label}</h3><p>{description}</p><dl>{payload.role&&<><dt>Role</dt><dd>{payload.role}</dd></>}{toolName&&<><dt>Tool</dt><dd>{toolName}</dd></>}{payload.call_id&&<><dt>Call ID</dt><dd>{payload.call_id}</dd></>}{payload.status&&<><dt>Status</dt><dd>{payload.status}</dd></>}</dl>{content&&<p className="formatted-content">{content}</p>}{toolInput&&<><h4>Recorded input</h4><pre>{toolInput}</pre></>}{toolOutput&&<><h4>Recorded result</h4><pre>{toolOutput}</pre></>}</div>}
+type UnknownRecord=Record<string,unknown>
+const isRecord=(value:unknown):value is UnknownRecord=>value!==null&&typeof value==='object'&&!Array.isArray(value)
+const textValue=(value:unknown)=>typeof value==='string'?value:''
+const numberValue=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?value:null
+function parseJSON(value:string):unknown{try{return JSON.parse(value)}catch{return undefined}}
+function displayJSON(value:unknown){if(typeof value==='string'){const parsed=parseJSON(value);if(parsed!==undefined)return JSON.stringify(parsed,null,2);return value}try{return JSON.stringify(value,null,2)}catch{return String(value)}}
+function contentText(value:unknown){if(typeof value==='string')return value;if(!Array.isArray(value))return '';return value.map(block=>isRecord(block)?textValue(block.text)||textValue(block.output_text)||textValue(block.input_text):'').filter(Boolean).join('\n')}
+function dateValue(value:unknown){const number=numberValue(value),date=number==null?new Date(textValue(value)):new Date(number<10_000_000_000?number*1000:number);return Number.isNaN(date.getTime())?'':date.toLocaleString()}
+function durationValue(value:unknown){const ms=numberValue(value);if(ms==null)return '';if(ms<1000)return `${ms} ms`;const seconds=Math.round(ms/100)/10;if(seconds<60)return `${seconds} sec`;const minutes=Math.floor(seconds/60),remaining=Math.round(seconds%60);return `${minutes} min${remaining?` ${remaining} sec`:''}`}
+function ScalarFields({fields}:{fields:Array<[string,unknown]>}){const visible=fields.filter(([,value])=>['string','number','boolean'].includes(typeof value)&&value!=='');if(!visible.length)return null;return <dl>{visible.map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{typeof value==='number'?new Intl.NumberFormat().format(value):String(value)}</dd></React.Fragment>)}</dl>}
+function DataBlock({title,value}:{title:string;value:unknown}){if(value==null||value==='')return null;return <><h4>{title}</h4><pre>{displayJSON(value)}</pre></>}
+function EvidenceView({kind,observedAt,raw,complete}:{kind:string;observedAt:string;raw:string;complete:boolean}){
+  const parsed=parseJSON(raw)
+  if(!isRecord(parsed))return <div className="formatted-evidence"><div><span className="section-label">{kindLabel(kind)}</span><time>{new Date(observedAt).toLocaleString()}</time></div><h3>{kindLabel(kind)}</h3><p>{complete?'This exact record is not JSON, so Inspector is preserving it as source text below.':'Load the remaining source bytes to format this record.'}</p>{raw&&<p className="formatted-preview">{raw}</p>}</div>
+  const payload=isRecord(parsed.payload)?parsed.payload:parsed,type=textValue(payload.type)||kind,label=kindLabel(type)
+  const content=contentText(payload.content)||textValue(payload.message)||textValue(payload.last_agent_message)||contentText(payload.summary)
+  const toolRequest=['custom_tool_call','function_call','tool_search_call'].includes(type)
+  const toolResult=['custom_tool_call_output','function_call_output','tool_search_output'].includes(type)
+  const toolInput=payload.input??payload.arguments
+  const toolOutput=payload.output
+  let description='Recorded lifecycle evidence.'
+  let fields:Array<[string,unknown]> = []
+  let detail:React.ReactNode=null
+  if(type==='task_started'){
+    description='The recorded configuration at the start of this agent turn.'
+    fields=[['Model context window',payload.model_context_window],['Collaboration mode',payload.collaboration_mode_kind],['Started',dateValue(payload.started_at)],['Turn ID',payload.turn_id]]
+  }else if(type==='task_complete'){
+    description='The recorded completion and timing for this agent turn.'
+    fields=[['Duration',durationValue(payload.duration_ms)],['Time to first token',durationValue(payload.time_to_first_token_ms)],['Completed',dateValue(payload.completed_at)],['Turn ID',payload.turn_id]]
+  }else if(type==='token_count'){
+    const info=isRecord(payload.info)?payload.info:{},last=isRecord(info.last_token_usage)?info.last_token_usage:{},total=isRecord(info.total_token_usage)?info.total_token_usage:{},limits=isRecord(payload.rate_limits)?payload.rate_limits:{},primary=isRecord(limits.primary)?limits.primary:{},credits=isRecord(limits.credits)?limits.credits:{}
+    description='Recorded token usage and capacity at this point in the turn.'
+    fields=[['Context window',info.model_context_window],['Rate limit',limits.limit_id],['Used',numberValue(primary.used_percent)==null?'':`${primary.used_percent}%`],['Window',numberValue(primary.window_minutes)==null?'':`${primary.window_minutes} min`],['Resets',dateValue(primary.resets_at)],['Plan',limits.plan_type],['Credits',credits.balance]]
+    detail=<div className="evidence-groups"><div><h4>Last usage</h4><ScalarFields fields={[['Input',last.input_tokens],['Cached input',last.cached_input_tokens],['Output',last.output_tokens],['Reasoning output',last.reasoning_output_tokens],['Total',last.total_tokens]]}/></div><div><h4>Cumulative usage</h4><ScalarFields fields={[['Input',total.input_tokens],['Cached input',total.cached_input_tokens],['Output',total.output_tokens],['Reasoning output',total.reasoning_output_tokens],['Total',total.total_tokens]]}/></div></div>
+  }else if(type==='turn_context'){
+    const sandbox=isRecord(payload.sandbox_policy)?payload.sandbox_policy:isRecord(payload.file_system_sandbox_policy)?payload.file_system_sandbox_policy:{}
+    description='The recorded execution context and policy for this turn.'
+    fields=[['Model',payload.model],['Reasoning effort',payload.effort],['Working directory',payload.cwd],['Current date',payload.current_date],['Timezone',payload.timezone],['Approval policy',payload.approval_policy],['Sandbox',sandbox.type??sandbox.mode],['Network access',sandbox.network_access],['Collaboration mode',isRecord(payload.collaboration_mode)?payload.collaboration_mode.mode??payload.collaboration_mode.kind:payload.collaboration_mode],['Multi-agent mode',payload.multi_agent_mode]]
+    detail=<DataBlock title="Workspace roots" value={payload.workspace_roots}/>
+  }else if(type==='sub_agent_activity'){
+    description='Recorded activity from a spawned agent session.'
+    fields=[['Activity',payload.kind],['Agent path',payload.agent_path],['Agent thread',payload.agent_thread_id],['Occurred',dateValue(payload.occurred_at_ms)],['Event ID',payload.event_id]]
+  }else if(type==='message'||type==='user_message'||type==='agent_message'){
+    description=`Recorded ${textValue(payload.role)||type.replace('_message','')} message.`
+    fields=[['Role',payload.role],['Phase',payload.phase],['Message ID',payload.id]]
+  }else if(toolRequest||toolResult){
+    description=toolRequest?'Recorded tool request and its exact arguments.':'Recorded tool result returned to the agent.'
+    fields=[['Tool',payload.name],['Call ID',payload.call_id],['Status',payload.status]]
+    detail=<>{toolRequest&&<DataBlock title="Recorded input" value={toolInput}/>} {toolResult&&<DataBlock title="Recorded result" value={toolOutput}/>}</>
+  }else if(type.includes('reasoning')){
+    description='Recorded reasoning summary; Inspector does not reconstruct omitted reasoning.'
+    fields=[['Status',payload.status],['Encrypted content',payload.encrypted_content?'Present':'']]
+  }else if(type.includes('compact')){
+    description='A compaction boundary recorded directly by the source.'
+    fields=[['Window',payload.window_number],['Window ID',payload.window_id],['Previous window',payload.previous_window_id],['First window',payload.first_window_id]]
+    detail=<div className="compaction-note"><strong>Exact recorded compaction evidence</strong><span>No reconstructed before/after context, preserved/removed classification, or component token estimate is claimed.</span></div>
+  }else if(type==='world_state'){
+    const state=isRecord(payload.state)?payload.state:{}
+    description='A recorded snapshot of capabilities and environment state.'
+    fields=[['Apps instructions',state.apps_instructions],['Plugins instructions',state.plugins_instructions],['Skills',isRecord(state.skills)?Object.keys(state.skills).length:''],['Environments',isRecord(state.environments)?Object.keys(state.environments).length:'']]
+    detail=<DataBlock title="Recorded state summary" value={Object.fromEntries(Object.entries(state).slice(0,12).map(([key,value])=>[key,isRecord(value)?`${Object.keys(value).length} entries`:value]))}/>
+  }else{
+    description='Recorded source event. Known scalar fields are shown below.'
+    fields=Object.entries(payload).filter(([key,value])=>key!=='type'&&['string','number','boolean'].includes(typeof value)).slice(0,12).map(([key,value])=>[kindLabel(key),value])
+    const objects=Object.fromEntries(Object.entries(payload).filter(([,value])=>isRecord(value)||Array.isArray(value)).slice(0,4))
+    if(Object.keys(objects).length)detail=<DataBlock title="Recorded data" value={objects}/>
+  }
+  return <div className="formatted-evidence"><div><span className="section-label">{label}</span><time>{new Date(observedAt).toLocaleString()}</time></div><h3>{label}</h3><p>{description}</p><ScalarFields fields={fields}/>{content&&<p className="formatted-content">{content}</p>}{detail}</div>
+}
 
 export function ContextInspector({revision,available,onApply}:Props){
   const [routeState,setRoute]=React.useState(route())
@@ -103,16 +170,15 @@ function SessionView({route,revision}:{route:Route;revision:number}){
 function TurnInspector({rootId,turnId,eventId,evidenceId,revision,ledger}:{rootId:string;turnId:string;eventId?:string;evidenceId?:string;revision:number;ledger:LedgerPage|null}){
   const selected=ledger?.items.find(item=>item.eventId===eventId||item.evidenceId===evidenceId)
   const activeEvidence=evidenceId||selected?.evidenceId
-  const [chunks,setChunks]=React.useState<EvidenceChunk[]>([]),[context,setContext]=React.useState<RecordedContext|null>(null),[error,setError]=React.useState('')
+  const [chunks,setChunks]=React.useState<EvidenceChunk[]>([]),[error,setError]=React.useState('')
   const eventRef=React.useRef<HTMLElement|null>(null)
   React.useEffect(()=>{eventRef.current?.scrollIntoView?.({block:'nearest',behavior:'smooth'})},[selected?.eventId,ledger])
-  React.useEffect(()=>{let live=true;setChunks([]);setContext(null);setError('');if(!activeEvidence)return;Promise.all([fetchEvidence(activeEvidence,revision),fetchRecordedContext(activeEvidence,revision)]).then(([chunk,recorded])=>{if(live){setChunks([chunk]);setContext(recorded)}}).catch(e=>{if(live)setError((e as Error).message)});return()=>{live=false}},[activeEvidence,revision])
+  React.useEffect(()=>{let live=true;setChunks([]);setError('');if(!activeEvidence)return;fetchEvidence(activeEvidence,revision).then(chunk=>{if(live)setChunks([chunk])}).catch(e=>{if(live)setError((e as Error).message)});return()=>{live=false}},[activeEvidence,revision])
   if(!ledger)return <p className="loading">Loading the completed-turn ledger…</p>
   const current=chunks.at(-1),raw=chunks.map(chunk=>chunk.text||'').join('')
   return <div className="turn-focus"><section className="ledger"><div><span className="section-label">CHRONOLOGICAL EVENT LEDGER</span><h2>Full recorded turn</h2><p>{ledger.items.length} source-backed events. Select one to inspect its exact record.</p></div><ol>{ledger.items.map((item,index)=>{const active=item.eventId===selected?.eventId;return <li key={item.eventId}><article ref={active?eventRef:undefined} className={active?'selected':''}><button aria-current={active?'true':undefined} onClick={()=>navigate(inspectorPath(`/context/${encodeURIComponent(rootId)}/turn/${encodeURIComponent(turnId)}/event/${encodeURIComponent(item.eventId)}`,{evidence:item.evidenceId}))}><span>{String(index+1).padStart(2,'0')}</span><strong>{kindLabel(item.kind)}</strong><time>{new Date(item.observedAt).toLocaleTimeString()}</time></button>{(item.kind==='compacted'||item.kind==='context_compacted')&&<small>First-class exact recorded compaction event; surrounding ledger usage remains visible.</small>}</article></li>})}</ol></section>
     <section className="evidence-panel"><span className="section-label">EVENT EVIDENCE</span>{!activeEvidence?<><h2>Choose an event</h2><p>Its opaque evidence reference will resolve against the original source file.</p></>:error?<div className="error"><h2>Evidence unavailable</h2><p>{error}</p></div>:!current?<p className="loading">Verifying pinned source fingerprints…</p>:<><div className="evidence-heading"><div><h2>{selected?kindLabel(selected.kind):'Deep-linked event'}</h2><p>Opaque evidence ID · revision {revision}</p></div><span className={current.availability==='available'?'exact-badge':'unavailable-badge'}>{current.availability==='available'?'Exact source':'Unavailable'}</span></div>
-      {current.availability!=='available'?<div className="unavailable-context"><strong>Exact payload unavailable</strong><p>The source is {current.availability.replaceAll('_',' ')}. Indexed metrics and normalized facts remain visible.</p></div>:<><EvidenceView kind={selected?.kind||'record'} observedAt={selected?.observedAt||current.availabilityObservedAt} raw={raw}/><details className="original-record"><summary>View original record</summary><div className="local-evidence-notice"><strong>Displays the original local Codex record</strong><p>It may contain secrets, messages, tool arguments, or results. It is rendered as inert text and never sent elsewhere.</p></div><pre className="raw-evidence" aria-label="Exact inert source payload">{raw}</pre><p className="chunk-meta">{current.encoding==='escaped-bytes'?'Unsafe/control bytes are visibly escaped; nothing is executed.':'UTF-8 source bytes rendered as inert text.'} {chunks.reduce((sum,chunk)=>sum+chunk.bytes,0)} bytes shown.</p>{!current.complete&&<button onClick={()=>void fetchEvidence(activeEvidence,revision,current.offset+current.bytes).then(chunk=>setChunks(value=>[...value,chunk]))}>Load next bounded chunk</button>}</details></>}
-      <div className={context?.fidelity==='exact'?'exact-context':'unavailable-context'}><strong>{context?.blocks[0]?.kind==='compaction'?'Exact recorded compaction evidence':context?.fidelity==='exact'?'Context seen by Codex':'Unavailable in demo'}</strong><p>{context?.reason||'The supported source proves this exact recorded model-input boundary.'}</p>{context?.blocks[0]?.kind==='compaction'&&<small>No reconstructed before/after context, preserved/removed classification, or component token estimate is claimed.</small>}</div></>}
+      {current.availability!=='available'?<div className="unavailable-context"><strong>Exact payload unavailable</strong><p>The source is {current.availability.replaceAll('_',' ')}. Indexed metrics and normalized facts remain visible.</p></div>:<><EvidenceView kind={selected?.kind||'record'} observedAt={selected?.observedAt||current.availabilityObservedAt} raw={raw} complete={current.complete}/><details className="original-record"><summary>View original record</summary><div className="local-evidence-notice"><strong>Displays the original local Codex record</strong><p>It may contain secrets, messages, tool arguments, or results. It is rendered as inert text and never sent elsewhere.</p></div><pre className="raw-evidence" aria-label="Exact inert source payload">{current.complete&&parseJSON(raw)!==undefined?displayJSON(parseJSON(raw)):raw}</pre><p className="chunk-meta">{current.encoding==='escaped-bytes'?'Unsafe/control bytes are visibly escaped; nothing is executed.':'UTF-8 source bytes rendered as inert text.'} {chunks.reduce((sum,chunk)=>sum+chunk.bytes,0)} bytes shown.</p>{!current.complete&&<button onClick={()=>void fetchEvidence(activeEvidence,revision,current.offset+current.bytes).then(chunk=>setChunks(value=>[...value,chunk]))}>Load next bounded chunk</button>}</details></>}</>}
     </section>
   </div>
 }
