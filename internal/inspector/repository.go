@@ -719,16 +719,18 @@ func (r Repository) mapTurns(ctx context.Context, epoch string, revision int64, 
 		return []MapTurn{}, nil
 	}
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
-	query := `SELECT t.session_id,t.id,t.state,coalesce(t.started_at,t.terminal_at),t.completed_at,u.total_tokens,
-		count(DISTINCT CASE WHEN tc.semantic_phase='request' THEN tc.id END),
-		count(DISTINCT CASE WHEN tc.semantic_phase='result' AND (coalesce(tc.exit_code,0)<>0 OR lower(coalesce(tc.status,'')) IN ('error','failed','failure','cancelled','timed_out')) THEN tc.id END),
-		count(DISTINCT c.event_id)
+	// Keep the turn scan one-row-per-turn. Joining tool calls and compactions here
+	// multiplies both fact sets before DISTINCT can reduce them; on large agent
+	// trees that made this query take tens of seconds. The bounded aggregates below
+	// scan each fact set once and are merged by turn ID in memory.
+	activity, err := r.mapTurnActivity(ctx, epoch, ids, placeholders)
+	if err != nil {
+		return nil, err
+	}
+	query := `SELECT t.session_id,t.id,t.state,coalesce(t.started_at,t.terminal_at),t.completed_at,u.total_tokens
 		FROM turns t
 		LEFT JOIN turn_usage u ON u.epoch_id=t.epoch_id AND u.turn_id=t.id AND u.formula_version=1
-		LEFT JOIN tool_calls tc ON tc.epoch_id=t.epoch_id AND tc.turn_id=t.id
-		LEFT JOIN compactions c ON c.epoch_id=t.epoch_id AND c.turn_id=t.id
 		WHERE t.epoch_id=? AND t.commit_revision<=? AND t.session_id IN (` + placeholders + `)
-		GROUP BY t.session_id,t.id,t.state,t.started_at,t.terminal_at,t.completed_at,u.total_tokens,t.source_order_key
 		ORDER BY t.session_id,t.source_order_key,t.id`
 	args := []any{epoch, revision}
 	for _, id := range ids {
@@ -756,8 +758,13 @@ func (r Repository) mapTurns(ctx context.Context, epoch string, revision int64, 
 		var turn MapTurn
 		var completed sql.NullString
 		var direct sql.NullInt64
-		if err = rows.Scan(&turn.SessionID, &turn.TurnID, &turn.State, &turn.StartedAt, &completed, &direct, &turn.ToolCount, &turn.ErrorCount, &turn.CompactionCount); err != nil {
+		if err = rows.Scan(&turn.SessionID, &turn.TurnID, &turn.State, &turn.StartedAt, &completed, &direct); err != nil {
 			return nil, err
+		}
+		if counts := activity[turn.TurnID]; counts != nil {
+			turn.ToolCount = counts.tools
+			turn.ErrorCount = counts.errors
+			turn.CompactionCount = counts.compactions
 		}
 		turn.Ordinal = ordinals[turn.SessionID]
 		ordinals[turn.SessionID]++
@@ -793,6 +800,58 @@ func (r Repository) mapTurns(ctx context.Context, epoch string, revision int64, 
 		out = append(out, turn)
 	}
 	return out, rows.Err()
+}
+
+type mapTurnCounts struct {
+	tools, errors, compactions int
+}
+
+func (r Repository) mapTurnActivity(ctx context.Context, epoch string, sessionIDs []string, placeholders string) (map[string]*mapTurnCounts, error) {
+	counts := make(map[string]*mapTurnCounts)
+	args := make([]any, 0, len(sessionIDs)+1)
+	args = append(args, epoch)
+	for _, id := range sessionIDs {
+		args = append(args, id)
+	}
+	rows, err := r.Store.DB().QueryContext(ctx, `SELECT turn_id,
+		count(CASE WHEN semantic_phase='request' THEN 1 END),
+		count(CASE WHEN semantic_phase='result' AND (coalesce(exit_code,0)<>0 OR lower(coalesce(status,'')) IN ('error','failed','failure','cancelled','timed_out')) THEN 1 END)
+		FROM tool_calls WHERE epoch_id=? AND session_id IN (`+placeholders+`) GROUP BY turn_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var turnID string
+		value := &mapTurnCounts{}
+		if err = rows.Scan(&turnID, &value.tools, &value.errors); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		counts[turnID] = value
+	}
+	if err = rows.Close(); err != nil {
+		return nil, err
+	}
+
+	rows, err = r.Store.DB().QueryContext(ctx, `SELECT turn_id,count(*) FROM compactions WHERE epoch_id=? AND session_id IN (`+placeholders+`) AND turn_id IS NOT NULL GROUP BY turn_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var turnID string
+		var compacted int
+		if err = rows.Scan(&turnID, &compacted); err != nil {
+			return nil, err
+		}
+		value := counts[turnID]
+		if value == nil {
+			value = &mapTurnCounts{}
+			counts[turnID] = value
+		}
+		value.compactions = compacted
+	}
+	return counts, rows.Err()
 }
 
 func (r Repository) rootTurns(ctx context.Context, epoch string, revision int64, rootID string) ([]RootTurn, error) {

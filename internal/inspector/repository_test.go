@@ -134,6 +134,9 @@ func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 	if rootTurn == nil || rootTurn.DirectTokens == nil || *rootTurn.DirectTokens != 1200 || rootTurn.InclusiveTokens == nil || *rootTurn.InclusiveTokens != 1200 || descendantTurn == nil || descendantTurn.DirectTokens == nil || *descendantTurn.DirectTokens != 500 || descendantTurn.InclusiveTokens == nil || *descendantTurn.InclusiveTokens != 500 {
 		t.Fatalf("turn-level causal topology is incomplete: root=%#v descendant=%#v all=%#v", rootTurn, descendantTurn, result.Turns)
 	}
+	if rootTurn.ToolCount != 1 || rootTurn.ErrorCount != 0 || rootTurn.CompactionCount != 1 {
+		t.Fatalf("turn activity aggregates changed while avoiding the fact-table cross product: %#v", rootTurn)
+	}
 	ledger, err := repository.Ledger(context.Background(), page.AppliedRevision, rootID, result.RootTurns[0].TurnID, 0, 200)
 	if err != nil {
 		t.Fatal(err)
