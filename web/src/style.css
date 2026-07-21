@@ -32,6 +32,17 @@
 @media(max-width:1180px){.session-table-card .session-table-head{display:none}.session-table-card .session-table [role=row]{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 22px;padding-block:16px}.session-table-card [role=cell]::before{display:block;margin-bottom:4px;color:#69736d;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.session-table-card [role=cell]:nth-child(1)::before{content:'Project / root session'}.session-table-card [role=cell]:nth-child(2)::before{content:'Active'}.session-table-card [role=cell]:nth-child(3)::before{content:'Agent tree'}.session-table-card [role=cell]:nth-child(4)::before{content:'Recorded tokens'}.session-table-card [role=cell]:nth-child(5)::before{content:'Actions'}.session-actions{align-self:end}}
 @media(max-width:620px){.session-table-card .session-table [role=row]{grid-template-columns:1fr}.session-actions{align-self:auto}}
 
+/* Keep the dark evidence workspace readable inside the light application shell. */
+.inspector-shell .discovery-intro,.inspector-shell .search-box,.inspector-shell .focus-empty,.inspector-shell .map-toolbar,.inspector-shell .map-node,.inspector-shell .topology-rail,.inspector-shell .ledger,.inspector-shell .evidence-panel,.inspector-shell .formatted-evidence,.inspector-shell .exact-context,.inspector-shell .unavailable-context{color:#edf2ee}
+.inspector-shell .map-toolbar small,.inspector-shell .topology-rail small,.inspector-shell .ledger>div>p,.inspector-shell .evidence-heading p,.inspector-shell .formatted-evidence p,.inspector-shell .formatted-evidence dt,.inspector-shell .exact-context p,.inspector-shell .unavailable-context p{color:#aab8af}
+.inspector-shell .map-node>strong,.inspector-shell .map-node dt,.inspector-shell .map-node dd{color:#e5eee7}
+.inspector-shell .map-toolbar button,.inspector-shell .map-node button{border:1px solid #506357;background:#1c2a21;color:#edf2ee}
+.inspector-shell .quiet-link{color:#1e5a50;border-color:#7da58b}.inspector-breadcrumb .quiet-link{margin-left:auto}
+.inspector-shell .fidelity-legend{color:#61736a}.inspector-breadcrumb button{color:#1e5a50;border-color:#7da58b}.inspector-breadcrumb [aria-current=page]{flex:0 0 auto;color:#53645c}
+.inspector-breadcrumb .root-crumb{max-width:min(440px,45vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-identity{margin:-10px 0 18px;padding:16px 18px;border:1px solid #d9d4c7;background:#fffdf8}.session-identity h2{margin:5px 0 4px;color:#183f39;font-size:24px}.session-identity p{margin:0;color:#69736d;font-size:12px}
+.map-toolbar>div:first-child{display:grid;gap:3px}.topology-rail>div small{display:block;margin-top:4px;color:#aab8af}.topology-rail .expand-session-map{min-width:0;margin-top:8px;padding:5px 8px;border-color:#78917e;color:#cfe4d2}
+
 /* Use the platform sans-serif stack throughout the application. */
 :root{--app-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-family:var(--app-font)}
 .discovery-result h3,.discovery-results h3,.accepted-report .finding-title h3{font-family:var(--app-font)}

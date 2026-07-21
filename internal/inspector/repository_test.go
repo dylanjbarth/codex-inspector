@@ -66,6 +66,10 @@ func TestDiscoveryExplainsDescendantMatchAndTotals(t *testing.T) {
 	if err != nil || len(rootPage.Items) != 1 || len(rootPage.Items[0].MatchSnippets) == 0 || rootPage.Items[0].MatchSnippets[0].Category != "root: message" || !strings.Contains(strings.ToLower(rootPage.Items[0].MatchSnippets[0].Text), "fake widget") {
 		t.Fatalf("bounded root snippet missing: page=%#v err=%v", rootPage, err)
 	}
+	reorderedPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "widget fake", "", []string{page.Items[0].SessionID}, 0, 50)
+	if err != nil || len(reorderedPage.Items) != 1 {
+		t.Fatalf("multi-term search should match all words regardless of phrase order: page=%#v err=%v", reorderedPage, err)
+	}
 	requestedRoots := make([]string, 50, 51)
 	for i := range requestedRoots {
 		requestedRoots[i] = fmt.Sprintf("session:outside-page-one-%02d", i)
