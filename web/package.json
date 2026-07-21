@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:demo": "VITE_DEMO_MODE=true vite build && node scripts/prepare-sites-dist.mjs",
+    "dev:demo": "VITE_DEMO_MODE=true vite --host 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

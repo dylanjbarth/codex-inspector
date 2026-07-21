@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { handleInternalLinkClick } from './navigation'
+import { DEMO_MODE } from './demo-api'
 
 type Props = { status: Status; children: React.ReactNode }
 
@@ -72,6 +73,7 @@ export function AppShell({ status, children }: Props) {
       <Nav compact={collapsed} />
     </aside>
     <div className="shell-content">
+      {DEMO_MODE && <div className="demo-notice" role="status"><strong>Interactive sample</strong><span>Explore every view with realistic sample data. No local Codex files are accessed.</span></div>}
       <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" /><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
       <div className="shell-dataset" aria-label="Effective local homes">
         <div className="shell-dataset-item">
