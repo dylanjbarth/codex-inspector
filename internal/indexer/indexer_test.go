@@ -88,12 +88,16 @@ func TestFullScanIdempotenceGoldenAndStates(t *testing.T) {
 			t.Fatalf("%s: got %d want %d", q, got, want)
 		}
 	}
-	_, _, matches, err := store.Sessions(0, "delegated check", 50)
+	_, _, matches, err := store.Sessions(0, "fake widget", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(matches) != 1 || matches[0].SourceSessionID != "root-001" {
-		t.Fatalf("descendant FTS did not resolve to root: %#v", matches)
+		t.Fatalf("root user-message FTS did not resolve to root: %#v", matches)
+	}
+	_, _, excluded, err := store.Sessions(0, "delegated check", 50)
+	if err != nil || len(excluded) != 0 {
+		t.Fatalf("assistant descendant content should not be discoverable: matches=%#v err=%v", excluded, err)
 	}
 	_, rev1, err := store.Snapshot()
 	if err != nil {

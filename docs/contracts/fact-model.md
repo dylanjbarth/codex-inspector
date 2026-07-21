@@ -128,9 +128,10 @@ inventory-reconciliation state at an applied revision. Earliest/latest values
 are accumulated into new versions; old versions remain unchanged.
 
 Session-index titles live in `session_label_versions`. FTS title documents carry
-their label revision. A pinned title query first chooses the latest label
-version not newer than the applied revision, then joins only that revision's FTS
-document. Future and superseded label documents cannot appear.
+their label revision so index validation remains revision-complete. Context
+Inspector displays the latest title not newer than the applied revision, but
+does not use title documents for keyword discovery. Future and superseded labels
+cannot appear.
 
 The CLI's fixed `FTSWriter` is the only supported application mutation path for
 the contentless event and session-label FTS5 tables. It inserts the immutable

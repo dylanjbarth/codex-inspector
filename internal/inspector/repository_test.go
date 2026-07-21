@@ -46,27 +46,35 @@ func syntheticRepository(t *testing.T) (Repository, func()) {
 	return Repository{Store: store}, func() { _ = store.Close() }
 }
 
-func TestDiscoveryExplainsDescendantMatchAndTotals(t *testing.T) {
+func TestDiscoverySearchesRootUserMessagesAndExactSessionIDs(t *testing.T) {
 	repository, closeStore := syntheticRepository(t)
 	defer closeStore()
-	page, err := repository.Sessions(context.Background(), 0, "delegated check", "", nil, 0, 50)
+	page, err := repository.Sessions(context.Background(), 0, "fake widget", "", nil, 0, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 1 || page.Items[0].SessionID != page.Items[0].RootWorkUnitID {
-		t.Fatalf("descendant match did not resolve to its root: %#v", page.Items)
+		t.Fatalf("root user-message match did not resolve to its root: %#v", page.Items)
 	}
-	if len(page.Items[0].MatchCategories) != 1 || page.Items[0].MatchCategories[0] != "descendant: message" {
-		t.Fatalf("match explanation is not descendant-specific: %#v", page.Items[0].MatchCategories)
+	if len(page.Items[0].MatchCategories) != 1 || page.Items[0].MatchCategories[0] != "root: user message" {
+		t.Fatalf("match explanation is not user-message-specific: %#v", page.Items[0].MatchCategories)
 	}
-	if len(page.Items[0].MatchSnippets) != 1 || page.Items[0].MatchSnippets[0].Category != "descendant: message" || !strings.Contains(page.Items[0].MatchSnippets[0].Text, "delegated check") || len([]rune(page.Items[0].MatchSnippets[0].Text)) > 240 {
-		t.Fatalf("bounded descendant snippet missing: %#v", page.Items[0].MatchSnippets)
+	if len(page.Items[0].MatchSnippets) == 0 || page.Items[0].MatchSnippets[0].Category != "root: user message" || !strings.Contains(strings.ToLower(page.Items[0].MatchSnippets[0].Text), "fake widget") || len([]rune(page.Items[0].MatchSnippets[0].Text)) > 240 {
+		t.Fatalf("bounded user-message snippet missing: %#v", page.Items[0].MatchSnippets)
 	}
-	rootPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "fake widget", "", []string{page.Items[0].SessionID}, 0, 50)
-	if err != nil || len(rootPage.Items) != 1 || len(rootPage.Items[0].MatchSnippets) == 0 || rootPage.Items[0].MatchSnippets[0].Category != "root: message" || !strings.Contains(strings.ToLower(rootPage.Items[0].MatchSnippets[0].Text), "fake widget") {
-		t.Fatalf("bounded root snippet missing: page=%#v err=%v", rootPage, err)
+	assistantPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "delegated check", "", nil, 0, 50)
+	if err != nil || len(assistantPage.Items) != 0 {
+		t.Fatalf("assistant and descendant content should not match: page=%#v err=%v", assistantPage, err)
 	}
-	reorderedPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "widget fake", "", []string{page.Items[0].SessionID}, 0, 50)
+	toolPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "fake success", "", nil, 0, 50)
+	if err != nil || len(toolPage.Items) != 0 {
+		t.Fatalf("tool results should not match: page=%#v err=%v", toolPage, err)
+	}
+	exactPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "root-001", "", nil, 0, 50)
+	if err != nil || len(exactPage.Items) != 1 || len(exactPage.Items[0].MatchCategories) != 1 || exactPage.Items[0].MatchCategories[0] != "root: session ID" {
+		t.Fatalf("exact source session ID lookup failed: page=%#v err=%v", exactPage, err)
+	}
+	reorderedPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "widget fake", "", nil, 0, 50)
 	if err != nil || len(reorderedPage.Items) != 1 {
 		t.Fatalf("multi-term search should match all words regardless of phrase order: page=%#v err=%v", reorderedPage, err)
 	}

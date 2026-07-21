@@ -282,8 +282,9 @@ Use a light application shell. A darker code/evidence treatment is allowed insid
 
 - Render a friendly session title using `session_index.jsonl` when available and the approved fallback otherwise.
 - Show project, date, token totals, completed turns, and match reason.
+- Limit keyword discovery to human-authored user messages in root sessions, with exact session-ID lookup as the only metadata-search exception.
+- Replace the complete result region with a pending state while a query is in flight; never highlight stale results with newly typed text.
 - Safely highlight visible query substrings by splitting text nodes; do not use injected HTML.
-- Keep descendant-only matches associated with their root and explain where the match occurred.
 - Make the entire result row one accessible link. Remove the separate “Open” button.
 
 ### Detail and evidence
@@ -401,4 +402,3 @@ Stop and report a precise blocker rather than consuming the deadline when:
 - generated contracts cannot be updated consistently;
 - browser E2E or real-home validation is unreliable in the available environment;
 - a required change would weaken exact-evidence or security invariants.
-

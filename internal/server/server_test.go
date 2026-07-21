@@ -507,8 +507,8 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	var sessionBody []byte
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		response, body := req(t, meta, "GET", "/v1/sessions?pageSize=50&query=delegated%20check", nil, headers)
-		if response.StatusCode == 200 && bytes.Contains(body, []byte(`"descendant: message"`)) {
+		response, body := req(t, meta, "GET", "/v1/sessions?pageSize=50&query=fake%20widget", nil, headers)
+		if response.StatusCode == 200 && bytes.Contains(body, []byte(`"root: user message"`)) {
 			sessionBody = body
 			break
 		}
@@ -529,7 +529,7 @@ func TestPhase6AutomatedDemoBoundarySmoke(t *testing.T) {
 	if err := json.Unmarshal(sessionBody, &sessions); err != nil || len(sessions.Items) != 1 {
 		t.Fatalf("bad discovery response: %s %v", sessionBody, err)
 	}
-	if len(sessions.Items[0].MatchCategories) != 1 || sessions.Items[0].MatchCategories[0] != "descendant: message" || sessions.Items[0].DirectTokens == nil || *sessions.Items[0].DirectTokens != 2000 || sessions.Items[0].DescendantTokens == nil || *sessions.Items[0].DescendantTokens != 500 {
+	if len(sessions.Items[0].MatchCategories) != 1 || sessions.Items[0].MatchCategories[0] != "root: user message" || sessions.Items[0].DirectTokens == nil || *sessions.Items[0].DirectTokens != 2000 || sessions.Items[0].DescendantTokens == nil || *sessions.Items[0].DescendantTokens != 500 {
 		t.Fatalf("discovery response is not explainable or metric-aligned: %#v", sessions.Items[0])
 	}
 	doc, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "schemas", "internal-api.openapi.json"))

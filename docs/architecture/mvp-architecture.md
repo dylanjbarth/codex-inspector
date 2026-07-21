@@ -376,7 +376,7 @@ The initial fact model includes:
 - completed and other terminal turns, including aborted, interrupted, and reconciled truncated outcomes;
 - ordered normalized event envelopes;
 - user and assistant message metadata and source locators;
-- a local full-text search index over readable titles, messages, and tool results that returns event IDs and match categories without copying complete payloads into display tables;
+- local full-text search documents for readable recorded content; Context Inspector discovery queries only human-authored messages in root sessions and returns event IDs without copying payloads into display tables;
 - model invocations and configuration;
 - recorded token snapshots and normalized usage;
 - tool invocations and results;
@@ -632,7 +632,9 @@ During the initial reverse scan, the Dashboard is usable as soon as facts exist.
 
 Context Inspector opens to discovery unless a route identifies a root session.
 
-Discovery searches indexed titles, projects, working directories, IDs, readable messages, and readable tool results. Results resolve to canonical root sessions. A match found in a descendant remains nested beneath its root and explains why it matched.
+Discovery full-text search is limited to readable `role=user` messages that belong directly to a root session. Assistant messages, spawned-agent content, tool results, titles, projects, and working directories do not participate in keyword matching. An exact internal or source session ID remains a supported lookup. Results display title, project, date, and token metadata without treating that metadata as searchable content.
+
+When a query changes, the previous result set is not presented as a match for the new text. The complete result region remains visibly pending and contains no highlights until the matching response returns.
 
 Dashboard rows and exact review citations open stable Inspector routes. A missing current-session ID falls back to discovery rather than a guessed session.
 

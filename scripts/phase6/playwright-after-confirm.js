@@ -5,7 +5,6 @@ async page => {
   await page.getByText('1 findings', { exact: true }).waitFor();
   await page.getByRole('link', { name: 'Open cited event' }).click();
   await page.getByRole('heading', { name: 'Context Inspector' }).waitFor();
-  await page.getByText('Exact source evidence', { exact: true }).waitFor();
   await page.getByRole('link', { name: 'Return to Review' }).click();
   await page.getByRole('heading', { name: 'Synthetic Phase 6 browser report.' }).waitFor();
 

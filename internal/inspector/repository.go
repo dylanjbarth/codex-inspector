@@ -347,67 +347,39 @@ func (r Repository) rootTotalsBatch(ctx context.Context, epoch string, revision 
 }
 
 func (r Repository) matches(ctx context.Context, epoch string, revision int64, rootID, query string) ([]string, []MatchSnippet, error) {
-	if strings.TrimSpace(query) == "" {
+	query = strings.TrimSpace(query)
+	if query == "" {
 		return nil, []MatchSnippet{}, nil
 	}
-	rows, err := r.Store.DB().QueryContext(ctx, latestSessions+`SELECT s.id,coalesce(l.title,''),s.source_session_id,coalesce(p.canonical_identity,''),coalesce(group_concat(pa.alias_value,' '),'')
-		FROM sv JOIN sessions s ON s.epoch_id=sv.epoch_id AND s.id=sv.session_id
-		LEFT JOIN labels l ON l.session_id=s.id LEFT JOIN projects p ON p.epoch_id=sv.epoch_id AND p.id=sv.project_id
-		LEFT JOIN project_aliases pa ON pa.epoch_id=sv.epoch_id AND pa.project_id=sv.project_id AND pa.observed_revision<=?
-		WHERE sv.epoch_id=? AND sv.root_work_unit_id=? GROUP BY s.id`, epoch, revision, epoch, revision, revision, epoch, rootID)
-	if err != nil {
-		return nil, nil, err
-	}
 	categories := map[string]bool{}
-	q := strings.ToLower(query)
-	for rows.Next() {
-		var id, title, sourceID, project, aliases string
-		if err = rows.Scan(&id, &title, &sourceID, &project, &aliases); err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		prefix := "root"
-		if id != rootID {
-			prefix = "descendant"
-		}
-		if containsAllSearchTerms(sourceID, q) {
-			categories[prefix+": session ID"] = true
-		}
-		if containsAllSearchTerms(title, q) {
-			categories[prefix+": title"] = true
-		}
-		if containsAllSearchTerms(project+" "+aliases, q) {
-			categories[prefix+": project or working directory"] = true
-		}
-	}
-	if err = rows.Close(); err != nil {
+	var sourceSessionID string
+	if err := r.Store.DB().QueryRowContext(ctx, `SELECT source_session_id FROM sessions WHERE epoch_id=? AND id=?`, epoch, rootID).Scan(&sourceSessionID); err != nil {
 		return nil, nil, err
+	}
+	if query == rootID || query == sourceSessionID {
+		categories["root: session ID"] = true
 	}
 	fts := ftsSearchQuery(query)
-	rows, err = r.Store.DB().QueryContext(ctx, latestSessions+`SELECT s.id,d.match_category,v.canonical_path,e.byte_start,e.byte_end,e.content_sha256
-		FROM sv JOIN turns t ON t.session_id=sv.session_id AND t.commit_revision<=?
+	rows, err := r.Store.DB().QueryContext(ctx, `SELECT d.match_category,v.canonical_path,e.byte_start,e.byte_end,e.content_sha256
+		FROM turns t
 		JOIN events e ON e.epoch_id=t.epoch_id AND e.turn_id=t.id AND e.commit_revision<=?
+		JOIN messages msg ON msg.epoch_id=e.epoch_id AND msg.event_id=e.id AND msg.role='user'
 		JOIN event_search_documents d ON d.epoch_id=e.epoch_id AND d.event_id=e.id
 		JOIN event_search ON event_search.rowid=d.rowid
-		JOIN sessions s ON s.epoch_id=sv.epoch_id AND s.id=sv.session_id
 		JOIN evidence_refs er ON er.epoch_id=e.epoch_id AND er.event_id=e.id
 		JOIN source_artifact_versions v ON v.epoch_id=er.epoch_id AND v.source_id=er.source_id AND v.revision=(SELECT max(vx.revision) FROM source_artifact_versions vx WHERE vx.epoch_id=v.epoch_id AND vx.source_id=v.source_id AND vx.revision<=?)
-		WHERE sv.epoch_id=? AND sv.root_work_unit_id=? AND event_search MATCH ? ORDER BY e.observed_at,e.record_ordinal LIMIT 20`, epoch, revision, epoch, revision, revision, revision, revision, epoch, rootID, fts)
+		WHERE t.epoch_id=? AND t.session_id=? AND t.commit_revision<=? AND d.match_category='message' AND event_search MATCH ? ORDER BY e.observed_at,e.record_ordinal LIMIT 20`, revision, revision, epoch, rootID, revision, fts)
 	snippets := make([]MatchSnippet, 0, 4)
 	seenSnippets := map[string]bool{}
 	if err == nil {
 		for rows.Next() {
-			var id, category, path, digest string
+			var category, path, digest string
 			var byteStart, byteEnd int64
-			if err = rows.Scan(&id, &category, &path, &byteStart, &byteEnd, &digest); err != nil {
+			if err = rows.Scan(&category, &path, &byteStart, &byteEnd, &digest); err != nil {
 				rows.Close()
 				return nil, nil, err
 			}
-			prefix := "root"
-			if id != rootID {
-				prefix = "descendant"
-			}
-			label := prefix + ": " + strings.ReplaceAll(category, "_", " ")
+			label := "root: user message"
 			categories[label] = true
 			if len(snippets) < 4 {
 				if text := sourceMatchSnippet(path, byteStart, byteEnd, digest, category, query); text != "" && !seenSnippets[label+"\x00"+text] {
@@ -433,20 +405,6 @@ func (r Repository) matches(ctx context.Context, epoch string, revision int64, r
 
 func searchTerms(query string) []string {
 	return strings.Fields(strings.ToLower(strings.TrimSpace(query)))
-}
-
-func containsAllSearchTerms(value, query string) bool {
-	haystack := strings.ToLower(value)
-	terms := searchTerms(query)
-	if len(terms) == 0 {
-		return false
-	}
-	for _, term := range terms {
-		if !strings.Contains(haystack, term) {
-			return false
-		}
-	}
-	return true
 }
 
 func ftsSearchQuery(query string) string {

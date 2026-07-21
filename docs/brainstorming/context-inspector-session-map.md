@@ -31,17 +31,18 @@ The product has three intentional entry paths:
 2. Opening Context Inspector from primary navigation opens a dedicated discovery view.
 3. Invoking Inspector from within a Codex session deep-links directly to that root session and, when possible, its active turn.
 
-Dashboard rows deep-link to the complete root-session map without automatically choosing a turn. A precise content-search result may focus the matching descendant branch or event. A copied deep link may restore the session, turn, event, and before/after boundary.
+Dashboard rows deep-link to the complete root-session map without automatically choosing a turn. A copied deep link may restore the session, turn, event, and before/after boundary.
 
-Discovery uses one local ranked full-text index over readable recorded content. The canonical result is always a user-initiated root session. A match found only in a descendant session remains nested beneath and de-emphasized relative to its root. Every result explains whether it matched a recorded title, user message, project, working directory, tool result, or spawned agent.
+Discovery searches human-authored `role=user` messages recorded directly in root sessions. This matches the retrieval question, “Where did I ask Codex to do this?” Assistant messages, spawned-agent prompts and responses, tool results, titles, projects, and working directories are excluded from keyword matching. Exact session-ID lookup remains available. The canonical result is always the matching user-initiated root session, with title, project, date, token totals, and the bounded matching user-message excerpt shown as metadata and evidence.
 
-Search and filters include:
+Search and display include:
 
 - recorded friendly session name or deterministic fallback;
-- project and working directory;
-- relative or absolute session date;
-- session ID;
-- keyword search over readable recorded session content.
+- project and session date as non-searchable metadata;
+- exact session ID lookup;
+- keyword search over readable root-session user messages.
+
+After the input changes, all results remain pending until that exact query returns. Previous cards and highlights are not reused for an in-flight query.
 
 The session-name fallback order is:
 
