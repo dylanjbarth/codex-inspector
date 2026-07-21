@@ -98,7 +98,7 @@ export function ContextInspector({revision,available,onApply}:Props){
   const returnTo=new URLSearchParams(location.search).get('return')
   React.useEffect(()=>{const update=()=>setRoute(route());addEventListener('popstate',update);return()=>removeEventListener('popstate',update)},[])
   return <section className="inspector-shell"><header><h1>Context Inspector</h1><nav>{returnTo&&returnTo.startsWith('/reviews/')&&<a className="quiet-link" href={returnTo}>Return to Review</a>}</nav></header>
-    {available!=null&&available!==revision&&<button className="new-data" onClick={()=>void onApply()}>New data available — preserve this view &amp; apply</button>}
+    {routeState.sessionId&&available!=null&&available!==revision&&<button className="new-data" onClick={()=>void onApply()}>New data available — preserve this view &amp; apply</button>}
     {routeState.sessionId?<SessionView key={`${routeState.sessionId}:${revision}`} route={routeState} revision={revision}/>:<Discovery revision={revision}/>} 
   </section>
 }
