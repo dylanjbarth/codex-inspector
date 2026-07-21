@@ -3,5 +3,13 @@
   "version": "0.1.0",
   "description": "Local-first observability for Codex sessions.",
   "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Codex Inspector",
+    "shortDescription": "Local-first observability for Codex sessions",
+    "category": "Productivity",
+    "brandColor": "#183F39",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
 }
