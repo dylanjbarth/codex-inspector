@@ -53,13 +53,13 @@ export function AppShell({ status, children }: Props) {
   }, [])
   return <TooltipProvider><div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className="shell-sidebar" onClick={toggleSidebar} title={collapsed ? 'Click to expand sidebar' : 'Click empty sidebar space to collapse'}>
-      <div className="shell-brand"><span className="brand-mark">CI</span>{!collapsed && <span><strong>Codex Inspector</strong></span>}</div>
+      <div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" />{!collapsed && <span><strong>Codex Inspector</strong></span>}</div>
       <Nav compact={collapsed} />
       {!collapsed && <RuntimeSummary status={status} />}
       <Tooltip><TooltipTrigger asChild><Button className="shell-collapse" variant="ghost" size="icon" onClick={() => setCollapsed(value => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</Button></TooltipTrigger><TooltipContent>{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</TooltipContent></Tooltip>
     </aside>
     <div className="shell-content">
-      <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><span className="brand-mark">CI</span><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /><RuntimeSummary status={status} /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
+      <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" /><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /><RuntimeSummary status={status} /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
       <div className="shell-dataset" aria-label="Effective local homes">
         <div className="shell-dataset-item">
           <div className="shell-dataset-label"><span>CODEX_HOME</span><Badge className="shell-dataset-source" variant="secondary">{sourceHome.resolution === 'environment' ? 'from environment' : 'using default'}</Badge></div>

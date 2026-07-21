@@ -15,9 +15,20 @@ func TestPluginContractAndSevenNonBlockingHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var p struct{ Name, Version, Skills, Hooks string }
+	var p struct {
+		Name, Version, Skills, Hooks string
+		Interface                    struct{ ComposerIcon, Logo string }
+	}
 	if json.Unmarshal(manifest, &p) != nil || p.Name != "codex-inspector" || p.Version != "0.1.0" || p.Skills != "./skills/" {
 		t.Fatalf("invalid plugin manifest: %s", manifest)
+	}
+	if p.Interface.ComposerIcon != "./assets/icon.png" || p.Interface.Logo != "./assets/logo.png" {
+		t.Fatalf("plugin brand assets are not wired: %s", manifest)
+	}
+	for _, asset := range []string{"icon.png", "logo.png"} {
+		if _, err := os.Stat(root("plugin", "codex-inspector", "assets", asset)); err != nil {
+			t.Fatalf("missing plugin brand asset %s: %v", asset, err)
+		}
 	}
 	hooks, err := os.ReadFile(root("plugin", "codex-inspector", "hooks", "hooks.json"))
 	if err != nil {
