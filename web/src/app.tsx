@@ -50,6 +50,12 @@ export function singleCapacityDrawdown(series:CapacitySeries[],windows:CapacityW
 function DashboardSkeleton(){return <section className="grid dashboard-skeleton" aria-busy="true" aria-label="Loading dashboard metrics"><article className="wide"><Skeleton className="skeleton-heading"/><div className="skeleton-split"><div><Skeleton className="skeleton-value"/><Skeleton className="skeleton-bar"/><Skeleton className="skeleton-copy"/></div><div><Skeleton className="skeleton-value"/><Skeleton className="skeleton-bar"/><Skeleton className="skeleton-copy"/></div></div></article><article><Skeleton className="skeleton-heading"/><Skeleton className="skeleton-value"/><Skeleton className="skeleton-bar"/><div className="skeleton-list"><Skeleton/><Skeleton/><Skeleton/></div></article><article className="wide"><Skeleton className="skeleton-heading"/><div className="skeleton-columns">{[46,68,84,38,57,91,64].map((height,index)=><Skeleton key={index} style={{height:`${height}%`}}/>)}</div></article><article><Skeleton className="skeleton-heading"/><div className="skeleton-columns compact">{[78,44,62,31,18].map((height,index)=><Skeleton key={index} style={{height:`${height}%`}}/>)}</div></article><article className="wide"><Skeleton className="skeleton-heading"/><div className="skeleton-table">{[0,1,2,3].map(row=><div key={row}><Skeleton/><Skeleton/><Skeleton/></div>)}</div></article><article className="wide"><Skeleton className="skeleton-heading"/><div className="skeleton-line-chart"><Skeleton/><Skeleton/><Skeleton/><Skeleton/><Skeleton/><Skeleton/></div></article></section>}
 
 const allFilterValue='__all__'
+const dashboardRanges=new Set(['2','7','30','60'])
+const dashboardFilterParams={range:'range',project:'project',model:'model',reasoning:'reasoning',kind:'contribution'} as const
+function dashboardFiltersFromLocation(){
+  const params=new URLSearchParams(location.search),range=params.get(dashboardFilterParams.range)||'30'
+  return {range:dashboardRanges.has(range)?range:'30',project:params.get(dashboardFilterParams.project)||'',model:params.get(dashboardFilterParams.model)||'',reasoning:params.get(dashboardFilterParams.reasoning)||'',kind:params.get(dashboardFilterParams.kind)||''}
+}
 export function uniqueFilterOptions(options:{value:string;label:string}[]){
   const values=new Set<string>(),labels=new Set<string>()
   return options.filter(option=>{const value=option.value.trim(),label=option.label.trim().toLocaleLowerCase();if(values.has(value)||labels.has(label))return false;values.add(value);labels.add(label);return true})
@@ -63,18 +69,21 @@ const sourceKindLabel=(kind:string)=>kind==='archived_rollout'?'Archived rollout
 const diagnosticTime=(value:string|null)=>value?new Date(value).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'Unavailable'
 
 export function App(){
+  const initialDashboardFilters=React.useRef(dashboardFiltersFromLocation()).current
   const [status,setStatus]=React.useState<Status|null>(null),[data,setData]=React.useState<MetricResult|null>(null),[sessions,setSessions]=React.useState<SessionPage['items']>([]),[error,setError]=React.useState('')
   const [options,setOptions]=React.useState<FilterOptions>({projects:[],models:[],reasoningEfforts:[],contributionKinds:fallbackKinds})
-  const [range,setRange]=React.useState('30'),[project,setProject]=React.useState(''),[model,setModel]=React.useState(''),[reasoning,setReasoning]=React.useState(''),[kind,setKind]=React.useState('')
+  const [range,setRange]=React.useState(initialDashboardFilters.range),[project,setProject]=React.useState(initialDashboardFilters.project),[model,setModel]=React.useState(initialDashboardFilters.model),[reasoning,setReasoning]=React.useState(initialDashboardFilters.reasoning),[kind,setKind]=React.useState(initialDashboardFilters.kind)
   const [applied,setApplied]=React.useState<number|null>(null),[available,setAvailable]=React.useState<number|null>(null),[metricsLoading,setMetricsLoading]=React.useState(false),[sessionsLoading,setSessionsLoading]=React.useState(false),[now,setNow]=React.useState(Date.now()),[coverageOpen,setCoverageOpen]=React.useState(false)
   const [sourceDiagnostics,setSourceDiagnostics]=React.useState<SourceDiagnosticPage['items']>([]),[sourceDiagnosticsLoading,setSourceDiagnosticsLoading]=React.useState(false),[sourceDiagnosticsError,setSourceDiagnosticsError]=React.useState(''),[copiedSource,setCopiedSource]=React.useState(''),[revealingSource,setRevealingSource]=React.useState('')
-  const [,setNavigationRevision]=React.useState(0)
+  const [navigationRevision,setNavigationRevision]=React.useState(0)
   const dashboardRoute=!location.pathname.startsWith('/context')&&!location.pathname.startsWith('/reviews')
   const appliedRef=React.useRef<number|null>(null)
   const datasetEpochRef=React.useRef<string|null>(null)
   const metricsRequestRef=React.useRef(0)
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'
   React.useEffect(()=>{const update=()=>setNavigationRevision(value=>value+1);addEventListener('popstate',update);return()=>removeEventListener('popstate',update)},[])
+  React.useEffect(()=>{if(!dashboardRoute)return;const filters=dashboardFiltersFromLocation();setRange(filters.range);setProject(filters.project);setModel(filters.model);setReasoning(filters.reasoning);setKind(filters.kind)},[dashboardRoute,navigationRevision])
+  React.useEffect(()=>{if(!dashboardRoute)return;const params=new URLSearchParams(location.search),filters={range,project,model,reasoning,kind};for(const [filter,param] of Object.entries(dashboardFilterParams) as [keyof typeof dashboardFilterParams,string][]){const value=filters[filter];if(value&&(filter!=='range'||value!=='30'))params.set(param,value);else params.delete(param)}const search=params.size?`?${params}`:'';if(search!==location.search)history.replaceState(history.state,'',`${location.pathname}${search}${location.hash}`)},[dashboardRoute,range,project,model,reasoning,kind])
   const buildQuery=React.useCallback((revision?:number)=>{const end=new Date(),start=new Date(end.getTime()-Number(range)*86400000);return {metricKeys:keys,timezone,grain:Number(range)<=2?'hour':'day',start:start.toISOString(),end:end.toISOString(),projectIds:project?[project]:undefined,models:model?[model]:undefined,reasoningEfforts:reasoning?[reasoning]:undefined,contributionKinds:kind?[kind]:undefined,requestedRevision:revision} satisfies DashboardQuery},[range,project,model,reasoning,kind,timezone])
   const loadMetrics=React.useCallback(async(revision?:number)=>{const request=++metricsRequestRef.current;setMetricsLoading(true);try{const result=await queryMetrics(buildQuery(revision));if(request===metricsRequestRef.current){setData(result);datasetEpochRef.current=result.datasetEpoch;appliedRef.current=result.appliedRevision;setApplied(result.appliedRevision)}return result}finally{if(request===metricsRequestRef.current)setMetricsLoading(false)}},[buildQuery])
   const refreshStatus=React.useCallback(async()=>{const fresh=await fetchStatus();setStatus(fresh);return fresh},[])
