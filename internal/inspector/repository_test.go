@@ -16,6 +16,10 @@ import (
 )
 
 func syntheticRepository(t *testing.T) (Repository, func()) {
+	return syntheticRepositoryWithExtraRoots(t, 0)
+}
+
+func syntheticRepositoryWithExtraRoots(t *testing.T, extraRoots int) (Repository, func()) {
 	t.Helper()
 	root := t.TempDir()
 	codex := filepath.Join(root, "codex")
@@ -35,6 +39,23 @@ func syntheticRepository(t *testing.T) (Repository, func()) {
 			t.Fatal(err)
 		}
 	}
+	rootFixture, err := os.ReadFile(filepath.Join(fixtures, "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < extraRoots; i++ {
+		suffix := fmt.Sprintf("extra-%03d", i)
+		data := strings.NewReplacer(
+			"root-001", suffix,
+			"turn-root-", "turn-"+suffix+"-",
+			"msg-root-", "msg-"+suffix+"-",
+			"call-1", "call-"+suffix,
+			"tool-item-1", "tool-item-"+suffix,
+		).Replace(string(rootFixture))
+		if err = os.WriteFile(filepath.Join(sessions, suffix+".jsonl"), []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	layout := home.Layout{Root: inspectorHome, Reviews: filepath.Join(inspectorHome, "reviews"), Queue: filepath.Join(inspectorHome, "queue"), Run: filepath.Join(inspectorHome, "run"), Logs: filepath.Join(inspectorHome, "logs"), Cache: filepath.Join(inspectorHome, "cache")}
 	if _, err := indexer.Run(context.Background(), indexer.Config{Layout: layout, CodexHome: codex}); err != nil {
 		t.Fatal(err)
@@ -44,6 +65,40 @@ func syntheticRepository(t *testing.T) (Repository, func()) {
 		t.Fatal(err)
 	}
 	return Repository{Store: store}, func() { _ = store.Close() }
+}
+
+func TestDiscoveryPaginatesBeforeEnrichingSessions(t *testing.T) {
+	repository, closeStore := syntheticRepositoryWithExtraRoots(t, 2)
+	defer closeStore()
+
+	first, err := repository.Sessions(context.Background(), 0, "", "", nil, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 1 || first.Coverage.Eligible != 3 || first.NextCursor != "1" {
+		t.Fatalf("unexpected first discovery page: %#v", first)
+	}
+	second, err := repository.Sessions(context.Background(), first.AppliedRevision, "", "", nil, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Coverage.Eligible != 3 || second.NextCursor != "2" || second.Items[0].SessionID == first.Items[0].SessionID {
+		t.Fatalf("unexpected second discovery page: %#v", second)
+	}
+	searched, err := repository.Sessions(context.Background(), first.AppliedRevision, "fake widget", "", nil, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(searched.Items) != 1 || searched.Coverage.Eligible != 3 || searched.NextCursor != "1" || len(searched.Items[0].MatchSnippets) == 0 {
+		t.Fatalf("unexpected bounded search page: %#v", searched)
+	}
+	beyond, err := repository.Sessions(context.Background(), first.AppliedRevision, "", "", nil, 99, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(beyond.Items) != 0 || beyond.Coverage.Eligible != 3 || beyond.NextCursor != "" {
+		t.Fatalf("out-of-range cursor lost the exact match count: %#v", beyond)
+	}
 }
 
 func TestDiscoverySearchesRootUserMessagesAndExactSessionIDs(t *testing.T) {

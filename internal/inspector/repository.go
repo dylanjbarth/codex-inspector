@@ -179,29 +179,19 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 		limit = 200
 	}
 	eligibleOverride, nextCursorOverride := -1, ""
-	if strings.TrimSpace(query) != "" && len(rootIDs) == 0 {
-		candidateIDs := make([]string, 0, 200)
-		for candidateOffset := 0; ; candidateOffset += 200 {
-			_, _, candidates, candidateErr := r.Store.SessionsPage(revision, query, projectID, candidateOffset, 200)
-			if candidateErr != nil {
-				return SessionPage{}, candidateErr
-			}
-			for _, candidate := range candidates {
-				candidateIDs = append(candidateIDs, candidate.ID)
-			}
-			if len(candidates) < 200 {
-				break
-			}
+	if len(rootIDs) == 0 {
+		_, _, eligible, candidates, candidateErr := r.Store.SessionCandidatesPage(revision, query, projectID, offset, limit)
+		if candidateErr != nil {
+			return SessionPage{}, candidateErr
 		}
-		eligibleOverride = len(candidateIDs)
-		if offset > eligibleOverride {
-			offset = eligibleOverride
+		eligibleOverride = eligible
+		if offset+len(candidates) < eligible {
+			nextCursorOverride = intString(offset + len(candidates))
 		}
-		end := min(offset+limit, eligibleOverride)
-		if end < eligibleOverride {
-			nextCursorOverride = intString(end)
+		rootIDs = make([]string, 0, len(candidates))
+		for _, candidate := range candidates {
+			rootIDs = append(rootIDs, candidate.ID)
 		}
-		rootIDs = candidateIDs[offset:end]
 		offset = 0
 		if len(rootIDs) == 0 {
 			return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: []SessionSummary{}}, nil
