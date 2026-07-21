@@ -1,9 +1,10 @@
 import React from 'react'
 import {createReviewPlan,fetchReview,fetchReviews,launchReview,type FilterOptions,type ReviewDetail,type ReviewPage,type ReviewPlan,type ReviewPlanRequest} from './api'
+import {navigate} from './navigation'
 
 type Props={revision:number;projects:FilterOptions['projects']}
 const pathParts=()=>location.pathname.split('/').filter(Boolean).map(decodeURIComponent)
-const go=(path:string)=>{history.pushState(null,'',path);dispatchEvent(new PopStateEvent('popstate'))}
+const go=navigate
 const stamp=(value:string)=>new Date(value).toLocaleString()
 const label=(value:string)=>value.replaceAll('_',' ').replace(/\b\w/g,x=>x.toUpperCase())
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { handleInternalLinkClick } from './navigation'
 
 type Props = { status: Status; children: React.ReactNode }
 
@@ -51,7 +52,7 @@ export function AppShell({ status, children }: Props) {
     if (target.closest('a,button,[role="button"],input,select,textarea')) return
     setCollapsed(value => !value)
   }, [])
-  return <TooltipProvider><div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
+  return <TooltipProvider><div className={collapsed ? 'app-shell collapsed' : 'app-shell'} onClick={handleInternalLinkClick}>
     <aside className="shell-sidebar" onClick={toggleSidebar} title={collapsed ? 'Click to expand sidebar' : 'Click empty sidebar space to collapse'}>
       <div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" />{!collapsed && <span><strong>Codex Inspector</strong></span>}</div>
       <Nav compact={collapsed} />

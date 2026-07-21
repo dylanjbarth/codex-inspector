@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import {fetchEvidence,fetchLedger,fetchRecordedContext,fetchSessionMap,fetchSessionMetadata,fetchSessions,type EvidenceChunk,type LedgerPage,type RecordedContext,type SessionMap,type SessionPage} from './api'
+import {navigate} from './navigation'
 
 type Props={revision:number;available:number|null;onApply:()=>Promise<void>}
 type Route={sessionId?:string;turnId?:string;eventId?:string;evidenceId?:string}
@@ -11,7 +12,6 @@ function route():Route{
   const eventIndex=parts.indexOf('event'),turnIndex=parts.indexOf('turn')
   return {sessionId:parts[1],turnId:turnIndex>=0?parts[turnIndex+1]:undefined,eventId:eventIndex>=0?parts[eventIndex+1]:undefined,evidenceId:new URLSearchParams(location.search).get('evidence')||undefined}
 }
-function navigate(path:string){history.pushState(null,'',path);dispatchEvent(new PopStateEvent('popstate'))}
 function inspectorPath(path:string,updates:Record<string,string|undefined>={}){const current=new URLSearchParams(location.search),next=new URLSearchParams();for(const key of ['q','return']){const value=current.get(key);if(value)next.set(key,value)}for(const [key,value] of Object.entries(updates)){if(value)next.set(key,value);else next.delete(key)}return `${path}${next.size?`?${next}`:''}`}
 const tokens=(value:number|null|undefined)=>value==null?'Unavailable':new Intl.NumberFormat().format(value)
 const kindLabel=(value:string)=>value.replaceAll('_',' ').replace(/\b\w/g,letter=>letter.toUpperCase())
