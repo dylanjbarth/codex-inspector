@@ -11,10 +11,16 @@ timezone.
 | `recorded_tokens` | tokens | sum normalized `total_tokens` for eligible completed turns |
 | `recorded_tokens_by_kind` | tokens | `recorded_tokens` grouped into `user_root_direct`, `descendant`, `inspector_review`, `other_orphan` |
 | `recorded_tokens_over_time` | tokens | completion-time calendar buckets grouped by contribution kind |
+| `recorded_tokens_by_model_reasoning_over_time` | tokens | completion-time calendar buckets grouped by completed-turn model and reasoning effort |
 | `token_composition` | tokens | mutually exclusive `uncached_input`, `cached_input`, `visible_output`, `reasoning_output`, `residual` |
 | `top_root_sessions_by_tokens` | tokens | roots ranked by inclusive tokens, returning direct and descendant separately |
 | `latest_capacity_observation` | percent | latest source-recorded observation per limit/window identity by observation time, returned in deterministic limit/window order |
 | `capacity_drawdown` | percent | ordered source observations partitioned by limit/window and reset boundary |
+
+Both time-series token metrics expose three additive bases per bucket:
+`uncached = total_tokens - cached_input_tokens`, `cached = cached_input_tokens`,
+and `total = total_tokens`. Missing cache components reduce the individual
+metric's coverage rather than being treated as zero.
 
 The catalog response is pinned to an applied index revision. It includes
 bounded project, model, reasoning-effort, and contribution-kind choices that
@@ -83,6 +89,8 @@ The fake root/descendant fixture yields:
 | `descendant` | 500 |
 | `inspector_review` | 0 |
 | `other_orphan` | 0 |
+| `gpt-fake` / `high` | 2,000 |
+| `gpt-fake` / `medium` | 500 |
 | uncached input | 1,350 |
 | cached input | 600 |
 | visible output | 440 |

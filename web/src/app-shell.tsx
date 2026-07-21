@@ -12,7 +12,7 @@ type Props = { status: Status; children: React.ReactNode }
 
 const routes = [
   { href: '/', label: 'Dashboard', icon: BarChart3 },
-  { href: '/context', label: 'Context Inspector', icon: BookOpenText },
+  { href: '/context', label: 'Session Inspector', icon: BookOpenText },
   { href: '/reviews', label: 'Reviews', icon: RefreshCw },
 ]
 

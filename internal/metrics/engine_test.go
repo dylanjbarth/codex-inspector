@@ -273,6 +273,28 @@ func TestGoldenMetricsAndFilters(t *testing.T) {
 	if by["userRootDirect"].(float64) != 2000 || by["descendant"].(float64) != 500 {
 		t.Fatalf("attribution=%v", by)
 	}
+	overTimeBucket := values["recorded_tokens_over_time"].([]any)[0].(map[string]any)
+	uncachedByKind := overTimeBucket["byKindUncached"].(map[string]any)
+	cachedByKind := overTimeBucket["byKindCached"].(map[string]any)
+	if uncachedByKind["userRootDirect"].(float64) != 1500 || uncachedByKind["descendant"].(float64) != 400 || cachedByKind["userRootDirect"].(float64) != 500 || cachedByKind["descendant"].(float64) != 100 {
+		t.Fatalf("cache attribution uncached=%v cached=%v", uncachedByKind, cachedByKind)
+	}
+	modelReasoningBuckets := values["recorded_tokens_by_model_reasoning_over_time"].([]any)
+	if len(modelReasoningBuckets) != 1 {
+		t.Fatalf("model/reasoning buckets=%v", modelReasoningBuckets)
+	}
+	series := modelReasoningBuckets[0].(map[string]any)["series"].([]any)
+	grouped, groupedUncached, groupedCached := map[string]float64{}, map[string]float64{}, map[string]float64{}
+	for _, raw := range series {
+		entry := raw.(map[string]any)
+		key := entry["model"].(string) + "/" + entry["reasoningEffort"].(string)
+		grouped[key] = entry["tokens"].(float64)
+		groupedUncached[key] = entry["uncachedTokens"].(float64)
+		groupedCached[key] = entry["cachedTokens"].(float64)
+	}
+	if grouped["gpt-fake/high"] != 2000 || grouped["gpt-fake/medium"] != 500 || groupedUncached["gpt-fake/high"] != 1500 || groupedUncached["gpt-fake/medium"] != 400 || groupedCached["gpt-fake/high"] != 500 || groupedCached["gpt-fake/medium"] != 100 {
+		t.Fatalf("model/reasoning attribution total=%v uncached=%v cached=%v", grouped, groupedUncached, groupedCached)
+	}
 	comp := values["token_composition"].(map[string]any)
 	if comp["uncachedInput"].(float64) != 1350 || comp["cachedInput"].(float64) != 600 || comp["visibleOutput"].(float64) != 440 || comp["reasoningOutput"].(float64) != 110 {
 		t.Fatalf("composition=%v", comp)
