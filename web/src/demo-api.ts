@@ -7,27 +7,117 @@ const revision = 12
 const exact = { fidelity: 'exact', observed: 12, eligible: 12 }
 const now = '2026-07-22T01:25:00Z'
 
-const sessions = [
+type ContributionKind = 'user_root_direct' | 'descendant' | 'inspector_review' | 'other_orphan'
+type TokenBreakdown = { userRootDirect: number; descendant: number; inspectorReview: number; otherOrphan: number }
+type DemoSession = {
+  sessionId: string
+  rootWorkUnitId: string
+  purpose: 'user'
+  title: string
+  project: string
+  projectId: string
+  model: string
+  reasoning: string
+  startedAt: string
+  latestCompleted: string
+  completedTurns: number
+  descendantSessions: number
+  matchCategories: string[]
+  matchSnippets: { category: string; text: string }[]
+  directTokens: number
+  descendantTokens: number
+  reviewTokens: number
+  otherTokens: number
+}
+
+const sessions: DemoSession[] = [
   {
     sessionId: 'sample-build-week', rootWorkUnitId: 'sample-build-week', purpose: 'user',
     title: 'Prepare the Build Week demo', project: '/Users/demo/codex-inspector',
+    projectId: 'codex-inspector', model: 'gpt-5.6-sol', reasoning: 'xhigh',
     startedAt: '2026-07-21T15:02:00Z', latestCompleted: '2026-07-21T17:38:00Z', completedTurns: 14,
     descendantSessions: 3, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Build an interactive demo that makes agent delegation and evidence easy to understand.' }],
-    directTokens: 428000, descendantTokens: 193000,
+    directTokens: 428000, descendantTokens: 193000, reviewTokens: 18000, otherTokens: 2000,
   },
   {
     sessionId: 'sample-search-fix', rootWorkUnitId: 'sample-search-fix', purpose: 'user',
     title: 'Fix session discovery for older IDs', project: '/Users/demo/codex-inspector',
+    projectId: 'codex-inspector', model: 'gpt-5.6-sol', reasoning: 'high',
     startedAt: '2026-07-21T11:20:00Z', latestCompleted: '2026-07-21T12:08:00Z', completedTurns: 7,
     descendantSessions: 1, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Find why older completed session IDs return no matches and add a regression test.' }],
-    directTokens: 214000, descendantTokens: 76000,
+    directTokens: 214000, descendantTokens: 76000, reviewTokens: 8000, otherTokens: 1000,
   },
   {
     sessionId: 'sample-judge-skills', rootWorkUnitId: 'sample-judge-skills', purpose: 'user',
     title: 'Evaluate the project against Build Week criteria', project: '/Users/demo/codex-inspector',
+    projectId: 'codex-inspector', model: 'gpt-5.6-sol', reasoning: 'high',
     startedAt: '2026-07-20T18:10:00Z', latestCompleted: '2026-07-20T19:31:00Z', completedTurns: 9,
     descendantSessions: 2, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Run the AI and human judge simulations and compare readiness with the previous baseline.' }],
-    directTokens: 305000, descendantTokens: 119000,
+    directTokens: 305000, descendantTokens: 119000, reviewTokens: 24000, otherTokens: 3000,
+  },
+  {
+    sessionId: 'sample-dashboard-qa', rootWorkUnitId: 'sample-dashboard-qa', purpose: 'user',
+    title: 'QA the token dashboard before the demo', project: '/Users/demo/codex-inspector',
+    projectId: 'codex-inspector', model: 'gpt-5.6-terra', reasoning: 'high',
+    startedAt: '2026-07-18T09:10:00Z', latestCompleted: '2026-07-18T10:22:00Z', completedTurns: 8,
+    descendantSessions: 1, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Test every dashboard filter, record the exact failures, and verify the repaired flow.' }],
+    directTokens: 168000, descendantTokens: 54000, reviewTokens: 11000, otherTokens: 1000,
+  },
+  {
+    sessionId: 'sample-video-ablation', rootWorkUnitId: 'sample-video-ablation', purpose: 'user',
+    title: 'Compare temporal pooling ablations', project: '/Users/demo/video-research',
+    projectId: 'video-research', model: 'gpt-5.6-sol', reasoning: 'xhigh',
+    startedAt: '2026-07-14T04:10:00Z', latestCompleted: '2026-07-14T06:02:00Z', completedTurns: 12,
+    descendantSessions: 1, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Compare the 8-frame and 32-frame ablations, then explain the accuracy and latency tradeoff.' }],
+    directTokens: 412000, descendantTokens: 61000, reviewTokens: 14000, otherTokens: 2000,
+  },
+  {
+    sessionId: 'sample-video-figure', rootWorkUnitId: 'sample-video-figure', purpose: 'user',
+    title: 'Turn benchmark results into a paper figure', project: '/Users/demo/video-research',
+    projectId: 'video-research', model: 'gpt-5.6-terra', reasoning: 'high',
+    startedAt: '2026-07-09T07:40:00Z', latestCompleted: '2026-07-09T08:28:00Z', completedTurns: 6,
+    descendantSessions: 0, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Create a publication-ready comparison figure from the verified benchmark table.' }],
+    directTokens: 277000, descendantTokens: 28000, reviewTokens: 10000, otherTokens: 1000,
+  },
+  {
+    sessionId: 'sample-related-work', rootWorkUnitId: 'sample-related-work', purpose: 'user',
+    title: 'Map the related work for video token selection', project: '/Users/demo/video-research',
+    projectId: 'video-research', model: 'gpt-5.6-sol', reasoning: 'xhigh',
+    startedAt: '2026-06-30T13:05:00Z', latestCompleted: '2026-06-30T15:19:00Z', completedTurns: 11,
+    descendantSessions: 2, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Build an evidence-backed map of recent video token selection methods and open questions.' }],
+    directTokens: 356000, descendantTokens: 92000, reviewTokens: 19000, otherTokens: 2000,
+  },
+  {
+    sessionId: 'sample-event-page', rootWorkUnitId: 'sample-event-page', purpose: 'user',
+    title: 'Launch the July community meetup page', project: '/Users/demo/community-ops',
+    projectId: 'community-ops', model: 'gpt-5.6-terra', reasoning: 'medium',
+    startedAt: '2026-06-22T07:30:00Z', latestCompleted: '2026-06-22T08:16:00Z', completedTurns: 5,
+    descendantSessions: 1, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Publish the meetup page with the confirmed schedule, speakers, and registration details.' }],
+    directTokens: 191000, descendantTokens: 36000, reviewTokens: 7000, otherTokens: 4000,
+  },
+  {
+    sessionId: 'sample-speaker-outreach', rootWorkUnitId: 'sample-speaker-outreach', purpose: 'user',
+    title: 'Prepare speaker outreach and scheduling', project: '/Users/demo/community-ops',
+    projectId: 'community-ops', model: 'gpt-5.6-terra', reasoning: 'medium',
+    startedAt: '2026-06-12T03:20:00Z', latestCompleted: '2026-06-12T04:04:00Z', completedTurns: 5,
+    descendantSessions: 0, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Draft concise speaker outreach and identify scheduling conflicts before anything is sent.' }],
+    directTokens: 144000, descendantTokens: 18000, reviewTokens: 5000, otherTokens: 3000,
+  },
+  {
+    sessionId: 'sample-community-recap', rootWorkUnitId: 'sample-community-recap', purpose: 'user',
+    title: 'Write the community meetup recap', project: '/Users/demo/community-ops',
+    projectId: 'community-ops', model: 'gpt-5.6-terra', reasoning: 'high',
+    startedAt: '2026-06-02T10:00:00Z', latestCompleted: '2026-06-02T11:03:00Z', completedTurns: 7,
+    descendantSessions: 0, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Turn the event notes into a factual recap without inventing quotes or attendance claims.' }],
+    directTokens: 205000, descendantTokens: 0, reviewTokens: 12000, otherTokens: 8000,
+  },
+  {
+    sessionId: 'sample-inspector-architecture', rootWorkUnitId: 'sample-inspector-architecture', purpose: 'user',
+    title: 'Define the phased Inspector architecture', project: '/Users/demo/codex-inspector',
+    projectId: 'codex-inspector', model: 'gpt-5.6-sol', reasoning: 'xhigh',
+    startedAt: '2026-05-26T05:12:00Z', latestCompleted: '2026-05-26T07:46:00Z', completedTurns: 13,
+    descendantSessions: 3, matchCategories: ['root: user message'], matchSnippets: [{ category: 'root: user message', text: 'Turn the MVP architecture into implementation phases with explicit contracts and risks.' }],
+    directTokens: 382000, descendantTokens: 158000, reviewTokens: 31000, otherTokens: 6000,
   },
 ]
 
@@ -41,8 +131,12 @@ const status = {
 }
 
 const filterOptions = {
-  projects: [{ value: 'codex-inspector', label: 'codex-inspector' }, { value: 'build-week', label: 'Build Week' }],
-  models: ['gpt-5.6-sol', 'gpt-5.6-terra'], reasoningEfforts: ['high', 'xhigh'],
+  projects: [
+    { value: 'codex-inspector', label: 'Codex Inspector' },
+    { value: 'video-research', label: 'Video Research' },
+    { value: 'community-ops', label: 'Community Ops' },
+  ],
+  models: ['gpt-5.6-sol', 'gpt-5.6-terra'], reasoningEfforts: ['medium', 'high', 'xhigh'],
   contributionKinds: [
     { value: 'user_root_direct', label: 'Direct user-session work' },
     { value: 'descendant', label: 'Spawned agent work' },
@@ -51,41 +145,129 @@ const filterOptions = {
   ],
 }
 
-const meta = {
-  formulaVersion: 1, fidelity: 'exact', coverage: exact,
-  indexedCoverage: { indexedStart: '2026-06-22T00:00:00Z', indexedEnd: now, completedWatermark: now },
-  timeBoundary: { requestedStart: null, requestedEnd: null, effectiveStart: '2026-06-22T00:00:00Z', effectiveEnd: now, timezone: 'UTC' }, exclusionReasons: {},
+const dayMs = 86400000
+const demoReferenceEnd = Date.parse(now)
+const capacityUse = [6, 13, 21, 30, 41, 53, 64]
+const capacityObservations = Array.from({ length: 60 }, (_, index) => {
+  const observedAt = demoReferenceEnd - (59 - index) * dayMs
+  const cycleDay = index % 7
+  const resetBoundary = observedAt + (7 - cycleDay) * dayMs
+  return { observedAt: new Date(observedAt).toISOString(), usedPercent: capacityUse[cycleDay], resetBoundary: new Date(resetBoundary).toISOString() }
+})
+
+function selectedKinds(request: any): Set<ContributionKind> {
+  const requested = Array.isArray(request.contributionKinds) ? request.contributionKinds : []
+  return new Set<ContributionKind>(requested.length ? requested : ['user_root_direct', 'descendant', 'inspector_review', 'other_orphan'])
 }
 
-function metrics(request: any = {}) {
-  const onlyDescendants = request.contributionKinds?.length === 1 && request.contributionKinds[0] === 'descendant'
-  const total = onlyDescendants ? 388000 : 1482000
-  const direct = onlyDescendants ? 0 : 947000
-  const descendants = onlyDescendants ? 388000 : 388000
-  const review = onlyDescendants ? 0 : 121000
-  const other = onlyDescendants ? 0 : 26000
-  const days = [
-    ['2026-07-16T00:00:00Z', 118000, 26000], ['2026-07-17T00:00:00Z', 91000, 48000],
-    ['2026-07-18T00:00:00Z', 126000, 55000], ['2026-07-19T00:00:00Z', 103000, 33000],
-    ['2026-07-20T00:00:00Z', 165000, 62000], ['2026-07-21T00:00:00Z', 241000, 114000],
-    ['2026-07-22T00:00:00Z', 103000, 50000],
-  ]
-  return { schemaVersion: 2, datasetEpoch: epoch, appliedRevision: revision, coverage: exact, results: [
+function sessionBreakdown(session: DemoSession, kinds: Set<ContributionKind>): TokenBreakdown {
+  return {
+    userRootDirect: kinds.has('user_root_direct') ? session.directTokens : 0,
+    descendant: kinds.has('descendant') ? session.descendantTokens : 0,
+    inspectorReview: kinds.has('inspector_review') ? session.reviewTokens : 0,
+    otherOrphan: kinds.has('other_orphan') ? session.otherTokens : 0,
+  }
+}
+
+function sumBreakdowns(values: TokenBreakdown[]): TokenBreakdown {
+  return values.reduce((sum, value) => ({
+    userRootDirect: sum.userRootDirect + value.userRootDirect,
+    descendant: sum.descendant + value.descendant,
+    inspectorReview: sum.inspectorReview + value.inspectorReview,
+    otherOrphan: sum.otherOrphan + value.otherOrphan,
+  }), { userRootDirect: 0, descendant: 0, inspectorReview: 0, otherOrphan: 0 })
+}
+
+function demoRange(request: any) {
+  const requestedStart = Date.parse(request.start)
+  const requestedEnd = Date.parse(request.end)
+  const duration = Number.isFinite(requestedStart) && Number.isFinite(requestedEnd)
+    ? Math.max(dayMs, Math.min(60 * dayMs, requestedEnd - requestedStart))
+    : 30 * dayMs
+  return { start: demoReferenceEnd - duration, end: demoReferenceEnd, requestedStart: request.start ?? null, requestedEnd: request.end ?? null }
+}
+
+function metricMeta(request: any, selectedCount: number) {
+  const range = demoRange(request)
+  const coverage = { fidelity: 'exact', observed: selectedCount, eligible: selectedCount }
+  return {
+    formulaVersion: 1, fidelity: 'exact', coverage,
+    indexedCoverage: { indexedStart: '2026-05-24T01:25:00Z', indexedEnd: now, completedWatermark: now },
+    timeBoundary: { requestedStart: range.requestedStart, requestedEnd: range.requestedEnd, effectiveStart: new Date(range.start).toISOString(), effectiveEnd: now, timezone: request.timezone ?? 'UTC' },
+    exclusionReasons: {},
+  }
+}
+
+export function buildDemoMetrics(request: any = {}) {
+  const range = demoRange(request)
+  const kinds = selectedKinds(request)
+  const projectIds = new Set<string>(request.projectIds ?? [])
+  const models = new Set<string>(request.models ?? [])
+  const reasoningEfforts = new Set<string>(request.reasoningEfforts ?? [])
+  const selected = sessions.filter(session => {
+    const startedAt = Date.parse(session.startedAt)
+    return startedAt >= range.start && startedAt <= range.end
+      && (!projectIds.size || projectIds.has(session.projectId))
+      && (!models.size || models.has(session.model))
+      && (!reasoningEfforts.size || reasoningEfforts.has(session.reasoning))
+  })
+  const breakdowns = selected.map(session => sessionBreakdown(session, kinds))
+  const byKind = sumBreakdowns(breakdowns)
+  const total = Object.values(byKind).reduce((sum, value) => sum + value, 0)
+  const grain = request.grain === 'hour' ? 'hour' : 'day'
+  const bucketMs = grain === 'hour' ? 3600000 : dayMs
+  const buckets = new Map<number, TokenBreakdown>()
+  selected.forEach((session, index) => {
+    const startedAt = Date.parse(session.startedAt)
+    const bucketStart = grain === 'hour'
+      ? Math.floor(startedAt / bucketMs) * bucketMs
+      : Date.UTC(new Date(startedAt).getUTCFullYear(), new Date(startedAt).getUTCMonth(), new Date(startedAt).getUTCDate())
+    buckets.set(bucketStart, sumBreakdowns([buckets.get(bucketStart) ?? { userRootDirect: 0, descendant: 0, inspectorReview: 0, otherOrphan: 0 }, breakdowns[index]]))
+  })
+  const overTime = [...buckets.entries()].sort(([a], [b]) => a - b).map(([bucketStart, byKind]) => ({
+    bucketStart: new Date(bucketStart).toISOString(), bucketEnd: new Date(bucketStart + bucketMs).toISOString(), timezone: request.timezone ?? 'UTC', grain, byKind,
+  }))
+  const composition = selected.reduce((sum, session, index) => {
+    const amount = Object.values(breakdowns[index]).reduce((total, value) => total + value, 0)
+    const cachedShare = session.model === 'gpt-5.6-sol' ? .34 : .24
+    const visibleShare = session.model === 'gpt-5.6-sol' ? .14 : .17
+    const reasoningShare = session.reasoning === 'xhigh' ? .14 : session.reasoning === 'high' ? .08 : .04
+    const uncachedShare = 1 - cachedShare - visibleShare - reasoningShare
+    sum.uncachedInput += Math.round(amount * uncachedShare)
+    sum.cachedInput += Math.round(amount * cachedShare)
+    sum.visibleOutput += Math.round(amount * visibleShare)
+    sum.reasoningOutput += Math.round(amount * reasoningShare)
+    return sum
+  }, { uncachedInput: 0, cachedInput: 0, visibleOutput: 0, reasoningOutput: 0, residual: 0 })
+  composition.residual = total - composition.uncachedInput - composition.cachedInput - composition.visibleOutput - composition.reasoningOutput
+  const roots = selected.map(session => {
+    const directTokens = kinds.has('user_root_direct') ? session.directTokens : 0
+    const descendantTokens = kinds.has('descendant') ? session.descendantTokens : 0
+    return { rootSessionId: session.sessionId, inclusiveTokens: directTokens + descendantTokens, directTokens, descendantTokens }
+  }).filter(root => root.inclusiveTokens > 0).sort((a, b) => b.inclusiveTokens - a.inclusiveTokens)
+  const capacityGroups = new Map<string, { limitId: string; windowMinutes: number; resetBoundary: string; points: { observedAt: string; usedPercent: number }[] }>()
+  capacityObservations.filter(point => Date.parse(point.observedAt) >= range.start).forEach(point => {
+    const group = capacityGroups.get(point.resetBoundary) ?? { limitId: 'codex', windowMinutes: 10080, resetBoundary: point.resetBoundary, points: [] }
+    group.points.push({ observedAt: point.observedAt, usedPercent: point.usedPercent })
+    capacityGroups.set(point.resetBoundary, group)
+  })
+  const meta = metricMeta(request, selected.length)
+  const coverage = meta.coverage
+  return { schemaVersion: 2, datasetEpoch: epoch, appliedRevision: revision, coverage, results: [
     { ...meta, key: 'recorded_tokens', value: total },
-    { ...meta, key: 'recorded_tokens_by_kind', value: { userRootDirect: direct, descendant: descendants, inspectorReview: review, otherOrphan: other } },
-    { ...meta, key: 'recorded_tokens_over_time', value: days.map(([bucketStart, userRootDirect, descendant]) => ({ bucketStart, bucketEnd: new Date(Date.parse(String(bucketStart)) + 86400000).toISOString(), timezone: 'UTC', grain: 'day', byKind: { userRootDirect: onlyDescendants ? 0 : userRootDirect, descendant, inspectorReview: onlyDescendants ? 0 : 12000, otherOrphan: onlyDescendants ? 0 : 3000 } })) },
-    { ...meta, key: 'token_composition', value: { uncachedInput: Math.round(total * .43), cachedInput: Math.round(total * .32), visibleOutput: Math.round(total * .17), reasoningOutput: Math.round(total * .08), residual: 0 } },
-    { ...meta, key: 'top_root_sessions_by_tokens', value: sessions.map(item => ({ rootSessionId: item.sessionId, inclusiveTokens: item.directTokens + item.descendantTokens, directTokens: item.directTokens, descendantTokens: item.descendantTokens })) },
+    { ...meta, key: 'recorded_tokens_by_kind', value: byKind },
+    { ...meta, key: 'recorded_tokens_over_time', value: overTime },
+    { ...meta, key: 'token_composition', value: composition },
+    { ...meta, key: 'top_root_sessions_by_tokens', value: roots },
     { ...meta, key: 'latest_capacity_observation', value: [{ observedAt: now, limitId: 'codex', windowMinutes: 300, usedPercent: 38, remainingPercent: 62, resetsAt: '2026-07-22T05:00:00Z', stale: false }, { observedAt: now, limitId: 'codex', windowMinutes: 10080, usedPercent: 64, remainingPercent: 36, resetsAt: '2026-07-27T00:00:00Z', stale: false }] },
-    { ...meta, key: 'capacity_drawdown', value: [{ limitId: 'codex', windowMinutes: 10080, resetBoundary: '2026-07-27T00:00:00Z', points: [
-      { observedAt: '2026-07-16T00:00:00Z', usedPercent: 8 }, { observedAt: '2026-07-17T00:00:00Z', usedPercent: 17 }, { observedAt: '2026-07-18T00:00:00Z', usedPercent: 29 }, { observedAt: '2026-07-19T00:00:00Z', usedPercent: 36 }, { observedAt: '2026-07-20T00:00:00Z', usedPercent: 47 }, { observedAt: '2026-07-21T00:00:00Z', usedPercent: 59 }, { observedAt: now, usedPercent: 64 },
-    ] }] },
+    { ...meta, key: 'capacity_drawdown', value: [...capacityGroups.values()] },
   ] }
 }
 
-function sessionPage(query = '') {
+function sessionPage(query = '', rootIds: string[] = []) {
   const needle = query.trim().toLowerCase()
-  const items = sessions.filter(item => !needle || [item.title, item.project, ...item.matchSnippets.map(snippet => snippet.text)].join(' ').toLowerCase().includes(needle))
+  const roots = new Set(rootIds)
+  const items = sessions.filter(item => (!roots.size || roots.has(item.sessionId)) && (!needle || [item.title, item.project, ...item.matchSnippets.map(snippet => snippet.text)].join(' ').toLowerCase().includes(needle)))
   return { schemaVersion: 2, datasetEpoch: epoch, appliedRevision: revision, coverage: { fidelity: 'exact', observed: items.length, eligible: sessions.length }, items }
 }
 
@@ -151,9 +333,9 @@ export function installDemoApi() {
     if (url.pathname === '/v1/status') return json(status)
     if (url.pathname === '/v1/events') return new Response(null, { status: 204 })
     if (url.pathname === '/v1/metrics/catalog') return json({ schemaVersion: 2, datasetEpoch: epoch, appliedRevision: revision, coverage: exact, metrics: [{ key: 'recorded_tokens', formulaVersion: 1, unit: 'tokens', dimensions: [] }], filterOptions })
-    if (url.pathname === '/v1/metrics/query') return json(metrics(init?.body ? JSON.parse(String(init.body)) : {}))
+    if (url.pathname === '/v1/metrics/query') return json(buildDemoMetrics(init?.body ? JSON.parse(String(init.body)) : {}))
     if (url.pathname === '/v1/source-diagnostics') return json({ schemaVersion: 2, datasetEpoch: epoch, appliedRevision: revision, items: [] })
-    if (url.pathname === '/v1/sessions') return json(sessionPage(url.searchParams.get('query') ?? ''))
+    if (url.pathname === '/v1/sessions') return json(sessionPage(url.searchParams.get('query') ?? '', url.searchParams.getAll('rootId')))
     const mapMatch = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/map$/)
     if (mapMatch) return json(sessionMap(decodeURIComponent(mapMatch[1])))
     const ledgerMatch = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/turns\/([^/]+)\/ledger$/)
