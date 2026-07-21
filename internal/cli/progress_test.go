@@ -135,6 +135,34 @@ func TestSyncTerminalErrorIsActionableAndDoesNotLeakSourcePath(t *testing.T) {
 	}
 }
 
+func TestSyncWriterConflictDoesNotReportFailedZeroOfZero(t *testing.T) {
+	root := t.TempDir()
+	inspector := filepath.Join(root, "inspector")
+	codex := filepath.Join(root, "codex")
+	t.Setenv("CODEX_INSPECTOR_HOME", inspector)
+	t.Setenv("CODEX_HOME", codex)
+	l, err := home.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = home.Ensure(l); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := proc.Acquire(filepath.Join(l.Run, "writer.lock"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+
+	var stdout, stderr bytes.Buffer
+	if code := Main([]string{"sync"}, IO{Out: &stdout, Err: &stderr}); code != 1 {
+		t.Fatalf("sync exit=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "Sync: could not start indexing") || !strings.Contains(stderr.String(), "another indexing pass is active") || !strings.Contains(stderr.String(), "sync --background") || strings.Contains(stderr.String(), "failed 0/0") {
+		t.Fatalf("writer conflict was misreported: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
 func TestBackgroundSyncStoppedErrorIsActionable(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("CODEX_INSPECTOR_HOME", root)
@@ -227,7 +255,7 @@ func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
 		case "/v1/health":
 			fmt.Fprint(w, `{"healthy":true,"instanceId":"stop-instance","protocolVersion":1}`)
 		case "/v1/status":
-			fmt.Fprint(w, `{"process":{"state":"ready","cliVersion":"0.1.0"},"index":{"state":"current","queuedSessionChanges":0},"hook":{"state":"healthy"}}`)
+			fmt.Fprint(w, `{"process":{"state":"ready","cliVersion":"0.1.0"},"index":{"state":"catching_up","queuedSessionChanges":4,"activePass":{"phase":"indexing","inventoriedCount":10,"processedCount":2,"remainingCount":5,"skippedCount":3,"failedCount":0,"requiresRebuildCount":0}},"hook":{"state":"healthy"}}`)
 		case "/v1/shutdown":
 			if r.Header.Get("Authorization") != "" || r.Header.Get("Origin") != fmt.Sprintf("http://127.0.0.1:%d", port) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -251,7 +279,7 @@ func TestStatusAndStopReportRuntimeEndpointsAndHomes(t *testing.T) {
 	if code := Main([]string{"status"}, IO{Out: &stdout, Err: &stderr}); code != 0 {
 		t.Fatalf("status exit=%d stderr=%s", code, stderr.String())
 	}
-	for _, want := range []string{"Inspector is running", fmt.Sprintf("port=%d", port), "codex_home=" + codexHome, "inspector_home=" + inspectorHome, "process=ready cli=0.1.0 index=current hook=healthy"} {
+	for _, want := range []string{"Inspector is running", fmt.Sprintf("port=%d", port), "codex_home=" + codexHome, "inspector_home=" + inspectorHome, "process=ready cli=0.1.0 index=catching_up hook=healthy queued_markers=4", "active_pass=indexing checked=5/10 remaining=5 processed=2 skipped=3 failed=0 requires_rebuild=0"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("status missing %q: %s", want, stdout.String())
 		}

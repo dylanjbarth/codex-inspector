@@ -373,6 +373,17 @@ export interface components {
             items: components["schemas"]["SourceDiagnostic"][];
             nextCursor?: string;
         };
+        IndexPassProgress: {
+            /** @enum {unknown} */
+            phase: "discovering" | "indexing" | "rebuilding" | "finalizing";
+            inventoriedCount: number;
+            scannedCount: number;
+            processedCount: number;
+            remainingCount: number;
+            skippedCount: number;
+            failedCount: number;
+            requiresRebuildCount: number;
+        };
         IndexStatus: {
             /** @enum {unknown} */
             state: "empty" | "building" | "current" | "catching_up" | "failed" | "requires_rebuild";
@@ -393,6 +404,7 @@ export interface components {
             skippedCount: number;
             failedCount: number;
             requiresRebuildCount: number;
+            activePass?: components["schemas"]["IndexPassProgress"];
             diagnosticGroups: components["schemas"]["SourceDiagnosticGroup"][];
             /** Format: date-time */
             reverseScanBoundary: string | null;

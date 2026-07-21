@@ -169,6 +169,16 @@ func statusCmd(args []string, s IO) error {
 		Index struct {
 			State  string `json:"state"`
 			Queued int    `json:"queuedSessionChanges"`
+			Active *struct {
+				Phase                string `json:"phase"`
+				InventoriedCount     int    `json:"inventoriedCount"`
+				ScannedCount         int    `json:"scannedCount"`
+				ProcessedCount       int    `json:"processedCount"`
+				RemainingCount       int    `json:"remainingCount"`
+				SkippedCount         int    `json:"skippedCount"`
+				FailedCount          int    `json:"failedCount"`
+				RequiresRebuildCount int    `json:"requiresRebuildCount"`
+			} `json:"activePass"`
 		} `json:"index"`
 		Hook struct {
 			State string `json:"state"`
@@ -178,6 +188,13 @@ func statusCmd(args []string, s IO) error {
 		return errors.New("Inspector server returned an invalid status; run codex-inspector open")
 	}
 	fmt.Fprintf(s.Out, "Inspector is running\nport=%d\ncodex_home=%s\ninspector_home=%s\nprocess=%s cli=%s index=%s hook=%s queued_markers=%d\n", m.Port, m.CodexHome, l.Root, v.Process.State, v.Process.CLIVersion, v.Index.State, v.Hook.State, v.Index.Queued)
+	if v.Index.Active != nil {
+		handled := v.Index.Active.ProcessedCount + v.Index.Active.SkippedCount + v.Index.Active.FailedCount + v.Index.Active.RequiresRebuildCount
+		if v.Index.Active.Phase == "rebuilding" {
+			handled = v.Index.Active.ScannedCount
+		}
+		fmt.Fprintf(s.Out, "active_pass=%s checked=%d/%d remaining=%d processed=%d skipped=%d failed=%d requires_rebuild=%d\n", v.Index.Active.Phase, handled, v.Index.Active.InventoriedCount, v.Index.Active.RemainingCount, v.Index.Active.ProcessedCount, v.Index.Active.SkippedCount, v.Index.Active.FailedCount, v.Index.Active.RequiresRebuildCount)
+	}
 	return nil
 }
 func stopCmd(args []string, s IO) error {
@@ -336,6 +353,14 @@ func syncCmd(args []string, s IO) error {
 		reporter := newSyncProgressReporter(s.Err)
 		progress, runErr := indexer.Run(context.Background(), indexer.Config{Layout: l, OnCommit: reporter.Report})
 		if runErr != nil {
+			if errors.Is(runErr, indexer.ErrWriterActive) {
+				reporter.CouldNotStart()
+				return errors.New("another indexing pass is active; use codex-inspector sync --background when the local server is running, or retry after the current pass finishes")
+			}
+			if progress.Inventoried == 0 {
+				reporter.CouldNotStart()
+				return errors.New("sync could not initialize; run codex-inspector doctor for compatibility and setup checks")
+			}
 			reporter.Failed(progress)
 			return errors.New("sync did not complete; run codex-inspector doctor for compatibility and setup checks")
 		}

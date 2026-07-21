@@ -160,7 +160,8 @@ func TestCheckpointReconciliationParsesOnlyChangedSources(t *testing.T) {
 
 func TestCheckpointAdapterUpgradeReprocessesUnchangedSource(t *testing.T) {
 	layout, codex := setup(t)
-	cfg := Config{Layout: layout, CodexHome: codex, Concurrency: 2}
+	var reported []Progress
+	cfg := Config{Layout: layout, CodexHome: codex, Concurrency: 2, OnCommit: func(progress Progress) { reported = append(reported, progress) }}
 	rootPath := filepath.Join(codex, "sessions", "2026", "07", "01", "rollout-root-001.jsonl")
 	rootPath, err := filepath.EvalSymlinks(rootPath)
 	if err != nil {
@@ -193,6 +194,18 @@ func TestCheckpointAdapterUpgradeReprocessesUnchangedSource(t *testing.T) {
 	}
 	if !progress.Rebuilt || progress.Processed != progress.Inventoried || progress.Skipped != 0 {
 		t.Fatalf("adapter upgrade did not rebuild unchanged source: progress=%#v", progress)
+	}
+	sawStart, sawComplete := false, false
+	for _, update := range reported {
+		if update.Stage == "rebuilding" && update.Scanned == 0 {
+			sawStart = true
+		}
+		if update.Stage == "rebuilding" && update.Scanned == update.Inventoried {
+			sawComplete = true
+		}
+	}
+	if !sawStart || !sawComplete {
+		t.Fatalf("adapter rebuild did not publish scan progress: %#v", reported)
 	}
 }
 

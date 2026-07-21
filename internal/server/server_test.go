@@ -274,6 +274,24 @@ func TestLoopbackStatusLoadsWithoutAuthenticationAndIdleShutdown(t *testing.T) {
 	}
 }
 
+func TestActivePassProgressHasDistinctDiscoveringIndexingAndFinalizingPhases(t *testing.T) {
+	if got := activePassProgress(false, indexer.Progress{Inventoried: 10}); got != nil {
+		t.Fatalf("inactive pass was reported: %+v", got)
+	}
+	if got := activePassProgress(true, indexer.Progress{}); got == nil || got.Phase != "discovering" || got.InventoriedCount != 0 {
+		t.Fatalf("discovering pass was not explicit: %+v", got)
+	}
+	if got := activePassProgress(true, indexer.Progress{Inventoried: 10, Processed: 2, Skipped: 3}); got == nil || got.Phase != "indexing" || got.RemainingCount != 5 || got.ProcessedCount != 2 || got.SkippedCount != 3 {
+		t.Fatalf("active pass counters are not pass-local: %+v", got)
+	}
+	if got := activePassProgress(true, indexer.Progress{Inventoried: 10, Processed: 2, Skipped: 7, Failed: 1}); got == nil || got.Phase != "finalizing" || got.RemainingCount != 0 {
+		t.Fatalf("finalizing pass was not explicit: %+v", got)
+	}
+	if got := activePassProgress(true, indexer.Progress{Stage: "rebuilding", Inventoried: 10, Scanned: 4, Processed: 10}); got == nil || got.Phase != "rebuilding" || got.ScannedCount != 4 || got.RemainingCount != 6 {
+		t.Fatalf("adapter rebuild progress was not explicit: %+v", got)
+	}
+}
+
 func TestSameOriginShutdownStopsServer(t *testing.T) {
 	m, layout, cancel, errs := startTestServer(t, time.Minute)
 	defer cancel()

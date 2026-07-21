@@ -40,6 +40,10 @@ func (r *syncProgressReporter) Failed(p indexer.Progress) {
 	r.write(progressLine("failed", p))
 }
 
+func (r *syncProgressReporter) CouldNotStart() {
+	r.write("Sync: could not start indexing.")
+}
+
 func (r *syncProgressReporter) write(line string) {
 	if line == r.lastLine {
 		return
@@ -49,6 +53,9 @@ func (r *syncProgressReporter) write(line string) {
 }
 
 func syncHandled(p indexer.Progress) int {
+	if p.Stage == "rebuilding" {
+		return min(p.Scanned, p.Inventoried)
+	}
 	handled := p.Processed + p.Skipped + p.Failed + p.RequiresRebuild
 	if handled > p.Inventoried {
 		return p.Inventoried

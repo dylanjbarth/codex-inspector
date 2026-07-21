@@ -74,6 +74,36 @@ type state struct {
 	shutdownOnce    sync.Once
 }
 
+type activeIndexPass struct {
+	Phase                string `json:"phase"`
+	InventoriedCount     int    `json:"inventoriedCount"`
+	ScannedCount         int    `json:"scannedCount"`
+	ProcessedCount       int    `json:"processedCount"`
+	RemainingCount       int    `json:"remainingCount"`
+	SkippedCount         int    `json:"skippedCount"`
+	FailedCount          int    `json:"failedCount"`
+	RequiresRebuildCount int    `json:"requiresRebuildCount"`
+}
+
+func activePassProgress(indexing bool, p indexer.Progress) *activeIndexPass {
+	if !indexing {
+		return nil
+	}
+	handled := p.Processed + p.Skipped + p.Failed + p.RequiresRebuild
+	phase := "discovering"
+	remaining := max(0, p.Inventoried-handled)
+	if p.Stage == "rebuilding" {
+		phase = "rebuilding"
+		remaining = max(0, p.Inventoried-p.Scanned)
+	} else if p.Inventoried > 0 {
+		phase = "indexing"
+		if handled >= p.Inventoried {
+			phase = "finalizing"
+		}
+	}
+	return &activeIndexPass{Phase: phase, InventoriedCount: p.Inventoried, ScannedCount: p.Scanned, ProcessedCount: p.Processed, RemainingCount: remaining, SkippedCount: p.Skipped, FailedCount: p.Failed, RequiresRebuildCount: p.RequiresRebuild}
+}
+
 type eventBuffer struct {
 	mu     sync.Mutex
 	next   int64
@@ -383,6 +413,7 @@ func (s *state) startIndex(force bool) string {
 		s.rebuiltRuns = 0
 	}
 	s.indexing = true
+	s.indexProgress = indexer.Progress{}
 	s.indexError = ""
 	s.lastActive = time.Now()
 	s.indexWG.Add(1)
@@ -401,7 +432,7 @@ func (s *state) startIndex(force bool) string {
 			s.indexProgress = p
 			s.lastActive = time.Now()
 			s.mu.Unlock()
-			s.events.publish("sync.progress", map[string]any{"processed": p.Processed, "queued": max(0, p.Inventoried-p.Processed-p.Skipped-p.Failed-p.RequiresRebuild), "skipped": p.Skipped, "failed": p.Failed, "inventoryComplete": p.Processed+p.Skipped+p.Failed+p.RequiresRebuild >= p.Inventoried})
+			s.events.publish("sync.progress", map[string]any{"stage": p.Stage, "scanned": p.Scanned, "processed": p.Processed, "queued": max(0, p.Inventoried-p.Processed-p.Skipped-p.Failed-p.RequiresRebuild), "skipped": p.Skipped, "failed": p.Failed, "inventoryComplete": p.Processed+p.Skipped+p.Failed+p.RequiresRebuild >= p.Inventoried})
 			if store, e := storage.Open(filepath.Join(s.layout.Root, "inspector.db")); e == nil {
 				epoch, revision, _ := store.Snapshot()
 				_ = store.Close()
@@ -1112,6 +1143,9 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 	}
 	remaining := max(0, progress.Inventoried-progress.Processed-progress.Skipped-progress.Failed-progress.RequiresRebuild)
 	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "inventoriedCount": max(dbStatus.Sources, progress.Inventoried), "processedCount": max(dbStatus.Processed, progress.Processed), "remainingCount": remaining, "queuedCount": max(dbStatus.Pending, remaining), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": dbStatus.Failed + progress.Failed, "requiresRebuildCount": dbStatus.RequiresRebuild, "diagnosticGroups": diagnosticGroups, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark}
+	if activePass := activePassProgress(indexing, progress); activePass != nil {
+		index["activePass"] = activePass
+	}
 	if progress.Boundary != "" {
 		index["reverseScanBoundary"] = progress.Boundary
 	}

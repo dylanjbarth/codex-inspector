@@ -30,13 +30,26 @@ function Nav({ compact = false }: { compact?: boolean }) {
   </nav>
 }
 
-function RuntimeSummary({ status }: { status: Status }) {
-  const activeIndex = status.index.state === 'building' || status.index.state === 'catching_up'
-  const complete = status.index.inventoriedCount ? Math.min(100, Math.round((status.index.processedCount + status.index.skippedCount + status.index.failedCount) / status.index.inventoriedCount * 100)) : 0
-  return <section className="shell-runtime" aria-label="Local runtime status">
-    <div className="shell-runtime-line"><span className={activeIndex ? 'runtime-dot active' : 'runtime-dot'} aria-hidden="true" /><span>{activeIndex ? 'Indexing local history' : status.index.state === 'current' ? 'Local index current' : status.index.state}</span></div>
-    {activeIndex && <><Progress value={complete} aria-label={`Index progress ${complete}%`} /><small>{status.index.processedCount} processed · {status.index.remainingCount} remaining</small></>}
-    {!activeIndex && <small>{status.index.supportedSourceCount} supported · {status.index.unsupportedSourceCount} limited</small>}
+function IndexRailStatus({ status }: { status: Status }) {
+  const pass = status.index.activePass
+  if (!pass) return <section className="shell-index-status idle" aria-label={`Local index ${status.index.state}, revision ${status.index.appliedRevision}`}>
+    <span className="shell-index-signal" aria-hidden="true" />
+    <span><b>Index</b><strong>{status.index.state === 'current' ? 'Current' : status.index.state.replaceAll('_', ' ')} · r{status.index.appliedRevision}</strong></span>
+  </section>
+  const handled = pass.phase === 'rebuilding' ? pass.scannedCount : pass.processedCount + pass.skippedCount + pass.failedCount + pass.requiresRebuildCount
+  const complete = pass.inventoriedCount ? Math.min(100, Math.round(handled / pass.inventoriedCount * 100)) : 0
+  const title = pass.phase === 'discovering' ? 'Discovering sources' : pass.phase === 'rebuilding' ? 'Rebuilding catalog' : pass.phase === 'finalizing' ? 'Finalizing snapshot' : 'Indexing history'
+  const detail = pass.phase === 'discovering'
+    ? `${status.index.queuedSessionChanges} queued change${status.index.queuedSessionChanges === 1 ? '' : 's'} waiting for this pass`
+    : pass.phase === 'rebuilding'
+      ? `${pass.scannedCount} of ${pass.inventoriedCount} sources prepared · upgrading the source adapter without replacing the active snapshot early`
+    : pass.phase === 'finalizing'
+      ? `${pass.inventoriedCount} sources checked · reconciling lineage and committing the snapshot`
+      : `${handled} of ${pass.inventoriedCount} sources checked · ${pass.processedCount} indexed · ${pass.skippedCount} unchanged · ${pass.remainingCount} remaining`
+  return <section className={`shell-index-status active ${pass.phase}`} role="status" aria-live="polite" aria-label={`${title}. ${detail}`} title={detail}>
+    <span className="shell-index-signal" aria-hidden="true" />
+    <span><b>Index</b><strong>{title}</strong></span>
+    {pass.inventoriedCount > 0 ? <span className="shell-index-progress"><Progress value={complete} aria-label={`Current index pass ${complete}%`} /><em>{handled}/{pass.inventoriedCount} · {complete}%</em></span> : <span className="shell-index-scanning"><i aria-hidden="true" />Scanning…</span>}
   </section>
 }
 
@@ -56,10 +69,9 @@ export function AppShell({ status, children }: Props) {
     <aside className="shell-sidebar" onClick={toggleSidebar} title={collapsed ? 'Click to expand sidebar' : 'Click empty sidebar space to collapse'}>
       <div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" />{!collapsed && <span><strong>Codex Inspector</strong></span>}</div>
       <Nav compact={collapsed} />
-      {!collapsed && <RuntimeSummary status={status} />}
     </aside>
     <div className="shell-content">
-      <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" /><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /><RuntimeSummary status={status} /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
+      <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" /><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
       <div className="shell-dataset" aria-label="Effective local homes">
         <div className="shell-dataset-item">
           <div className="shell-dataset-label"><span>CODEX_HOME</span><Badge className="shell-dataset-source" variant="secondary">{sourceHome.resolution === 'environment' ? 'from environment' : 'using default'}</Badge></div>
@@ -69,6 +81,7 @@ export function AppShell({ status, children }: Props) {
           <div className="shell-dataset-label"><span>CODEX_INSPECTOR_HOME</span></div>
           <strong title={inspectorHome}>{inspectorHome}</strong>
         </div>
+        <IndexRailStatus status={status} />
       </div>
       {children}
     </div>

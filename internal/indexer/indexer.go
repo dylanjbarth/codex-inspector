@@ -26,6 +26,8 @@ import (
 
 type Progress struct {
 	Inventoried, Processed, Skipped, Failed, RequiresRebuild, QueueConsumed int
+	Scanned                                                                 int
+	Stage                                                                   string
 	Boundary                                                                string
 	FailureReasons                                                          map[string]int
 	Rebuilt                                                                 bool
@@ -39,6 +41,8 @@ type Config struct {
 	OnParse     func(sources.Candidate)
 }
 type spawningProof struct{ parentSessionID, turnID string }
+
+var ErrWriterActive = errors.New("another Inspector writer is active")
 
 func Run(ctx context.Context, cfg Config) (Progress, error) {
 	var effective home.CodexHome
@@ -76,7 +80,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	}
 	lock, err := proc.Acquire(filepath.Join(cfg.Layout.Run, "writer.lock"), true)
 	if err != nil {
-		return Progress{}, errors.New("another Inspector writer is active")
+		return Progress{}, ErrWriterActive
 	}
 	defer lock.Close()
 	indexPath := filepath.Join(cfg.Layout.Root, "inspector.db")
@@ -97,7 +101,12 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	store, err := storage.Open(indexPath)
 	if errors.Is(err, storage.ErrSchemaV1RequiresRebuild) {
 		labels := sessionLabels(inventory)
-		batches, buildErr := inventoryBatches(ctx, inventory, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews)
+		p.Stage = "rebuilding"
+		notify(cfg, p)
+		batches, buildErr := inventoryBatches(ctx, inventory, labels, terminalProofs, spawningProofs, cfg.Layout.Reviews, func(scanned int) {
+			p.Scanned = scanned
+			notify(cfg, p)
+		})
 		if buildErr != nil {
 			return p, buildErr
 		}
@@ -133,7 +142,13 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		// Replaying an unchanged source incrementally is both semantically unsafe
 		// and rejected by checkpoint monotonicity, so replace the full derived
 		// catalog atomically before applying any ordinary incremental work.
-		if err = rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews); err != nil {
+		p.Stage = "rebuilding"
+		p.Scanned = 0
+		notify(cfg, p)
+		if err = rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, func(scanned int) {
+			p.Scanned = scanned
+			notify(cfg, p)
+		}); err != nil {
 			p.Failed++
 			p.FailureReasons["rebuild_failed"]++
 			return p, err
@@ -330,7 +345,13 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		}
 	}
 	if p.Failed == 0 && rebuildRequested {
-		if err := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews); err != nil {
+		p.Stage = "rebuilding"
+		p.Scanned = 0
+		notify(cfg, p)
+		if err := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, func(scanned int) {
+			p.Scanned = scanned
+			notify(cfg, p)
+		}); err != nil {
 			p.Failed++
 			p.FailureReasons["rebuild_failed"]++
 			if firstFailure == nil {
@@ -363,15 +384,15 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	return p, nil
 }
 
-func rebuildInventory(ctx context.Context, store *storage.Store, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string) error {
-	batches, err := inventoryBatches(ctx, candidates, labels, proofs, spawning, reviewsRoot)
+func rebuildInventory(ctx context.Context, store *storage.Store, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string, onScan func(int)) error {
+	batches, err := inventoryBatches(ctx, candidates, labels, proofs, spawning, reviewsRoot, onScan)
 	if err != nil {
 		return err
 	}
 	return store.Rebuild(ctx, batches)
 }
 
-func inventoryBatches(ctx context.Context, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string) ([]facts.Batch, error) {
+func inventoryBatches(ctx context.Context, candidates []sources.Candidate, labels map[string]string, proofs map[string]map[string]sources.TerminalProof, spawning map[string]spawningProof, reviewsRoot string, onScan func(int)) ([]facts.Batch, error) {
 	rawBatches := make([]facts.Batch, 0, len(candidates))
 	for _, candidate := range candidates {
 		var batch facts.Batch
@@ -387,6 +408,9 @@ func inventoryBatches(ctx context.Context, candidates []sources.Candidate, label
 			return nil, fmt.Errorf("rebuild parse %s: %w", candidate.Path, err)
 		}
 		rawBatches = append(rawBatches, batch)
+		if onScan != nil {
+			onScan(len(rawBatches))
+		}
 	}
 	if err := normalizeResumedSessions(rawBatches); err != nil {
 		return nil, err
