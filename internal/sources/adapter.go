@@ -521,7 +521,26 @@ func normalize(b facts.Batch, rows []located, proofs map[string]TerminalProof) f
 }
 
 func friendlySessionTitle(text string) string {
-	words := strings.Fields(text)
+	trimmed := strings.TrimSpace(text)
+	for strings.HasPrefix(strings.ToLower(trimmed), "<image ") {
+		end := strings.Index(strings.ToLower(trimmed), "</image>")
+		if end < 0 {
+			return ""
+		}
+		trimmed = strings.TrimSpace(trimmed[end+len("</image>"):])
+	}
+	if strings.HasPrefix(trimmed, "[Image #") {
+		if end := strings.Index(trimmed, "]"); end >= 0 {
+			trimmed = strings.TrimSpace(trimmed[end+1:])
+		}
+	}
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range []string{"<environment_context", "<system", "<developer", "{\"cwd\"", "{'cwd'", "the following is the codex agent history"} {
+		if strings.HasPrefix(lower, prefix) {
+			return ""
+		}
+	}
+	words := strings.Fields(trimmed)
 	if len(words) == 0 {
 		return ""
 	}

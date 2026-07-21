@@ -47,12 +47,12 @@ export async function queryMetrics(query: DashboardQuery): Promise<MetricResult>
   return response.json()
 }
 
-async function inspectorJSON<T>(path:string,message:string):Promise<T>{
-  const response=await fetch(path)
+async function inspectorJSON<T>(path:string,message:string,signal?:AbortSignal):Promise<T>{
+  const response=await fetch(path,{signal})
   if(!response.ok){let detail='';try{const problem=await response.json() as {detail?:string;title?:string};detail=problem.detail||problem.title||''}catch{/* payload-free fallback */}throw new Error(detail||message)}
   return response.json() as Promise<T>
 }
-export function fetchSessions(query:string,revision:number,cursor?:string):Promise<SessionPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'50'});if(query)params.set('query',query);if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions?${params}`,'Session discovery is unavailable')}
+export function fetchSessions(query:string,revision:number,cursor?:string,signal?:AbortSignal):Promise<SessionPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'50'});if(query)params.set('query',query);if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions?${params}`,'Session discovery is unavailable',signal)}
 export function fetchSessionMetadata(rootIds:string[],revision:number):Promise<SessionPage>{const params=new URLSearchParams({revision:String(revision),pageSize:String(Math.max(1,Math.min(200,rootIds.length)))});for(const rootId of rootIds.slice(0,200))params.append('rootId',rootId);return inspectorJSON(`/v1/sessions?${params}`,'Session metadata is unavailable')}
 export function fetchSessionMap(sessionId:string,revision:number):Promise<SessionMap>{return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/map?revision=${revision}`,'Session map is unavailable')}
 export function fetchLedger(sessionId:string,turnId:string,revision:number,cursor?:string):Promise<LedgerPage>{const params=new URLSearchParams({revision:String(revision),pageSize:'200'});if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/ledger?${params}`,'Turn evidence is unavailable')}
