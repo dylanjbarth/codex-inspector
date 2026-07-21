@@ -108,6 +108,31 @@ func TestPlanBuildsPromptFromSingleAndTimeScopes(t *testing.T) {
 	if plan.SchemaVersion != 3 || plan.Review.Scope.RootSessionID != pageRoot || plan.Review.ReviewID == "" || !strings.Contains(plan.LaunchPrompt, "$codex-inspector:review-session") || !strings.Contains(plan.LaunchPrompt, pageRoot) || !strings.Contains(plan.LaunchPrompt, "do not expect a precomputed manifest") {
 		t.Fatalf("contract missing: %+v", plan)
 	}
+	for _, required := range []string{
+		"# Codex Inspector Effectiveness Review",
+		"## Non-negotiable boundaries",
+		"## How to investigate and scope the evidence",
+		"## Fixed four-lens rubric",
+		"Task framing and steering ('task_framing_and_steering')",
+		"Execution efficiency ('execution_efficiency')",
+		"Delegation and workflow ('delegation_and_workflow')",
+		"Reusable leverage ('reusable_leverage')",
+		"task-to-capability fit, not raw consumption",
+		"## Finding and recommendation rules",
+		"no quota or forced balance",
+		"## Exact output contract",
+		`"schemaVersion": "inspector.review/v1"`,
+		`"reviewId": "` + plan.Review.ReviewID + `"`,
+		`"datasetEpoch": "` + plan.DatasetEpoch + `"`,
+		`"indexRevision": ` + fmt.Sprint(plan.AppliedRevision),
+		"real 'evidence_refs.id'",
+		"Validate the completed object",
+		"Do not execute recommendations or action prompts",
+	} {
+		if !strings.Contains(plan.LaunchPrompt, required) {
+			t.Fatalf("launch prompt missing %q", required)
+		}
+	}
 	encoded, err := json.Marshal(plan)
 	if err != nil || len(encoded) > 16*1024 || strings.Contains(string(encoded), "evidenceId") || strings.Contains(string(encoded), "manifestPreview") {
 		t.Fatalf("prompt-first preview is unexpectedly large or evidence-bearing: bytes=%d err=%v", len(encoded), err)
@@ -122,7 +147,7 @@ func TestPlanBuildsPromptFromSingleAndTimeScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if timePlan.Review.Scope.Timezone != "America/Chicago" || timePlan.Review.Scope.ProjectID != projectID || timePlan.Review.ProjectName == "" || !strings.Contains(timePlan.LaunchPrompt, projectID) || !strings.Contains(timePlan.LaunchPrompt, timePlan.Review.ProjectName) {
+	if timePlan.Review.Scope.Timezone != "America/Chicago" || timePlan.Review.Scope.ProjectID != projectID || timePlan.Review.ProjectName == "" || !strings.Contains(timePlan.LaunchPrompt, projectID) || !strings.Contains(timePlan.LaunchPrompt, timePlan.Review.ProjectName) || !strings.Contains(timePlan.LaunchPrompt, "strictly less than 2026-07-02T00:00:00Z") || !strings.Contains(timePlan.LaunchPrompt, "Match the normalized project attached to each root work unit") {
 		t.Fatalf("time scope=%+v prompt=%s", timePlan.Review, timePlan.LaunchPrompt)
 	}
 	timeReq.Scope.ProjectID = "project-guessed"
