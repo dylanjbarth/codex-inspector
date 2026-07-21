@@ -13,9 +13,24 @@ evidence-backed advice about your workflow.
 Your session history and Inspector data stay on your machine. There is no
 account, cloud dashboard, remote database, or sample data to configure.
 
-> [insert screenshot of the Token & Capacity dashboard here]
->
-> _Synthetic data shown. No private Codex history is included._
+## Try the hosted sample
+
+[Open the interactive Codex Inspector sample](https://codex-inspector-sample.jungnerd.chatgpt.site/)
+to explore the dashboard without installing anything. This separate public
+sandbox uses a privacy-safe synthetic dataset with internally consistent
+projects, sessions, models, reasoning levels, agent contributions, and token
+records. It never reads local Codex files.
+
+![Codex Inspector hosted sample dashboard](docs/screenshots/hosted-demo-dashboard.jpg)
+
+_The 30-day overview includes eight matching root sessions and 3,137,000
+recorded tokens._
+
+![Codex Inspector hosted sample filtered to one project, model, reasoning level, and contribution type](docs/screenshots/hosted-demo-filtered.jpg)
+
+_Filtering to the last seven days, Codex Inspector, gpt-5.6-sol, xhigh, and
+spawned-agent work narrows the same dataset to one root session and 193,000
+recorded tokens._
 
 > [!NOTE]
 > The current release supports **macOS on Apple Silicon** and Codex CLI/host
