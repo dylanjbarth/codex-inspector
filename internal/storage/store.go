@@ -1120,10 +1120,10 @@ func boolInt(v bool) int {
 func hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 type Checkpoint struct {
-	Size, Offset, MTimeNS int64
-	Prefix, Path, Kind    string
-	State, AdapterVersion string
-	SourceSessionID       string
+	Size, Offset, MTimeNS              int64
+	Prefix, Path, Kind                 string
+	State, StateReason, AdapterVersion string
+	SourceSessionID                    string
 }
 
 func (s *Store) Checkpoint(sourceStableID string) (Checkpoint, error) {
@@ -1132,7 +1132,7 @@ func (s *Store) Checkpoint(sourceStableID string) (Checkpoint, error) {
 		return Checkpoint{}, e
 	}
 	var c Checkpoint
-	e = s.db.QueryRow(`SELECT c.observed_size,c.complete_byte_offset,c.observed_mtime_ns,c.prefix_sha256,v.canonical_path,v.source_kind,v.state,c.adapter_version,a.source_session_id FROM source_checkpoints c JOIN source_artifacts a ON a.epoch_id=c.epoch_id AND a.id=c.source_id JOIN source_artifact_versions v ON v.epoch_id=c.epoch_id AND v.source_id=c.source_id WHERE c.source_id=? ORDER BY v.revision DESC LIMIT 1`, scoped(epoch, sourceStableID)).Scan(&c.Size, &c.Offset, &c.MTimeNS, &c.Prefix, &c.Path, &c.Kind, &c.State, &c.AdapterVersion, &c.SourceSessionID)
+	e = s.db.QueryRow(`SELECT c.observed_size,c.complete_byte_offset,c.observed_mtime_ns,c.prefix_sha256,v.canonical_path,v.source_kind,v.state,coalesce(v.state_reason,''),c.adapter_version,a.source_session_id FROM source_checkpoints c JOIN source_artifacts a ON a.epoch_id=c.epoch_id AND a.id=c.source_id JOIN source_artifact_versions v ON v.epoch_id=c.epoch_id AND v.source_id=c.source_id WHERE c.source_id=? ORDER BY v.revision DESC LIMIT 1`, scoped(epoch, sourceStableID)).Scan(&c.Size, &c.Offset, &c.MTimeNS, &c.Prefix, &c.Path, &c.Kind, &c.State, &c.StateReason, &c.AdapterVersion, &c.SourceSessionID)
 	return c, e
 }
 
@@ -1144,7 +1144,7 @@ func (s *Store) CheckpointsByPath() (map[string]Checkpoint, error) {
 	if e != nil {
 		return nil, e
 	}
-	rows, e := s.db.Query(`SELECT c.observed_size,c.complete_byte_offset,c.observed_mtime_ns,c.prefix_sha256,v.canonical_path,v.source_kind,v.state,c.adapter_version,a.source_session_id
+	rows, e := s.db.Query(`SELECT c.observed_size,c.complete_byte_offset,c.observed_mtime_ns,c.prefix_sha256,v.canonical_path,v.source_kind,v.state,coalesce(v.state_reason,''),c.adapter_version,a.source_session_id
 		FROM source_artifact_versions v
 		JOIN source_checkpoints c ON c.epoch_id=v.epoch_id AND c.source_id=v.source_id
 		JOIN source_artifacts a ON a.epoch_id=v.epoch_id AND a.id=v.source_id
@@ -1157,7 +1157,7 @@ func (s *Store) CheckpointsByPath() (map[string]Checkpoint, error) {
 	checkpoints := map[string]Checkpoint{}
 	for rows.Next() {
 		var checkpoint Checkpoint
-		if e = rows.Scan(&checkpoint.Size, &checkpoint.Offset, &checkpoint.MTimeNS, &checkpoint.Prefix, &checkpoint.Path, &checkpoint.Kind, &checkpoint.State, &checkpoint.AdapterVersion, &checkpoint.SourceSessionID); e != nil {
+		if e = rows.Scan(&checkpoint.Size, &checkpoint.Offset, &checkpoint.MTimeNS, &checkpoint.Prefix, &checkpoint.Path, &checkpoint.Kind, &checkpoint.State, &checkpoint.StateReason, &checkpoint.AdapterVersion, &checkpoint.SourceSessionID); e != nil {
 			return nil, e
 		}
 		checkpoints[checkpoint.Path] = checkpoint
@@ -1171,6 +1171,33 @@ func (s *Store) HasOtherSessionSegment(sourceSessionID, sourceStableID string) b
 	}
 	var count int
 	return s.db.QueryRow(`SELECT count(*) FROM source_artifacts WHERE epoch_id=? AND source_session_id=? AND id<>?`, epoch, sourceSessionID, scoped(epoch, sourceStableID)).Scan(&count) == nil && count > 0
+}
+
+// HasRecoverableFailedSources identifies legacy path-level failure artifacts
+// that coexist with a parsed source for the same rollout. A replacement build
+// removes the stale diagnostic after the parsed source can be indexed again.
+func (s *Store) HasRecoverableFailedSources() (bool, error) {
+	epoch, latest, err := s.Snapshot()
+	if err != nil {
+		return false, err
+	}
+	var count int
+	query := `WITH latest_sources AS (
+		SELECT v.* FROM source_artifact_versions v
+		WHERE v.epoch_id=? AND v.revision=(
+			SELECT max(x.revision) FROM source_artifact_versions x
+			WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id AND x.revision<=?
+		)
+	)
+	SELECT count(*) FROM latest_sources failed
+	WHERE failed.state='failed' AND EXISTS (
+		SELECT 1 FROM latest_sources parsed
+		WHERE parsed.canonical_path=failed.canonical_path
+		AND parsed.source_id<>failed.source_id
+		AND parsed.state IN ('supported','indexing','current')
+	)`
+	err = s.db.QueryRow(query, epoch, latest).Scan(&count)
+	return count > 0, err
 }
 func (s *Store) MarkRequiresRebuild(sourceStableID, reason string) error {
 	epoch, latest, e := s.Snapshot()
@@ -1309,30 +1336,31 @@ const MaxSourceDiagnosticGroups = 50
 var diagnosticVersionPattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}(?:[-+][0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$`)
 
 var diagnosticReasonCodes = map[string]bool{
-	"leading_record_too_large":          true,
-	"missing_leading_session_meta":      true,
-	"invalid_leading_session_meta":      true,
-	"invalid_session_meta":              true,
-	"invalid_session_meta_timestamp":    true,
-	"missing_required_session_identity": true,
-	"unsupported_codex_version":         true,
-	"incompatible_turn_context":         true,
-	"incompatible_record_envelope":      true,
-	"incompatible_event_record":         true,
-	"incompatible_turn_identity":        true,
-	"incompatible_token_record":         true,
-	"incompatible_response_record":      true,
-	"incompatible_tool_identity":        true,
-	"incompatible_record_shape":         true,
-	"foreign_key_constraint":            true,
-	"identity_constraint":               true,
-	"indexed_prefix_changed_or_shrank":  true,
-	"fact_check_constraint":             true,
-	"storage_busy":                      true,
-	"normalization_failed":              true,
-	"parse_failed":                      true,
-	"rebuild_failed":                    true,
-	"unspecified":                       true,
+	"leading_record_too_large":                true,
+	"missing_leading_session_meta":            true,
+	"invalid_leading_session_meta":            true,
+	"invalid_session_meta":                    true,
+	"invalid_session_meta_timestamp":          true,
+	"missing_required_session_identity":       true,
+	"unsupported_codex_version":               true,
+	"incompatible_turn_context":               true,
+	"incompatible_record_envelope":            true,
+	"incompatible_event_record":               true,
+	"incompatible_turn_identity":              true,
+	"incompatible_token_record":               true,
+	"incompatible_response_record":            true,
+	"incompatible_tool_identity":              true,
+	"incompatible_record_shape":               true,
+	"foreign_key_constraint":                  true,
+	"identity_constraint":                     true,
+	"indexed_prefix_changed_or_shrank":        true,
+	"fact_check_constraint":                   true,
+	"storage_busy":                            true,
+	"normalization_failed":                    true,
+	"terminal_turn_exceeds_transaction_bound": true,
+	"parse_failed":                            true,
+	"rebuild_failed":                          true,
+	"unspecified":                             true,
 }
 
 func normalizeDiagnosticReason(value string) string {

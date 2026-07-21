@@ -48,8 +48,8 @@ func TestAutomaticIndexCircuitBreaker(t *testing.T) {
 	for i := 0; i < maxAutomaticIndexRetries; i++ {
 		s.recordIndexResult(indexer.Progress{}, errors.New("failed"))
 	}
-	if !s.autoSuppressed || s.indexError != "index_retry_suppressed" {
-		t.Fatalf("repeated failures did not suppress automatic indexing: %#v", s)
+	if !s.autoSuppressed || s.indexError != "index_failed" {
+		t.Fatalf("repeated failures did not preserve the cause while suppressing automatic indexing: %#v", s)
 	}
 }
 

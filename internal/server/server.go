@@ -484,7 +484,6 @@ func (s *state) recordIndexResult(p indexer.Progress, err error) {
 		}
 		if s.failedRuns >= maxAutomaticIndexRetries {
 			s.autoSuppressed = true
-			s.indexError = "index_retry_suppressed"
 		}
 		return
 	}
@@ -1138,7 +1137,7 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 		processState = "degraded"
 	}
 	s.mu.Lock()
-	indexing, progress, indexErr := s.indexing, s.indexProgress, s.indexError
+	indexing, progress, indexErr, retrySuppressed := s.indexing, s.indexProgress, s.indexError, s.autoSuppressed
 	s.mu.Unlock()
 	epoch := "phase2-empty"
 	revision := int64(1)
@@ -1175,7 +1174,7 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 		lastError = indexErr
 	}
 	remaining := max(0, progress.Inventoried-progress.Processed-progress.Skipped-progress.Failed-progress.RequiresRebuild)
-	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "inventoriedCount": max(dbStatus.Sources, progress.Inventoried), "processedCount": max(dbStatus.Processed, progress.Processed), "remainingCount": remaining, "queuedCount": max(dbStatus.Pending, remaining), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": dbStatus.Failed + progress.Failed, "requiresRebuildCount": dbStatus.RequiresRebuild, "diagnosticGroups": diagnosticGroups, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark}
+	index := map[string]any{"state": indexState, "datasetEpoch": epoch, "appliedRevision": revision, "schemaVersion": version.IndexSchema, "databaseBytes": dbStatus.DatabaseBytes, "sourceCount": dbStatus.Sources, "supportedSourceCount": dbStatus.Supported, "unsupportedSourceCount": dbStatus.Unsupported, "pendingTailCount": dbStatus.Pending, "queuedSessionChanges": len(names), "inventoriedCount": max(dbStatus.Sources, progress.Inventoried), "processedCount": max(dbStatus.Processed, progress.Processed), "remainingCount": remaining, "queuedCount": max(dbStatus.Pending, remaining), "skippedCount": max(dbStatus.Unsupported, progress.Skipped), "failedCount": max(dbStatus.Failed, progress.Failed), "requiresRebuildCount": dbStatus.RequiresRebuild, "diagnosticGroups": diagnosticGroups, "reverseScanBoundary": nil, "completedWatermark": dbStatus.Watermark, "retrySuppressed": retrySuppressed}
 	if activePass := activePassProgress(indexing, progress); activePass != nil {
 		index["activePass"] = activePass
 	}
@@ -1334,6 +1333,8 @@ func sourceRemediation(state, reason string) string {
 		return "Keep the source intact, update Inspector, and sync again; this record shape is not currently supported."
 	case "parse_failed", "normalization_failed":
 		return "Run codex-inspector sync again. If this group remains, run codex-inspector doctor and report the reason and detected version."
+	case "terminal_turn_exceeds_transaction_bound":
+		return "This source contains a terminal turn larger than Inspector's bounded transaction size. The remaining corpus can still index; update Inspector when larger-turn support is available."
 	case "rebuild_failed":
 		return "Run codex-inspector doctor, resolve the reported data-home issue, then retry codex-inspector sync."
 	}

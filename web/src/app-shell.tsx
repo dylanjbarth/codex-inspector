@@ -34,7 +34,7 @@ function IndexRailStatus({ status }: { status: Status }) {
   const pass = status.index.activePass
   if (!pass) return <section className="shell-index-status idle" aria-label={`Local index ${status.index.state}, revision ${status.index.appliedRevision}`}>
     <span className="shell-index-signal" aria-hidden="true" />
-    <span><b>Index</b><strong>{status.index.state === 'current' ? 'Current' : status.index.state.replaceAll('_', ' ')} · r{status.index.appliedRevision}</strong>{status.index.lastErrorCode && <small>{status.index.lastErrorCode.replaceAll('_', ' ')}</small>}</span>
+    <span><b>Index</b><strong>{status.index.state === 'current' ? 'Current' : status.index.state.replaceAll('_', ' ')} · r{status.index.appliedRevision}</strong>{status.index.lastErrorCode && <small>{status.index.lastErrorCode.replaceAll('_', ' ')}{status.index.retrySuppressed ? ' · retry suppressed' : ''}</small>}</span>
   </section>
   const indexed = pass.processedCount + pass.skippedCount + pass.failedCount + pass.requiresRebuildCount
   const handled = pass.phase === 'rebuilding' ? pass.scannedCount : pass.phase === 'finalizing' ? Math.max(pass.scannedCount, indexed) : indexed

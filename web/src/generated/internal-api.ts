@@ -411,6 +411,7 @@ export interface components {
             /** Format: date-time */
             completedWatermark: string | null;
             lastErrorCode?: string;
+            retrySuppressed?: boolean;
         };
         HookMarkerHealth: {
             /** @enum {unknown} */

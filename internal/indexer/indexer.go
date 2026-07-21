@@ -96,6 +96,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	inventory := candidates
 	p := Progress{Inventoried: len(candidates), FailureReasons: map[string]int{}}
 	var firstFailure error
+	hardFailures := 0
 	rebuildRequested := false
 	processedSessions := map[string]string{}
 	store, err := storage.Open(indexPath)
@@ -137,6 +138,13 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	if err != nil {
 		return Progress{}, err
 	}
+	recoverableFailures, err := store.HasRecoverableFailedSources()
+	if err != nil {
+		return Progress{}, err
+	}
+	if recoverableFailures {
+		rebuildRequested = true
+	}
 	for _, checkpoint := range checkpoints {
 		if checkpoint.AdapterVersion == sources.AdapterVersion {
 			continue
@@ -174,7 +182,8 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 	work := make([]sources.Candidate, 0, len(inventory))
 	for _, candidate := range inventory {
 		checkpoint, found := checkpoints[candidate.Path]
-		if found && unchangedCandidate(candidate, checkpoint) && !checkpointTargeted(checkpoint, terminalProofs, spawningProofs) {
+		stableFailure := checkpoint.State == "failed" && checkpoint.StateReason == "terminal_turn_exceeds_transaction_bound"
+		if found && (checkpoint.State != "failed" || stableFailure) && unchangedCandidate(candidate, checkpoint) && !checkpointTargeted(checkpoint, terminalProofs, spawningProofs) {
 			p.Skipped++
 			continue
 		}
@@ -196,6 +205,10 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			batch, e := sources.ParseSessionIndex(c)
 			if e != nil {
 				p.Failed++
+				hardFailures++
+				if firstFailure == nil {
+					firstFailure = e
+				}
 				notify(cfg, p)
 				continue
 			}
@@ -223,6 +236,10 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			}
 			if e != nil {
 				p.Failed++
+				hardFailures++
+				if firstFailure == nil {
+					firstFailure = e
+				}
 			} else {
 				p.Processed++
 			}
@@ -291,6 +308,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 				_ = storeFailed(ctx, store, candidate, "parse_failed")
 				p.Failed++
+				hardFailures++
 				notify(cfg, p)
 				continue
 			}
@@ -314,6 +332,10 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 			} else if !errors.Is(e, sql.ErrNoRows) {
 				p.Failed++
+				hardFailures++
+				if firstFailure == nil {
+					firstFailure = e
+				}
 				notify(cfg, p)
 				continue
 			}
@@ -330,8 +352,23 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				processedSessions[sessionKey] = item.batch.Source.ID
 			}
 			chunks, splitErr := splitBatches(item.batch)
+			if errors.Is(splitErr, errTerminalTurnExceedsTransactionBound) {
+				if e = storeFailed(ctx, store, candidate, "terminal_turn_exceeds_transaction_bound"); e != nil {
+					hardFailures++
+					if firstFailure == nil {
+						firstFailure = e
+					}
+				} else {
+					p.FailureReasons["terminal_turn_exceeds_transaction_bound"]++
+				}
+				p.Failed++
+				notify(cfg, p)
+				continue
+			}
 			if splitErr != nil {
 				e = splitErr
+			} else if checkpointExists {
+				chunks = chunksAtOrAfterCheckpoint(chunks, checkpoint.Offset)
 			}
 			for _, chunk := range chunks {
 				if _, e = store.Apply(ctx, chunk, "normalize_source"); e != nil {
@@ -345,6 +382,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 				}
 				_ = storeFailed(ctx, store, candidate, "normalization_failed")
 				p.Failed++
+				hardFailures++
 				notify(cfg, p)
 				continue
 			}
@@ -352,11 +390,11 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 			notify(cfg, p)
 		}
 	}
-	if p.Failed == 0 && rebuildRequested {
+	if hardFailures == 0 && rebuildRequested {
 		p.Stage = "rebuilding"
 		p.Scanned = 0
 		notify(cfg, p)
-		failed, rebuildErr := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, false, func(scanned int) {
+		failed, rebuildErr := rebuildInventory(ctx, store, inventory, sessionLabels(inventory), terminalProofs, spawningProofs, cfg.Layout.Reviews, true, func(scanned int) {
 			p.Scanned = scanned
 			notify(cfg, p)
 		}, func() {
@@ -365,6 +403,7 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		})
 		if rebuildErr != nil {
 			p.Failed++
+			hardFailures++
 			p.FailureReasons["rebuild_failed"]++
 			if firstFailure == nil {
 				firstFailure = rebuildErr
@@ -378,18 +417,19 @@ func Run(ctx context.Context, cfg Config) (Progress, error) {
 		}
 	} else if err := store.ReconcileLineage(ctx); err != nil {
 		p.Failed++
+		hardFailures++
 		if firstFailure == nil {
 			firstFailure = err
 		}
 	}
-	if p.Failed == 0 || p.Rebuilt {
+	if hardFailures == 0 || p.Rebuilt {
 		for _, path := range markerPaths {
 			if os.Remove(path) == nil {
 				p.QueueConsumed++
 			}
 		}
 	}
-	if p.Failed > 0 && !p.Rebuilt {
+	if hardFailures > 0 && !p.Rebuilt {
 		notify(cfg, p)
 		return p, fmt.Errorf("%d sources failed: %v", p.Failed, firstFailure)
 	}
@@ -466,7 +506,11 @@ func rebuildChunks(batch facts.Batch, tolerateSourceFailures bool) ([]facts.Batc
 		return nil, false, err
 	}
 	candidate := sources.Candidate{Path: batch.Source.Path, Kind: batch.Source.Kind, Size: batch.Source.Size, MTimeNS: batch.Source.MTimeNS}
-	return []facts.Batch{failedSourceBatch(candidate, "normalization_failed")}, true, nil
+	reason := "normalization_failed"
+	if errors.Is(err, errTerminalTurnExceedsTransactionBound) {
+		reason = "terminal_turn_exceeds_transaction_bound"
+	}
+	return []facts.Batch{failedSourceBatch(candidate, reason)}, true, nil
 }
 
 func normalizeResumedSessions(batches []facts.Batch) error {
@@ -565,6 +609,8 @@ func subtractUsage(current, prior facts.Usage) (facts.Usage, bool) {
 	return facts.Usage{Input: input, CachedInput: cached, Output: output, ReasoningOutput: reasoning, Total: total}, true
 }
 
+var errTerminalTurnExceedsTransactionBound = errors.New("terminal turn exceeds 8 MiB transaction bound")
+
 func splitBatches(b facts.Batch) ([]facts.Batch, error) {
 	if len(b.SessionLabels) > 500 {
 		keys := make([]string, 0, len(b.SessionLabels))
@@ -625,7 +671,7 @@ func splitBatches(b facts.Batch) ([]facts.Batch, error) {
 			unitBytes += event.PayloadLength
 		}
 		if unitBytes > 8<<20 {
-			return nil, errors.New("terminal turn exceeds 8 MiB transaction bound")
+			return nil, errTerminalTurnExceedsTransactionBound
 		}
 		unitCount := unit[1] - unit[0]
 		if count > 0 && (count+unitCount > 500 || bytes+unitBytes > 8<<20) {
@@ -707,6 +753,18 @@ func splitBatches(b facts.Batch) ([]facts.Batch, error) {
 		out = append(out, chunk)
 	}
 	return out, nil
+}
+
+// chunksAtOrAfterCheckpoint drops only chunks whose proving watermark is
+// wholly behind the durable checkpoint. The first retained chunk may overlap
+// already indexed events; Store.Apply deduplicates those facts while advancing
+// the checkpoint to the chunk's later watermark.
+func chunksAtOrAfterCheckpoint(chunks []facts.Batch, checkpointOffset int64) []facts.Batch {
+	first := 0
+	for first < len(chunks) && chunks[first].Source.CompleteOffset < checkpointOffset {
+		first++
+	}
+	return chunks[first:]
 }
 
 const emptySHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

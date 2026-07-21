@@ -232,7 +232,7 @@ func TestRebuildQuarantinesSourceThatExceedsTransactionBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !quarantined || len(chunks) != 1 || chunks[0].Source.State != "failed" || chunks[0].Source.StateReason != "normalization_failed" {
+	if !quarantined || len(chunks) != 1 || chunks[0].Source.State != "failed" || chunks[0].Source.StateReason != "terminal_turn_exceeds_transaction_bound" {
 		t.Fatalf("oversized rebuild source was not quarantined: quarantined=%t chunks=%#v", quarantined, chunks)
 	}
 }
@@ -284,6 +284,184 @@ func TestAppendChangesOnlyNewTurnAndPinnedRevision(t *testing.T) {
 	}
 	if scalar(t, store.DB(), "select sum(total_tokens) from turn_usage") != 2600 || scalar(t, store.DB(), "select count(*) from events") != oldEvents+4 {
 		t.Fatal("append changed unexpected facts")
+	}
+}
+
+func TestAppendToPreviouslyChunkedSourceAdvancesCheckpoint(t *testing.T) {
+	root := t.TempDir()
+	codex := filepath.Join(root, "codex")
+	sessions := filepath.Join(codex, "sessions")
+	layout := home.Layout{Root: filepath.Join(root, "inspector")}
+	layout.Reviews = filepath.Join(layout.Root, "reviews")
+	layout.Queue = filepath.Join(layout.Root, "queue")
+	layout.Run = filepath.Join(layout.Root, "run")
+	layout.Logs = filepath.Join(layout.Root, "logs")
+	layout.Cache = filepath.Join(layout.Root, "cache")
+	if err := os.MkdirAll(sessions, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessions, "rollout-chunked.jsonl")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = file.WriteString(`{"timestamp":"2026-07-01T00:00:00Z","type":"session_meta","payload":{"session_id":"chunked-append","cwd":"/fake/chunked","originator":"codex-tui","cli_version":"0.144.1","source":"cli"}}` + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	writeCompletedTurns(t, file, 0, 200)
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{Layout: layout, CodexHome: codex, Concurrency: 1}
+	if _, err = Run(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	file, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCompletedTurns(t, file, 200, 200)
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := Run(context.Background(), cfg)
+	if err != nil || progress.Processed != 1 || progress.Failed != 0 {
+		t.Fatalf("chunked append failed: progress=%#v err=%v", progress, err)
+	}
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if got := scalar(t, store.DB(), "select count(*) from turns where state='completed'"); got != 400 {
+		t.Fatalf("completed turns=%d, want 400", got)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offset int64
+	if err = store.DB().QueryRow("select max(complete_byte_offset) from source_checkpoints").Scan(&offset); err != nil || offset != info.Size() {
+		t.Fatalf("checkpoint offset=%d size=%d err=%v", offset, info.Size(), err)
+	}
+}
+
+func writeCompletedTurns(t *testing.T, file *os.File, start, count int) {
+	t.Helper()
+	for i := start; i < start+count; i++ {
+		turnID := fmt.Sprintf("turn-%04d", i)
+		for _, line := range []string{
+			fmt.Sprintf(`{"timestamp":"2026-07-01T00:00:01Z","type":"turn_context","payload":{"turn_id":%q,"cwd":"/fake/chunked","model":"gpt-fake","effort":"low"}}`, turnID),
+			fmt.Sprintf(`{"timestamp":"2026-07-01T00:00:02Z","type":"event_msg","payload":{"type":"task_started","turn_id":%q}}`, turnID),
+			fmt.Sprintf(`{"timestamp":"2026-07-01T00:00:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":%q}}`, turnID),
+		} {
+			if _, err := file.WriteString(line + "\n"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestOversizedTerminalTurnIsQuarantinedWithoutFailingPass(t *testing.T) {
+	root := t.TempDir()
+	codex := filepath.Join(root, "codex")
+	sessions := filepath.Join(codex, "sessions")
+	layout := home.Layout{Root: filepath.Join(root, "inspector")}
+	layout.Reviews = filepath.Join(layout.Root, "reviews")
+	layout.Queue = filepath.Join(layout.Root, "queue")
+	layout.Run = filepath.Join(layout.Root, "run")
+	layout.Logs = filepath.Join(layout.Root, "logs")
+	layout.Cache = filepath.Join(layout.Root, "cache")
+	if err := os.MkdirAll(sessions, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var data strings.Builder
+	data.WriteString(`{"timestamp":"2026-07-01T00:00:00Z","type":"session_meta","payload":{"session_id":"oversized-turn","cwd":"/fake/large","originator":"codex-tui","cli_version":"0.144.1","source":"cli"}}` + "\n")
+	data.WriteString(`{"timestamp":"2026-07-01T00:00:01Z","type":"turn_context","payload":{"turn_id":"turn-large","cwd":"/fake/large","model":"gpt-fake","effort":"low"}}` + "\n")
+	payload := strings.Repeat("x", 1<<20)
+	for i := 0; i < 9; i++ {
+		fmt.Fprintf(&data, `{"timestamp":"2026-07-01T00:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"analysis","content":[{"type":"output_text","text":"%s"}]}}`+"\n", payload)
+	}
+	data.WriteString(`{"timestamp":"2026-07-01T00:00:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-large"}}` + "\n")
+	if err := os.WriteFile(filepath.Join(sessions, "rollout-oversized.jsonl"), []byte(data.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := Run(context.Background(), Config{Layout: layout, CodexHome: codex, Concurrency: 1})
+	if err != nil || progress.Failed != 1 || progress.FailureReasons["terminal_turn_exceeds_transaction_bound"] != 1 {
+		t.Fatalf("oversized source was not locally quarantined: progress=%#v err=%v", progress, err)
+	}
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var reason string
+	if err = store.DB().QueryRow(`SELECT state_reason FROM source_artifact_versions WHERE state='failed' ORDER BY revision DESC LIMIT 1`).Scan(&reason); err != nil || reason != "terminal_turn_exceeds_transaction_bound" {
+		t.Fatalf("quarantine reason=%q err=%v", reason, err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := Run(context.Background(), Config{Layout: layout, CodexHome: codex, Concurrency: 1})
+	if err != nil || repeated.Processed != 0 || repeated.Skipped != 1 {
+		t.Fatalf("unchanged quarantine was not skipped: progress=%#v err=%v", repeated, err)
+	}
+}
+
+func TestRecoveredPathFailureRebuildsAwayStaleDiagnostic(t *testing.T) {
+	layout, codex := setup(t)
+	cfg := Config{Layout: layout, CodexHome: codex, Concurrency: 1}
+	if _, err := Run(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(codex, "sessions", "2026", "07", "01", "rollout-root-001.jsonl")
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := sources.Candidate{Path: root, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}
+	if err = storeFailed(context.Background(), store, candidate, "normalization_failed"); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	recoverable, recoverableErr := store.HasRecoverableFailedSources()
+	if recoverableErr != nil || !recoverable {
+		store.Close()
+		t.Fatalf("seeded duplicate path failure was not detected: recoverable=%t err=%v", recoverable, recoverableErr)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(root, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = file.WriteString(appendTurn); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := Run(context.Background(), cfg)
+	if err != nil || !progress.Rebuilt || progress.Failed != 0 {
+		t.Fatalf("recovered failure did not replace catalog: progress=%#v err=%v", progress, err)
+	}
+	store, err = storage.Open(filepath.Join(layout.Root, "inspector.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if got := scalar(t, store.DB(), `SELECT count(*) FROM source_artifact_versions v WHERE v.state='failed' AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)`); got != 0 {
+		t.Fatalf("stale failed diagnostics=%d, want 0", got)
 	}
 }
 
