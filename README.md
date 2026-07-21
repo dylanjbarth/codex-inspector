@@ -26,11 +26,16 @@ records. It never reads local Codex files.
 _The 30-day overview includes eight matching root sessions and 3,137,000
 recorded tokens._
 
+<details>
+<summary>See the same data with specific filters applied</summary>
+
 ![Codex Inspector hosted sample filtered to one project, model, reasoning level, and contribution type](docs/screenshots/hosted-demo-filtered.jpg)
 
 _Filtering to the last seven days, Codex Inspector, gpt-5.6-sol, xhigh, and
 spawned-agent work narrows the same dataset to one root session and 193,000
 recorded tokens._
+
+</details>
 
 > [!NOTE]
 > The current release supports **macOS on Apple Silicon** and Codex CLI/host
@@ -86,9 +91,10 @@ Search your sessions, follow work into spawned agents, and replay a turn in the
 order it happened. You can inspect messages, tool calls, patches, searches,
 context compactions, and token records without digging through log files.
 
-> [insert screenshot of Context Inspector with a selected turn here]
->
-> _Synthetic data shown. No private Codex history is included._
+![Session Inspector showing delegated work and an original tool request](docs/screenshots/hosted-demo-session-inspector.jpg)
+
+_Synthetic session data shows the root turn, delegated work, and original
+`exec_command` evidence side by side. No private Codex history is included._
 
 ### Improve your workflow
 
@@ -97,9 +103,10 @@ at task framing, execution, delegation, and opportunities to turn repeated work
 into reusable guidance or automation. Each finding cites the local evidence
 that supports it and suggests a concrete next step.
 
-> [insert screenshot of a completed GPT-5.6 Effectiveness Review here]
->
-> _Synthetic data shown. No private Codex history is included._
+![Completed GPT-5.6 Effectiveness Review with a source-backed finding](docs/screenshots/hosted-demo-review.jpg)
+
+_A completed GPT-5.6 review connects each finding to available evidence and a
+concrete next action. No private Codex history is included._
 
 ## How it works
 
