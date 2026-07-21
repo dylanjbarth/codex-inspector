@@ -98,14 +98,7 @@ Codex Inspector has three parts:
 3. **The local dashboard** turns that index into usage views, session traces,
    and review reports in your browser.
 
-```mermaid
-flowchart LR
-    A["Your Codex sessions"] --> B["Local Inspector index"]
-    P["Codex plugin"] -->|"session changed"| B
-    B --> C["Dashboard on your Mac"]
-    C -->|"you explicitly start a review"| R["Codex review"]
-    R --> C
-```
+![How Codex Inspector turns local Codex sessions into a private index, dashboard, and explicitly requested reviews](docs/design/codex-inspector-how-it-works.png)
 
 Normal indexing is local and deterministic. A review is different: it is an
 explicit Codex task and may send the evidence it reads to your configured Codex
