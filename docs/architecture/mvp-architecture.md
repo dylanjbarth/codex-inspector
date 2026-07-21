@@ -338,7 +338,7 @@ The demo indexes supported current-format instances of:
 - `session_index.jsonl` for titles and discovery metadata;
 - capacity and rate-limit observations recorded in rollouts.
 
-The demo does not index `history.jsonl`, memory databases, automation/application databases, or other Codex state. It also does not attempt older rollout adapters. Unsupported sources remain in inventory with their detected Codex version, reason, and byte count so coverage is honest.
+The demo does not index `history.jsonl`, memory databases, automation/application databases, or other Codex state. Historical rollout versions are admitted through the same structure-first adapter when their records pass the current safety invariants; their version is diagnostic rather than an allowlist key. Unsupported sources remain in inventory with their detected Codex version, reason, and byte count so coverage is honest.
 
 ## 6. Normalized fact store
 

@@ -110,6 +110,16 @@ func TestSourceInventoryAtIsRevisionPinned(t *testing.T) {
 	if err != nil || len(groups) != 1 || groups[0].State != "unsupported" || groups[0].Reason != "unsupported_codex_version" || groups[0].DetectedVersion != "0.145.0-alpha.19" || groups[0].Count != 1 {
 		t.Fatalf("unsupported version diagnostic was not preserved: groups=%+v err=%v", groups, err)
 	}
+	diagnosticEpoch, diagnosticRevision, diagnostics, hasMore, err := store.SourceDiagnostics(context.Background(), 0, 10)
+	if err != nil || hasMore || diagnosticEpoch != epoch || diagnosticRevision != revision || len(diagnostics) != 1 {
+		t.Fatalf("source diagnostics page mismatch: epoch=%q revision=%d items=%+v more=%t err=%v", diagnosticEpoch, diagnosticRevision, diagnostics, hasMore, err)
+	}
+	if diagnostics[0].SourceID != sourceID || diagnostics[0].SessionID != "root-001" || diagnostics[0].State != "unsupported" || diagnostics[0].DetectedVersion != "0.145.0-alpha.19" || diagnostics[0].CanonicalPath == "" {
+		t.Fatalf("source diagnostic lost actionable artifact identity: %+v", diagnostics[0])
+	}
+	if path, pathErr := store.SourceDiagnosticPath(context.Background(), sourceID); pathErr != nil || path != diagnostics[0].CanonicalPath {
+		t.Fatalf("source diagnostic path=%q err=%v want=%q", path, pathErr, diagnostics[0].CanonicalPath)
+	}
 
 	revision++
 	if _, err = store.DB().Exec(`INSERT INTO index_revisions(epoch_id,revision,committed_at,reason) VALUES(?,?,?,'inventory')`, epoch, revision, "2026-07-19T12:01:00Z"); err != nil {

@@ -5,8 +5,8 @@
 | Capability | Supported value | Compatibility decision |
 | --- | --- | --- |
 | Codex CLI/host | `codex-cli >=0.142.5` | recent stable and prerelease hosts are accepted |
-| rollout adapter | `rollout-jsonl/codex-recent-structural/v4` | recent sources proceed to the complete structural validator below |
-| proven rollout fixtures | `0.142.5`, `0.144.0-alpha.4`, `0.144.1`, `0.145.0-alpha.18` | regression corpus; not an exhaustive allowlist |
+| rollout adapter | `rollout-jsonl/codex-structural/v5` | historical sources proceed to the complete structural validator regardless of release age |
+| proven rollout fixtures | `0.100.0-alpha.10` through `0.145.0-alpha.18` observed locally; canonical fixtures for `0.142.5`, `0.144.0-alpha.4`, `0.144.1`, `0.145.0-alpha.18` | versions are diagnostic cohorts, not an allowlist |
 | session index | legacy append-only `id`/`thread_name`/`updated_at` records; file absent on proof host | optional label input; absence is supported |
 | demo OS | macOS 26.5.1 | exact proof machine |
 | architecture | `arm64` | only published demo artifact |
@@ -33,12 +33,12 @@ A supported source is newline-delimited JSON with:
    `originator`, and `source`; user roots use a non-empty string source while
    descendants use the observed `subagent.other` or
    `subagent.thread_spawn` tagged-object shape;
-2. `payload.cli_version` is a valid release at or above `0.142.5`; matching the
-   recent-version policy is necessary but never sufficient, and an incompatible
-   record, event, response, identity, usage, or lifecycle shape remains rejected
-   with a payload-safe reason;
-3. a `turn_context` record per visible turn with `payload.turn_id`, `model`,
-   `effort`, and `cwd`;
+2. `payload.cli_version` is a syntactically valid release; historical ingestion
+   has no version floor, and every source must independently pass the structural
+   checks below;
+3. a `turn_context` record per visible turn with `payload.turn_id`, `model`, and
+   `cwd`; historical null or absent `effort` is retained as unavailable, and a
+   repeated context for the same turn is treated as a later snapshot;
 4. `event_msg/task_started` and, for committed turns,
    `event_msg/task_complete`, both carrying the same `turn_id`; when present,
    `completed_at` is numeric (string or object values are rejected), while the
@@ -58,14 +58,18 @@ Recorded compaction uses the observed paired shapes
 recorded compacted message/replacement history and optional window identities.
 
 Optional supported fields include `session_meta.parent_thread_id`, Git
-metadata, `rate_limits`, `world_state`, response IDs, and tool call IDs. A
-missing optional field lowers field coverage; it is not synthesized.
+metadata, `rate_limits`, `world_state`, reasoning effort, response IDs, and
+tool call IDs. Rate-limit-only token records retain capacity without claiming
+token usage. Unknown non-empty event and response discriminators are retained
+as generic evidence; only known semantic records affect lifecycle, usage, and
+tool facts. A repeated `session_meta` is accepted only when its session identity
+and version match the leading record. A missing optional field lowers field
+coverage; it is not synthesized.
 
 The adapter rejects the source before normalization when the CLI version is
-older than the compatibility floor, the leading metadata record is absent,
-required identity fields are missing, a turn/event/tool identity is
-inconsistent, a complete record or known discriminator has an incompatible
-type, or an unknown record/event discriminator appears. The inventory keeps
+malformed, the leading metadata record is absent, required identity fields are
+missing, a known lifecycle or tool identity is inconsistent, or a complete
+record or known semantic field has an incompatible type. The inventory keeps
 the detected version, byte count, and a payload-free reason.
 
 The optional `session_index.jsonl` label adapter accepts append-only objects

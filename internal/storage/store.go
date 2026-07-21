@@ -26,7 +26,7 @@ import (
 //go:embed migrations/001_schema.sql
 var migrations embed.FS
 
-const AdapterVersion = "rollout-jsonl/codex-recent-structural/v4"
+const AdapterVersion = "rollout-jsonl/codex-structural/v5"
 
 type Store struct {
 	db        *sql.DB
@@ -1269,6 +1269,15 @@ type SourceDiagnosticGroup struct {
 	Count                          int
 }
 
+type SourceDiagnostic struct {
+	SourceID, SessionID, SourceKind, CanonicalPath string
+	State, Reason, DetectedVersion, Availability   string
+	ByteSize                                       int64
+	MTimeNS                                        *int64
+}
+
+const MaxSourceDiagnostics = 200
+
 const MaxSourceDiagnosticGroups = 50
 
 var diagnosticVersionPattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}(?:[-+][0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$`)
@@ -1362,6 +1371,66 @@ func (s *Store) SourceDiagnosticGroups(ctx context.Context) ([]SourceDiagnosticG
 		groups = append(groups, SourceDiagnosticGroup{State: "multiple", Reason: "additional_diagnostic_groups", DetectedVersion: "multiple", Count: overflowCount})
 	}
 	return groups, nil
+}
+
+// SourceDiagnostics returns bounded, local-only metadata for rollout files that
+// Inspector could not include. Unlike status cohorts, this intentionally includes
+// canonical paths so the operator can inspect the exact local artifact.
+func (s *Store) SourceDiagnostics(ctx context.Context, offset, limit int) (string, int64, []SourceDiagnostic, bool, error) {
+	if offset < 0 || limit < 1 || limit > MaxSourceDiagnostics {
+		return "", 0, nil, false, errors.New("invalid source diagnostic page")
+	}
+	epoch, revision, err := s.Snapshot()
+	if err != nil {
+		return "", 0, nil, false, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT v.source_id,a.source_session_id,v.source_kind,v.canonical_path,v.state,
+		coalesce(v.state_reason,'unspecified'),coalesce(v.detected_codex_version,'unknown'),
+		v.source_evidence_availability,v.byte_size,v.mtime_ns
+		FROM source_artifact_versions v
+		JOIN source_artifacts a ON a.epoch_id=v.epoch_id AND a.id=v.source_id
+		WHERE v.epoch_id=? AND v.state IN ('unsupported','failed','requires_rebuild')
+		AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)
+		ORDER BY coalesce(v.mtime_ns,0) DESC,v.canonical_path,v.source_id LIMIT ? OFFSET ?`, epoch, limit+1, offset)
+	if err != nil {
+		return "", 0, nil, false, err
+	}
+	defer rows.Close()
+	items := make([]SourceDiagnostic, 0, limit)
+	for rows.Next() {
+		var item SourceDiagnostic
+		var mtime sql.NullInt64
+		if err = rows.Scan(&item.SourceID, &item.SessionID, &item.SourceKind, &item.CanonicalPath, &item.State, &item.Reason, &item.DetectedVersion, &item.Availability, &item.ByteSize, &mtime); err != nil {
+			return "", 0, nil, false, err
+		}
+		item.Reason = normalizeDiagnosticReason(item.Reason)
+		item.DetectedVersion = normalizeDiagnosticVersion(item.DetectedVersion)
+		if mtime.Valid {
+			value := mtime.Int64
+			item.MTimeNS = &value
+		}
+		items = append(items, item)
+	}
+	if err = rows.Err(); err != nil {
+		return "", 0, nil, false, err
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	return epoch, revision, items, hasMore, nil
+}
+
+func (s *Store) SourceDiagnosticPath(ctx context.Context, sourceID string) (string, error) {
+	epoch, _, err := s.Snapshot()
+	if err != nil {
+		return "", err
+	}
+	var path string
+	err = s.db.QueryRowContext(ctx, `SELECT v.canonical_path FROM source_artifact_versions v
+		WHERE v.epoch_id=? AND v.source_id=? AND v.state IN ('unsupported','failed','requires_rebuild')
+		AND v.revision=(SELECT max(x.revision) FROM source_artifact_versions x WHERE x.epoch_id=v.epoch_id AND x.source_id=v.source_id)`, epoch, sourceID).Scan(&path)
+	return path, err
 }
 
 type SourceInventory struct {

@@ -56,12 +56,12 @@ func TestSourceDecisions(t *testing.T) {
 	}
 }
 
-func TestRecentCodexVersionsReachStructuralValidation(t *testing.T) {
+func TestHistoricalCodexVersionsReachStructuralValidation(t *testing.T) {
 	data, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, version := range []string{"0.142.5", "0.143.0", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
+	for _, version := range []string{"0.100.0-alpha.10", "0.125.0", "0.142.4", "0.142.5", "0.143.0", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			candidate := strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"`+version+`"`, 1)
 			decision, parseErr := ParseRollout(strings.NewReader(candidate))
@@ -70,10 +70,10 @@ func TestRecentCodexVersionsReachStructuralValidation(t *testing.T) {
 			}
 		})
 	}
-	old := strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.142.4"`, 1)
-	decision, err := ParseRollout(strings.NewReader(old))
+	invalid := strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"not-a-version"`, 1)
+	decision, err := ParseRollout(strings.NewReader(invalid))
 	if err != nil || decision.Supported || decision.Reason != "unsupported_codex_version" {
-		t.Fatalf("old version accepted: decision=%+v err=%v", decision, err)
+		t.Fatalf("invalid version accepted: decision=%+v err=%v", decision, err)
 	}
 }
 
@@ -167,6 +167,29 @@ func TestSourceFingerprintRejectsMalformedSameVersion(t *testing.T) {
 	}
 	if !pending.Supported || !pending.PendingTail {
 		t.Fatalf("unterminated final tail not retained as retryable: %+v", pending)
+	}
+}
+
+func TestStructuralValidatorRetainsCompatibleHistoricalVariants(t *testing.T) {
+	data, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	variants := map[string]string{
+		"missing-reasoning-effort":  strings.Replace(string(data), `"effort":"high"`, `"effort":null`, 1),
+		"rate-limit-only-token":     strings.Replace(string(data), `"info":{"last_token_usage":null,"total_token_usage":{"input_tokens":1600,"cached_input_tokens":500,"output_tokens":400,"reasoning_output_tokens":80,"total_tokens":2000},"model_context_window":99999}`, `"info":null`, 1),
+		"repeated-turn-context":     string(data) + "{\"timestamp\":\"2026-07-01T12:00:00Z\",\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"turn-root-2\",\"cwd\":\"/fake/acme\",\"model\":\"gpt-fake\",\"effort\":\"high\"}}\n",
+		"generic-event":             string(data) + "{\"timestamp\":\"2026-07-01T12:00:00Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"future_observation\"}}\n",
+		"generic-response":          string(data) + "{\"timestamp\":\"2026-07-01T12:00:00Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"future_response\"}}\n",
+		"repeated-session-metadata": string(data) + strings.SplitN(string(data), "\n", 2)[0] + "\n",
+	}
+	for name, variant := range variants {
+		t.Run(name, func(t *testing.T) {
+			decision, parseErr := ParseRollout(strings.NewReader(variant))
+			if parseErr != nil || !decision.Supported {
+				t.Fatalf("compatible historical variant rejected: decision=%+v err=%v", decision, parseErr)
+			}
+		})
 	}
 }
 

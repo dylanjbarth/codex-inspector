@@ -963,7 +963,7 @@ func TestIndexedPrefixChangeHasActionableRemediation(t *testing.T) {
 
 func TestUnsupportedCodexVersionHasActionableRemediation(t *testing.T) {
 	remediation := sourceRemediation("unsupported", "unsupported_codex_version")
-	if !strings.Contains(remediation, "exact Codex rollout version") || !strings.Contains(remediation, "Update Inspector") {
+	if !strings.Contains(remediation, "malformed Codex version metadata") || !strings.Contains(remediation, "bug report") {
 		t.Fatalf("unsupported-version remediation is not actionable: %q", remediation)
 	}
 }

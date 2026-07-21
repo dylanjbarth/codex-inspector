@@ -19,12 +19,12 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-recent-structural/v4"
+	AdapterVersion        = "rollout-jsonl/codex-structural/v5"
 	FormulaVersion        = 1
 )
 
 func SupportsCodexVersion(version string) bool {
-	return inspectorversion.SupportsCodexHost(version)
+	return inspectorversion.IsCodexVersion(version)
 }
 
 type SourceDecision struct {
@@ -923,50 +923,64 @@ func completedTurnCount(turns []Turn) int {
 
 func validateSupportedRecords(records []record) string {
 	outer := map[string]bool{"session_meta": true, "turn_context": true, "event_msg": true, "response_item": true, "compacted": true, "world_state": true, "inter_agent_communication_metadata": true}
-	events := map[string]bool{"agent_message": true, "context_compacted": true, "entered_review_mode": true, "exited_review_mode": true, "image_generation_end": true, "mcp_tool_call_end": true, "patch_apply_end": true, "sub_agent_activity": true, "task_complete": true, "task_started": true, "thread_rolled_back": true, "thread_settings_applied": true, "token_count": true, "turn_aborted": true, "user_message": true, "web_search_end": true}
-	responses := map[string]bool{"agent_message": true, "custom_tool_call": true, "custom_tool_call_output": true, "function_call": true, "function_call_output": true, "message": true, "reasoning": true}
-	turns := map[string]bool{}
+	var initialMeta metadataPayload
+	if json.Unmarshal(records[0].Payload, &initialMeta) != nil {
+		return "invalid_session_meta"
+	}
+	if initialMeta.SessionID == "" {
+		initialMeta.SessionID = initialMeta.ID
+	}
 	for _, rec := range records {
 		if rec.Type != "turn_context" {
 			continue
 		}
 		var p turnContextPayload
 		var raw map[string]json.RawMessage
-		if json.Unmarshal(rec.Payload, &p) != nil || json.Unmarshal(rec.Payload, &raw) != nil || p.TurnID == "" || p.Model == "" || p.Effort == "" || p.CWD == "" || raw["cwd"] == nil || turns[p.TurnID] {
+		if json.Unmarshal(rec.Payload, &p) != nil || json.Unmarshal(rec.Payload, &raw) != nil || p.TurnID == "" || p.Model == "" || p.CWD == "" || raw["cwd"] == nil {
 			return "incompatible_turn_context"
 		}
-		turns[p.TurnID] = true
 	}
 	for i, rec := range records {
-		if _, err := time.Parse(time.RFC3339, rec.Timestamp); err != nil || !outer[rec.Type] || (rec.Type == "session_meta" && i != 0) {
+		if _, err := time.Parse(time.RFC3339, rec.Timestamp); err != nil || !outer[rec.Type] {
 			return "incompatible_record_envelope"
 		}
 		switch rec.Type {
+		case "session_meta":
+			if i == 0 {
+				continue
+			}
+			var repeated metadataPayload
+			if json.Unmarshal(rec.Payload, &repeated) != nil {
+				return "invalid_session_meta"
+			}
+			if repeated.SessionID == "" {
+				repeated.SessionID = repeated.ID
+			}
+			if repeated.SessionID != initialMeta.SessionID || repeated.CLIVersion != initialMeta.CLIVersion {
+				return "incompatible_record_envelope"
+			}
 		case "turn_context":
 			continue
 		case "event_msg":
 			var p eventPayload
-			if json.Unmarshal(rec.Payload, &p) != nil || !events[p.Type] {
+			if json.Unmarshal(rec.Payload, &p) != nil || p.Type == "" {
 				return "incompatible_event_record"
 			}
-			if (p.Type == "task_started" || p.Type == "task_complete") && (p.TurnID == "" || !turns[p.TurnID]) {
+			if (p.Type == "task_started" || p.Type == "task_complete") && p.TurnID == "" {
 				return "incompatible_turn_identity"
 			}
 			if p.Type == "task_complete" && len(p.CompletedAt) != 0 && !validJSONNumber(p.CompletedAt) {
 				return "incompatible_event_record"
 			}
-			if p.Type == "token_count" && p.Info == nil {
-				return "incompatible_token_record"
-			}
-			if p.Type == "token_count" && ((p.Info.Last != nil && !validUsage(*p.Info.Last)) || (p.Info.Total != nil && !validUsage(*p.Info.Total))) {
+			if p.Type == "token_count" && p.Info != nil && ((p.Info.Last != nil && !validUsage(*p.Info.Last)) || (p.Info.Total != nil && !validUsage(*p.Info.Total))) {
 				return "incompatible_token_record"
 			}
 		case "response_item":
 			var p responsePayload
-			if json.Unmarshal(rec.Payload, &p) != nil || !responses[p.Type] {
+			if json.Unmarshal(rec.Payload, &p) != nil || p.Type == "" {
 				return "incompatible_response_record"
 			}
-			if (p.Type == "custom_tool_call" || p.Type == "custom_tool_call_output" || p.Type == "function_call" || p.Type == "function_call_output") && p.CallID == "" {
+			if (p.Type == "custom_tool_call" || p.Type == "custom_tool_call_output" || p.Type == "function_call" || p.Type == "function_call_output" || p.Type == "tool_search_call" || p.Type == "tool_search_output") && p.CallID == "" {
 				return "incompatible_tool_identity"
 			}
 		case "compacted", "world_state", "inter_agent_communication_metadata":

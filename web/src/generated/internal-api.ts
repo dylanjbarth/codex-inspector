@@ -52,6 +52,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/source-diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSourceDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/source-diagnostics/{sourceId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revealSourceDiagnostic"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sync": {
         parameters: {
             query?: never;
@@ -311,6 +343,35 @@ export interface components {
             detectedVersion: string;
             count: number;
             remediation: string;
+        };
+        SourceDiagnostic: {
+            sourceId: components["schemas"]["OpaqueId"];
+            sessionId?: string;
+            /** @enum {unknown} */
+            sourceKind: "active_rollout" | "archived_rollout" | "session_index";
+            /** @enum {unknown} */
+            state: "unsupported" | "failed" | "requires_rebuild";
+            reason: string;
+            detectedVersion: string;
+            path: string;
+            relativePath: string;
+            filename: string;
+            byteSize: number;
+            /** @enum {unknown} */
+            availability: "available" | "source_missing" | "fingerprint_mismatch" | "unreadable";
+            /** Format: date-time */
+            recordedAt: string | null;
+            /** Format: date-time */
+            modifiedAt: string | null;
+            remediation: string;
+        };
+        SourceDiagnosticPage: {
+            /** @constant */
+            schemaVersion: 2;
+            datasetEpoch: components["schemas"]["OpaqueId"];
+            appliedRevision: number;
+            items: components["schemas"]["SourceDiagnostic"][];
+            nextCursor?: string;
         };
         IndexStatus: {
             /** @enum {unknown} */
@@ -797,7 +858,7 @@ export interface components {
             sourcePrefixSha256: string;
             eventFingerprint: string;
             /** @constant */
-            adapterVersion: "rollout-jsonl/codex-recent-structural/v4";
+            adapterVersion: "rollout-jsonl/codex-structural/v5";
             recordOrdinal: number;
             byteStart?: number;
             byteEnd?: number;
@@ -1128,6 +1189,55 @@ export interface operations {
                 };
             };
             401: components["responses"]["ProblemResponse"];
+        };
+    };
+    listSourceDiagnostics: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["CursorParameter"];
+                pageSize?: components["parameters"]["PageSizeParameter"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded local metadata for excluded rollout files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceDiagnosticPage"];
+                };
+            };
+            400: components["responses"]["ProblemResponse"];
+            401: components["responses"]["ProblemResponse"];
+        };
+    };
+    revealSourceDiagnostic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceId: components["schemas"]["OpaqueId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rollout file revealed in the platform file manager */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ProblemResponse"];
+            401: components["responses"]["ProblemResponse"];
+            403: components["responses"]["ProblemResponse"];
+            404: components["responses"]["ProblemResponse"];
         };
     };
     startSync: {

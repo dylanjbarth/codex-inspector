@@ -1,6 +1,7 @@
 import type { components } from './generated/internal-api'
 
 export type Status = components['schemas']['Status']
+export type SourceDiagnosticPage = components['schemas']['SourceDiagnosticPage']
 export type MetricResult = components['schemas']['MetricResult']
 export type FilterOptions = components['schemas']['MetricFilterOptions']
 export type SessionPage = components['schemas']['SessionPage']
@@ -27,6 +28,13 @@ export async function fetchStatus(): Promise<Status> {
   const response = await fetch('/v1/status')
   if (!response.ok) throw new Error('The local Inspector server is unavailable')
   return response.json()
+}
+
+export function fetchSourceDiagnostics(cursor?:string):Promise<SourceDiagnosticPage>{const params=new URLSearchParams({pageSize:'200'});if(cursor)params.set('cursor',cursor);return inspectorJSON(`/v1/source-diagnostics?${params}`,'Rollout file diagnostics are unavailable')}
+
+export async function revealSourceDiagnostic(sourceId:string):Promise<void>{
+  const response=await fetch(`/v1/source-diagnostics/${encodeURIComponent(sourceId)}/reveal`,{method:'POST',headers:{'X-Inspector-Origin':location.origin}})
+  if(!response.ok)throw new Error('The rollout file could not be revealed in Finder')
 }
 
 export async function fetchFilterOptions(requestedRevision?:number):Promise<FilterOptions>{

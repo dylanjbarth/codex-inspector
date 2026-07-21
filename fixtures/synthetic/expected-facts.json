@@ -1,5 +1,5 @@
 {
-  "adapterVersion": "rollout-jsonl/codex-recent-structural/v4",
+  "adapterVersion": "rollout-jsonl/codex-structural/v5",
   "sources": [
     {
       "name": "root.jsonl",
@@ -12,7 +12,7 @@
       "decision": "supported",
       "pendingTail": false,
       "completeBytes": 4381,
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "name": "descendant.jsonl",
@@ -25,7 +25,7 @@
       "decision": "supported",
       "pendingTail": false,
       "completeBytes": 1921,
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "name": "unsupported.jsonl",
@@ -36,7 +36,7 @@
       "decision": "incompatible_record_envelope",
       "pendingTail": false,
       "completeBytes": 372,
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "name": "truncated.jsonl",
@@ -49,7 +49,7 @@
       "decision": "supported",
       "pendingTail": true,
       "completeBytes": 651,
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     }
   ],
   "sessions": [
@@ -60,7 +60,7 @@
       "projectIdentity": "https://example.invalid/acme/widgets.git",
       "sourceId": "source:63b805295bc06d4978bde90bbef87f3700ecdcfd4b1950aca336714bcd108da3",
       "segmentId": "segment:90408b64495782d911923962782dc41f4aad168f68b7618edeb723457f89b9f8",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "sessionId": "child-001",
@@ -70,7 +70,7 @@
       "projectIdentity": "https://example.invalid/acme/widgets.git",
       "sourceId": "source:b2a68e94c39eede3156249e0dd25a221283f7e5128e024d323bf0e330e95292f",
       "segmentId": "segment:b5b892f948610019110b8d8659e3e80dcd3a8997753b4173651edc661d94a815",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     }
   ],
   "turns": [
@@ -90,7 +90,7 @@
         "reasoning_output_tokens": 50,
         "total_tokens": 1200
       },
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "turnId": "turn-root-2",
@@ -108,7 +108,7 @@
         "reasoning_output_tokens": 30,
         "total_tokens": 800
       },
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "turnId": "turn-child-1",
@@ -126,7 +126,7 @@
         "reasoning_output_tokens": 30,
         "total_tokens": 500
       },
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     }
   ],
   "events": [
@@ -141,7 +141,7 @@
       "eventKind": "session_meta",
       "observedAt": "2026-07-01T10:00:00Z",
       "contentSha256": "36416673491b74a14fdcbbc10693cfa4f33d3b77a7a9d620140fbabd44245d7d",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:8cb058da75e5f3c6b7c2e9854c65a7dfd8d1ff450581df7ed60d9f55068a3a0f",
@@ -155,7 +155,7 @@
       "observedAt": "2026-07-01T10:00:01Z",
       "turnId": "turn-root-1",
       "contentSha256": "478828f6cb2520185ba8ba8eae165664af1da100c01a10438d2e16630d52c89e",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:384431b75b897297d5e089fc4b16ca6ffa1178041557991a29c6ac589d27b51e",
@@ -169,7 +169,7 @@
       "observedAt": "2026-07-01T10:00:02Z",
       "turnId": "turn-root-1",
       "contentSha256": "e7832a75478b7fdc0a9ee4d1f5b08bc2cf743886aee616ee964adb4b9989aa17",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:2325792788206663e2c2c4863e3c0b8fcb53532533d77de192db07f4e8b96fd6",
@@ -183,7 +183,7 @@
       "observedAt": "2026-07-01T10:00:03Z",
       "turnId": "turn-root-1",
       "contentSha256": "62af071466f42f8b534375c07a2fb7ca6c9ebbea636f4fe58845774bfcb5778c",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:65d25cae1c3ae74ab7859856f583db45962c24f7a5f96789157ed365a0c249ca",
@@ -197,7 +197,7 @@
       "observedAt": "2026-07-01T10:00:04Z",
       "turnId": "turn-root-1",
       "contentSha256": "2678ddf1779f0f191ae8eb133e52d52f5a2811a2fc6e4c34477dffde8e98d3f0",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:0de24508edebc18c1de6338f4fd558c3b183d99686727574f608970b1f605e98",
@@ -211,7 +211,7 @@
       "observedAt": "2026-07-01T10:00:05Z",
       "turnId": "turn-root-1",
       "contentSha256": "1eaf600b37603f59f620b3c39c3338a58188e28f1ac3218d82704cb8a7034f8b",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:2cb38b9633a8ef204aea34473ce5b260718e3237446e96aadd9f3ec8886e1d81",
@@ -225,7 +225,7 @@
       "observedAt": "2026-07-01T10:00:05.100Z",
       "turnId": "turn-root-1",
       "contentSha256": "655439129ba64bfb951c0f0c159aa21b2a4313e9b88f1fa34da8776f95ff9a43",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:2beecd0a24ce1d6aec4251815a1724aea39af7ec22009a60d4afa3727e3af8b1",
@@ -239,7 +239,7 @@
       "observedAt": "2026-07-01T10:00:05.200Z",
       "turnId": "turn-root-1",
       "contentSha256": "b4de77d27b677bffe903b8ddac1dcc7730a00e43b270c12fc9a7951473754673",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:81db99ccecd6fe27bf6a169a2baec8b6fe062b7348057d9a4e746fde201c5356",
@@ -253,7 +253,7 @@
       "observedAt": "2026-07-01T10:00:06Z",
       "turnId": "turn-root-1",
       "contentSha256": "9dae18783b0aa0db6b3d94234661382b730d436cb3c7cfc27dba379e94c61296",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:7705b3ade7b57b3ef631f0ddb242c5550c868f3cd74fa00e160c6c69cf32f022",
@@ -267,7 +267,7 @@
       "observedAt": "2026-07-01T10:00:07Z",
       "turnId": "turn-root-1",
       "contentSha256": "d12308825aa81ba1c7ccc2bcac7420b1ae5578772b9920bd91ca23cec95de5ba",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:bd343b8d21102fff35aa1bd765a3b7384c5c26cdbc3c2dcdac4cb0f2cdbbacf0",
@@ -281,7 +281,7 @@
       "observedAt": "2026-07-01T10:30:00Z",
       "turnId": "turn-root-1",
       "contentSha256": "be38a8ba570e3988e218c2ada0ede56818124a292eaa2274f604a51789e76bab",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:20cc23151c84135369e8f550f26ea18d1575ed3c8c927d9353ec14115e02f0a8",
@@ -295,7 +295,7 @@
       "observedAt": "2026-07-01T10:30:01Z",
       "turnId": "turn-root-1",
       "contentSha256": "ca30f30ec0feaa84992dcb6b234cd3249ad5464d6f703dc36ec0c56d6051fc62",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:21f5e72e81766ef2f2a42e893d007d9ae01efb9eaade772004e9068ce00740b1",
@@ -309,7 +309,7 @@
       "observedAt": "2026-07-01T11:00:01Z",
       "turnId": "turn-root-2",
       "contentSha256": "fa6c9334d835adb508c8d51c0bc97d5308505ef9b52245bb45b0793fe4300180",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:262747030520ccc0b3f2572df1eca492def9302d1f457382b10bb80854507e51",
@@ -323,7 +323,7 @@
       "observedAt": "2026-07-01T11:00:02Z",
       "turnId": "turn-root-2",
       "contentSha256": "0bd376b05e8bfd68dc1d3f84ed42d7066408ffdf5024d5502893464557392207",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:d91692941f0567c9d9dddd3fbd1e8d144be67799b8ef7aeea1c81cdaba4be4e6",
@@ -337,7 +337,7 @@
       "observedAt": "2026-07-01T11:00:03Z",
       "turnId": "turn-root-2",
       "contentSha256": "e7fe5f52517c9713def18eec6e6fc02cf0e9c94dbb00cbbc67b1593c6795e8f4",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:3b873995c96e3bf8d7ae7e9dfa1ad9a4f81705dd4886a5303587606178d6f74c",
@@ -351,7 +351,7 @@
       "observedAt": "2026-07-01T11:00:04Z",
       "turnId": "turn-root-2",
       "contentSha256": "c492749c3fa9dd82477a8246af0b45d424368dadc149e271ee71665f3c32e5a5",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:0401f8aee5566c79651d707115ff785110d763fdd9de1cb53bb0ac063435c03e",
@@ -365,7 +365,7 @@
       "observedAt": "2026-07-01T11:00:05Z",
       "turnId": "turn-root-2",
       "contentSha256": "d36e67fca284f3e2e04f2a955fc3d5b181e399b6a1f4ee784e8636788483914d",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:f3370cb908d680a265d41356c6f412795c34166155753c834cb5477c1869f8e2",
@@ -378,7 +378,7 @@
       "eventKind": "session_meta",
       "observedAt": "2026-07-01T10:00:04Z",
       "contentSha256": "91c3368fa19aec7ce1f8da9e4327bb2b1ca97a3ef5b844c046bb38c6afeaad22",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:5ae5f37b0e597faff0c59707e1dc6f2fafd8af97456820c8379f3ae6263ea9dc",
@@ -392,7 +392,7 @@
       "observedAt": "2026-07-01T10:00:05Z",
       "turnId": "turn-child-1",
       "contentSha256": "c214ed07a3e697293f696c99da4b8950fb68e3b64c7219d70f34e6561f238199",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:bc3fedb1dc779a215c43ecff9bedcf9488a376e5c4da7f0691bc6eadbd36435e",
@@ -406,7 +406,7 @@
       "observedAt": "2026-07-01T10:00:06Z",
       "turnId": "turn-child-1",
       "contentSha256": "567b515353bb6f3a8247216a68e65e29dc75da05f8d224d6be6fd3f91c19537f",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:371745b444379b082e4f5c92875f20f0fef4b09666e710474b36ff6145805f6c",
@@ -420,7 +420,7 @@
       "observedAt": "2026-07-01T10:00:07Z",
       "turnId": "turn-child-1",
       "contentSha256": "a8cee04cdc10e6fd34c6ab9786da2560a0c07ad0665995413ba9b454276fa578",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:bf8af30d51bb75f122054c070ea505a06357aa95e0e52ac87735f7c183ec5019",
@@ -434,7 +434,7 @@
       "observedAt": "2026-07-01T10:00:08Z",
       "turnId": "turn-child-1",
       "contentSha256": "1810838969815e36adfb20c051897afa2c8e72c631586e7898f3ff63deaf101b",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "eventId": "event:3b0b00d82f8bb3b45bc5d8f3d7ee883b5579eefc29cd39326ae69d4cbc5f5e71",
@@ -448,7 +448,7 @@
       "observedAt": "2026-07-01T10:00:09Z",
       "turnId": "turn-child-1",
       "contentSha256": "78e25baf3ffa31ffed46a384d76ce977b15c95a9f24e5b8a4adf390813d0b43c",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     }
   ],
   "messages": [
@@ -571,7 +571,7 @@
       "byteStart": 0,
       "byteEnd": 395,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:76d79442888862de24c4b10bf6d34b70ffb24e73aad83e71bc9e73aaf9c2bf55",
@@ -583,7 +583,7 @@
       "byteStart": 396,
       "byteEnd": 544,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:14a1b981d5a8d1e0d3a52d0e5f3c3459de0245ee1eb5051f5accb0af7465a8c7",
@@ -595,7 +595,7 @@
       "byteStart": 545,
       "byteEnd": 759,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:86a65526f273310e22e5f8963b0623a650d68693b7caa53477fdc06186f6b3ed",
@@ -607,7 +607,7 @@
       "byteStart": 760,
       "byteEnd": 1023,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:ddcb7bbceaf04bd971e7af14aab7ab3fb8a3b9a2fce5f8035294378da5b1ca86",
@@ -619,7 +619,7 @@
       "byteStart": 1024,
       "byteEnd": 1308,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:38636456ca7a2c4ce6547cd74ef3445739f6718c5888afcc3a6e6b0a79b7dbda",
@@ -631,7 +631,7 @@
       "byteStart": 1309,
       "byteEnd": 1552,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:69204b8f08e4929df49e2506df115aacee61c9603571966c5ffccda915b924dc",
@@ -643,7 +643,7 @@
       "byteStart": 1553,
       "byteEnd": 1802,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:e79648b4b8ea62eaebd9c88d60c221034e8eee79e224102944cff36870b3e84e",
@@ -655,7 +655,7 @@
       "byteStart": 1803,
       "byteEnd": 2022,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:268ba398d21003c0151ea667d90564c847d6ec9c978ce845c98df79ded3a5a5d",
@@ -667,7 +667,7 @@
       "byteStart": 2023,
       "byteEnd": 2535,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:baf955fb220b5865b7413cc5f46044688a47553fc856b4cfbbc01281ff0537b0",
@@ -679,7 +679,7 @@
       "byteStart": 2536,
       "byteEnd": 2768,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:8dc68032c1233cb69fdf29bb9d759cd61e9f3231309c9b961b24ae1cd65314ec",
@@ -691,7 +691,7 @@
       "byteStart": 2769,
       "byteEnd": 2863,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:5b8f1cf32da07ea810437ec8e9658864d16928dd8686569d6f35abaa8b29f441",
@@ -703,7 +703,7 @@
       "byteStart": 2864,
       "byteEnd": 3118,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:93c518f2eb633e0b6346dc4991ea77c1fa13fa5ecb442c992f9daf88117a6daa",
@@ -715,7 +715,7 @@
       "byteStart": 3119,
       "byteEnd": 3267,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:78b71d2aa18e599b8af0e50abe2107b24095c67240299198b4f05c8eefd89b6b",
@@ -727,7 +727,7 @@
       "byteStart": 3268,
       "byteEnd": 3482,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:e6a6483ac3a12a29c65e5562de2315a2f43ce3875df3568891f49a02d5a7da71",
@@ -739,7 +739,7 @@
       "byteStart": 3483,
       "byteEnd": 3746,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:77867b6273a29893a1bc99f3e374b10a4178b8333f7240f6be1494d2fc2eef2a",
@@ -751,7 +751,7 @@
       "byteStart": 3747,
       "byteEnd": 4147,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:8332f6271af370c5163b9a44819f97fb11d53e675ec2632b1d03173004312aa8",
@@ -763,7 +763,7 @@
       "byteStart": 4148,
       "byteEnd": 4380,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:860934aa432b95d9cb9c67b4d14cbe03bac4d4b8f959eb217c747e1ad4f273a1",
@@ -775,7 +775,7 @@
       "byteStart": 0,
       "byteEnd": 588,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:ab25149b83975464fa6801c2278767a0c3ce19193391c1eaf90671b65fd07f18",
@@ -787,7 +787,7 @@
       "byteStart": 589,
       "byteEnd": 749,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:2151f35d6a74285346df59453029650f141b67e19c01f8385a3822c03e743ed0",
@@ -799,7 +799,7 @@
       "byteStart": 750,
       "byteEnd": 965,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:4e0805d412dddc599eccd9ade2665984e1cbf0e012dee1df47ea57f8222542e0",
@@ -811,7 +811,7 @@
       "byteStart": 966,
       "byteEnd": 1262,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:b8a7f867621b1fb24470c181a6c574ca37f1720cdaeebacb96a1dde8ea9d2e2f",
@@ -823,7 +823,7 @@
       "byteStart": 1263,
       "byteEnd": 1677,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     },
     {
       "evidenceId": "evidence:23381085ebe81cd98492ef3c57a86f119021c5ccf6e0a1282a85274e8952c067",
@@ -835,7 +835,7 @@
       "byteStart": 1678,
       "byteEnd": 1920,
       "availability": "available",
-      "adapterVersion": "rollout-jsonl/codex-recent-structural/v4"
+      "adapterVersion": "rollout-jsonl/codex-structural/v5"
     }
   ]
 }

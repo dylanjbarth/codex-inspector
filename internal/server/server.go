@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -285,6 +286,8 @@ func (s *state) routes(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/heartbeat", s.loopback(s.sameOrigin(s.heartbeat)))
 	m.HandleFunc("POST /v1/shutdown", s.loopback(s.sameOrigin(s.shutdownServer)))
 	m.HandleFunc("GET /v1/status", s.loopback(s.status))
+	m.HandleFunc("GET /v1/source-diagnostics", s.loopback(s.sourceDiagnostics))
+	m.HandleFunc("POST /v1/source-diagnostics/{sourceId}/reveal", s.loopback(s.sameOrigin(s.revealSourceDiagnostic)))
 	m.HandleFunc("GET /v1/metrics/catalog", s.loopback(s.metricCatalog))
 	m.HandleFunc("POST /v1/metrics/query", s.loopback(s.sameOrigin(s.metricQuery)))
 	m.HandleFunc("GET /v1/events", s.loopback(s.sameOrigin(s.streamEvents)))
@@ -1121,6 +1124,133 @@ func (s *state) status(w http.ResponseWriter, r *http.Request) {
 	}
 	s.write(w, map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "coverage": coverage, "sourceHome": map[string]any{"path": s.codexHome, "resolution": s.codexHomeSource}, "inspectorHome": map[string]any{"path": s.layout.Root}, "process": map[string]any{"state": processState, "inspectorVersion": version.CLI, "cliVersion": version.CLI, "cliCompatibility": s.compat.CLICompatibility, "pluginVersion": s.compat.PluginVersion, "pluginProtocolVersion": s.compat.PluginProtocol, "pid": os.Getpid(), "startedAt": s.meta.StartedAt.Format(time.RFC3339Nano)}, "index": index, "hook": map[string]any{"state": hookState, "registeredEvents": []string{"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"}, "lastMarker": lastMarker, "diagnostics": diagnostics}})
 }
+
+var rolloutFilenameTime = regexp.MustCompile(`^rollout-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})`)
+
+func sourceRecordedAt(path string) *string {
+	match := rolloutFilenameTime.FindStringSubmatch(filepath.Base(path))
+	if len(match) != 2 {
+		return nil
+	}
+	value, err := time.ParseInLocation("2006-01-02T15-04-05", match[1], time.Local)
+	if err != nil {
+		return nil
+	}
+	formatted := value.Format(time.RFC3339)
+	return &formatted
+}
+
+func sourceModifiedAt(mtimeNS *int64) *string {
+	if mtimeNS == nil {
+		return nil
+	}
+	formatted := time.Unix(0, *mtimeNS).UTC().Format(time.RFC3339Nano)
+	return &formatted
+}
+
+func (s *state) sourceDiagnostics(w http.ResponseWriter, r *http.Request) {
+	allowed := map[string]bool{"cursor": true, "pageSize": true}
+	for key := range r.URL.Query() {
+		if !allowed[key] {
+			s.problem(w, 400, "invalid_query_parameter", "Query parameter is invalid")
+			return
+		}
+	}
+	limit, offset := 50, 0
+	var err error
+	if raw := r.URL.Query().Get("pageSize"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > storage.MaxSourceDiagnostics {
+			s.problem(w, 400, "invalid_page_size", "Page size is invalid")
+			return
+		}
+	}
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		offset, err = strconv.Atoi(raw)
+		if err != nil || offset < 0 || len(raw) > 12 {
+			s.problem(w, 400, "invalid_cursor", "Cursor is invalid")
+			return
+		}
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	defer store.Close()
+	epoch, revision, diagnostics, hasMore, err := store.SourceDiagnostics(r.Context(), offset, limit)
+	if err != nil {
+		s.problem(w, 500, "source_diagnostics_unavailable", "Rollout file diagnostics are unavailable")
+		return
+	}
+	items := make([]map[string]any, 0, len(diagnostics))
+	for _, item := range diagnostics {
+		relativePath, relErr := filepath.Rel(s.codexHome, item.CanonicalPath)
+		if relErr != nil || relativePath == "." || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+			relativePath = filepath.Base(item.CanonicalPath)
+		}
+		value := map[string]any{
+			"sourceId": item.SourceID, "sourceKind": item.SourceKind, "state": item.State,
+			"reason": item.Reason, "detectedVersion": item.DetectedVersion,
+			"path": item.CanonicalPath, "relativePath": relativePath, "filename": filepath.Base(item.CanonicalPath),
+			"byteSize": item.ByteSize, "availability": item.Availability,
+			"remediation": sourceRemediation(item.State, item.Reason),
+			"recordedAt":  sourceRecordedAt(item.CanonicalPath), "modifiedAt": sourceModifiedAt(item.MTimeNS),
+		}
+		if strings.TrimSpace(item.SessionID) != "" {
+			value["sessionId"] = item.SessionID
+		}
+		items = append(items, value)
+	}
+	response := map[string]any{"schemaVersion": version.IndexSchema, "datasetEpoch": epoch, "appliedRevision": revision, "items": items}
+	if hasMore {
+		response["nextCursor"] = strconv.Itoa(offset + limit)
+	}
+	s.writeBounded(w, response, 1024*1024)
+}
+
+func pathWithin(root, target string) bool {
+	rootPath, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	targetPath, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(rootPath, targetPath)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func (s *state) revealSourceDiagnostic(w http.ResponseWriter, r *http.Request) {
+	sourceID := r.PathValue("sourceId")
+	if !opaqueID.MatchString(sourceID) {
+		s.problem(w, 400, "invalid_source_id", "Source ID is invalid")
+		return
+	}
+	store, err := storage.Open(filepath.Join(s.layout.Root, "inspector.db"))
+	if err != nil {
+		s.problem(w, 500, "index_unavailable", "Index unavailable")
+		return
+	}
+	path, err := store.SourceDiagnosticPath(r.Context(), sourceID)
+	_ = store.Close()
+	if errors.Is(err, sql.ErrNoRows) {
+		s.problem(w, 404, "source_not_found", "Rollout file was not found")
+		return
+	}
+	if err != nil || !pathWithin(s.codexHome, path) {
+		s.problem(w, 400, "source_path_rejected", "Rollout file path is unavailable")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	if err = exec.CommandContext(ctx, "open", "-R", path).Run(); err != nil {
+		s.problem(w, 500, "source_reveal_failed", "Rollout file could not be revealed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 func sourceRemediation(state, reason string) string {
 	switch reason {
 	case "diagnostic_query_failed":
@@ -1132,7 +1262,7 @@ func sourceRemediation(state, reason string) string {
 	case "indexed_prefix_changed_or_shrank":
 		return "The recorded source changed before its indexed boundary. Run codex-inspector sync to rebuild derived data from the current local source."
 	case "unsupported_codex_version":
-		return "This exact Codex rollout version is not supported. Update Inspector and sync again after support for this version is available."
+		return "This rollout has missing or malformed Codex version metadata. Keep the source intact and include this reason in a bug report."
 	case "incompatible_record_envelope", "missing_leading_session_meta", "invalid_session_meta":
 		return "Keep the source intact, update Inspector, and sync again; this record shape is not currently supported."
 	case "parse_failed", "normalization_failed":

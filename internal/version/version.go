@@ -12,7 +12,7 @@ const (
 	Protocol       = 1
 	IndexSchema    = 2
 	MinCodexHost   = "0.142.5"
-	SourceAdapter  = "rollout-jsonl/codex-recent-structural/v4"
+	SourceAdapter  = "rollout-jsonl/codex-structural/v5"
 	PluginCLIRange = ">=0.1.0 <0.2.0"
 )
 
@@ -34,6 +34,15 @@ func SupportsCodexHost(raw string) bool {
 	}
 	// A prerelease with the same numeric core is older than the stable floor.
 	return !strings.Contains(strings.SplitN(raw, "+", 2)[0], "-")
+}
+
+// IsCodexVersion reports whether raw is a well-formed Codex release string.
+// Historical rollout ingestion is structure-gated, not host-version-gated:
+// older sources still have to pass the complete record validator before any
+// facts are normalized.
+func IsCodexVersion(raw string) bool {
+	_, ok := numericVersion(raw)
+	return ok
 }
 
 func numericVersion(raw string) ([3]int, bool) {

@@ -23,7 +23,7 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-recent-structural/v4"
+	AdapterVersion        = "rollout-jsonl/codex-structural/v5"
 )
 
 type wireRecord struct {
@@ -540,40 +540,33 @@ func friendlySessionTitle(text string) string {
 
 func validate(rows []located) string {
 	outer := map[string]bool{"session_meta": true, "turn_context": true, "event_msg": true, "response_item": true, "compacted": true, "world_state": true, "inter_agent_communication_metadata": true}
-	events := map[string]bool{"agent_message": true, "context_compacted": true, "entered_review_mode": true, "exited_review_mode": true, "image_generation_end": true, "mcp_tool_call_end": true, "patch_apply_end": true, "sub_agent_activity": true, "task_complete": true, "task_started": true, "thread_rolled_back": true, "thread_settings_applied": true, "token_count": true, "turn_aborted": true, "user_message": true, "web_search_end": true}
-	responses := map[string]bool{"agent_message": true, "custom_tool_call": true, "custom_tool_call_output": true, "function_call": true, "function_call_output": true, "message": true, "reasoning": true}
-	turns := map[string]bool{}
 	for _, r := range rows {
 		if !outer[r.Record.Type] {
 			return "incompatible_record_envelope"
 		}
 		if r.Record.Type == "turn_context" {
 			var w turnWire
-			if json.Unmarshal(r.Record.Payload, &w) != nil || w.TurnID == "" || w.Model == "" || w.Effort == "" || w.CWD == "" || turns[w.TurnID] {
+			if json.Unmarshal(r.Record.Payload, &w) != nil || w.TurnID == "" || w.Model == "" || w.CWD == "" {
 				return "incompatible_turn_context"
 			}
-			turns[w.TurnID] = true
 		}
 	}
 	for _, r := range rows {
 		switch r.Record.Type {
 		case "event_msg":
 			var w eventWire
-			if json.Unmarshal(r.Record.Payload, &w) != nil || !events[w.Type] {
+			if json.Unmarshal(r.Record.Payload, &w) != nil || w.Type == "" {
 				return "incompatible_event_record"
 			}
-			if (w.Type == "task_started" || w.Type == "task_complete") && (!turns[w.TurnID]) {
+			if (w.Type == "task_started" || w.Type == "task_complete") && w.TurnID == "" {
 				return "incompatible_turn_identity"
-			}
-			if w.Type == "token_count" && w.Info == nil {
-				return "incompatible_token_record"
 			}
 		case "response_item":
 			var p struct {
 				Type   string `json:"type"`
 				CallID string `json:"call_id"`
 			}
-			if json.Unmarshal(r.Record.Payload, &p) != nil || !responses[p.Type] {
+			if json.Unmarshal(r.Record.Payload, &p) != nil || p.Type == "" {
 				return "incompatible_response_record"
 			}
 			if isTool(p.Type) && p.CallID == "" {
@@ -676,7 +669,7 @@ func semanticPhase(k string) string {
 	return k
 }
 func isTool(k string) bool {
-	return k == "custom_tool_call" || k == "custom_tool_call_output" || k == "function_call" || k == "function_call_output"
+	return k == "custom_tool_call" || k == "custom_tool_call_output" || k == "function_call" || k == "function_call_output" || k == "tool_search_call" || k == "tool_search_output"
 }
 func responseText(raw json.RawMessage) string {
 	var p []struct {

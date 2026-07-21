@@ -426,12 +426,12 @@ func TestAdapterRetainsPrimaryAndSecondaryRateLimitWindows(t *testing.T) {
 	}
 }
 
-func TestAdapterAcceptsRecentStructurallyCompatibleVersions(t *testing.T) {
+func TestAdapterAcceptsStructurallyCompatibleHistoricalVersions(t *testing.T) {
 	data, err := os.ReadFile(fixture(t, "root.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, version := range []string{"0.142.5", "0.143.0", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
+	for _, version := range []string{"0.100.0-alpha.10", "0.125.0", "0.142.4", "0.142.5", "0.143.0", "0.144.0-alpha.4", "0.144.1", "0.145.0-alpha.18", "0.145.0-alpha.19", "1.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			candidate := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"`+version+`"`, 1))
 			path := filepath.Join(t.TempDir(), "compatible-cohort.jsonl")
@@ -443,14 +443,14 @@ func TestAdapterAcceptsRecentStructurallyCompatibleVersions(t *testing.T) {
 				t.Fatal(statErr)
 			}
 			batch, parseErr := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
-			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-recent-structural/v4" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
+			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-structural/v5" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
 				t.Fatalf("batch=%+v turns=%d evidence=%d err=%v", batch.Source, len(batch.Turns), len(batch.Evidence), parseErr)
 			}
 		})
 	}
-	old := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"0.142.4"`, 1))
-	path := filepath.Join(t.TempDir(), "old-cohort.jsonl")
-	if err = os.WriteFile(path, old, 0o600); err != nil {
+	invalid := []byte(strings.Replace(string(data), `"cli_version":"0.144.1"`, `"cli_version":"not-a-version"`, 1))
+	path := filepath.Join(t.TempDir(), "invalid-version.jsonl")
+	if err = os.WriteFile(path, invalid, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
@@ -459,7 +459,7 @@ func TestAdapterAcceptsRecentStructurallyCompatibleVersions(t *testing.T) {
 	}
 	batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
 	if err != nil || batch.Source.State != "unsupported" || batch.Source.StateReason != "unsupported_codex_version" {
-		t.Fatalf("old batch=%+v err=%v", batch.Source, err)
+		t.Fatalf("invalid-version batch=%+v err=%v", batch.Source, err)
 	}
 }
 
