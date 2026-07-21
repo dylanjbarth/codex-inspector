@@ -26,7 +26,7 @@ func syntheticRepository(t *testing.T) (Repository, func()) {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	fixtures := filepath.Join(filepath.Dir(file), "..", "..", "fixtures", "synthetic")
-	for _, name := range []string{"root.jsonl", "descendant.jsonl"} {
+	for _, name := range []string{"root.jsonl", "descendant.jsonl", "unsupported.jsonl"} {
 		data, err := os.ReadFile(filepath.Join(fixtures, name))
 		if err != nil {
 			t.Fatal(err)
@@ -71,8 +71,12 @@ func TestDiscoverySearchesRootUserMessagesAndExactSessionIDs(t *testing.T) {
 		t.Fatalf("tool results should not match: page=%#v err=%v", toolPage, err)
 	}
 	exactPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "root-001", "", nil, 0, 50)
-	if err != nil || len(exactPage.Items) != 1 || len(exactPage.Items[0].MatchCategories) != 1 || exactPage.Items[0].MatchCategories[0] != "root: session ID" {
+	if err != nil || len(exactPage.Items) != 1 || exactPage.Items[0].RawSessionID != "root-001" || len(exactPage.Items[0].MatchCategories) != 1 || exactPage.Items[0].MatchCategories[0] != "root: session ID" {
 		t.Fatalf("exact source session ID lookup failed: page=%#v err=%v", exactPage, err)
+	}
+	unavailablePage, err := repository.Sessions(context.Background(), page.AppliedRevision, "unsupported-001", "", nil, 0, 50)
+	if err != nil || len(unavailablePage.Items) != 0 || len(unavailablePage.Unavailable) != 1 || unavailablePage.Unavailable[0].RawSessionID != "unsupported-001" || unavailablePage.Unavailable[0].State != "unsupported" || unavailablePage.Unavailable[0].Reason != "incompatible_record_envelope" {
+		t.Fatalf("exact raw ID should explain an excluded historical source: page=%#v err=%v", unavailablePage, err)
 	}
 	reorderedPage, err := repository.Sessions(context.Background(), page.AppliedRevision, "widget fake", "", nil, 0, 50)
 	if err != nil || len(reorderedPage.Items) != 1 {
