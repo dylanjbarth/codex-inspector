@@ -1,0 +1,110 @@
+{
+  "adapter_version": "0.2.1",
+  "codex_cli_version": "0.143.0",
+  "source_commit": "c4d748f586a84a3ed5b6aceb82e9a1db4abb1cda",
+  "source_tag": "rust-v0.143.0",
+  "required_sources": [
+    "codex-rs/rollout/src/recorder.rs",
+    "codex-rs/protocol/src/protocol.rs",
+    "codex-rs/protocol/src/config_types.rs",
+    "codex-rs/hooks/src/schema.rs",
+    "codex-rs/core-skills/src/invocation_utils.rs",
+    "codex-rs/core/src/skills.rs",
+    "codex-rs/state/migrations/0001_threads.sql",
+    "codex-rs/state/migrations/0020_threads_model_reasoning_effort.sql",
+    "codex-rs/state/migrations/0021_thread_spawn_edges.sql",
+    "codex-rs/core/src/tools/handlers/multi_agents_spec.rs"
+  ],
+  "required_thread_columns": [
+    "id",
+    "rollout_path",
+    "created_at",
+    "updated_at",
+    "source",
+    "model_provider",
+    "cwd",
+    "tokens_used",
+    "archived",
+    "cli_version",
+    "model",
+    "reasoning_effort"
+  ],
+  "required_tables": {
+    "thread_spawn_edges": [
+      "parent_thread_id",
+      "child_thread_id",
+      "status"
+    ]
+  },
+  "guidance_sources": {
+    "model_roles": "https://learn.chatgpt.com/docs/models#recommended-models",
+    "subagents": "https://learn.chatgpt.com/docs/agent-configuration/subagents"
+  },
+  "metrics": {
+    "session_total_tokens": {
+      "source_file": "codex-rs/state/migrations/0001_threads.sql",
+      "symbol": "threads.tokens_used",
+      "persisted_field": "tokens_used",
+      "confidence": "observed",
+      "redaction_class": "metadata"
+    },
+    "token_breakdown": {
+      "source_file": "codex-rs/protocol/src/protocol.rs",
+      "symbol": "TokenUsageInfo.total_token_usage",
+      "persisted_field": "event_msg.token_count.info.total_token_usage",
+      "confidence": "observed",
+      "redaction_class": "metadata"
+    },
+    "model": {
+      "source_file": "codex-rs/state/migrations/0020_threads_model_reasoning_effort.sql",
+      "symbol": "threads.model",
+      "persisted_field": "model",
+      "confidence": "observed",
+      "redaction_class": "metadata"
+    },
+    "reasoning_effort": {
+      "source_file": "codex-rs/state/migrations/0020_threads_model_reasoning_effort.sql",
+      "symbol": "threads.reasoning_effort",
+      "persisted_field": "reasoning_effort",
+      "confidence": "observed",
+      "redaction_class": "metadata"
+    },
+    "session_speed": {
+      "source_file": "codex-rs/protocol/src/protocol.rs",
+      "symbol": "ThreadSettingsAppliedEvent.thread_settings.service_tier and SessionConfiguredEvent.service_tier",
+      "mapping_source_file": "codex-rs/protocol/src/config_types.rs",
+      "mapping_symbol": "ServiceTier::request_value and SERVICE_TIER_DEFAULT_REQUEST_VALUE",
+      "persisted_field": "event_msg.thread_settings_applied.thread_settings.service_tier or event_msg.session_configured.service_tier",
+      "confidence": "observed",
+      "redaction_class": "metadata"
+    },
+    "tool_activity": {
+      "source_file": "codex-rs/protocol/src/protocol.rs",
+      "symbol": "RolloutItem::ResponseItem and EventMsg tool lifecycle variants",
+      "persisted_field": "response_item and event_msg",
+      "confidence": "correlated",
+      "redaction_class": "sensitive-content"
+    },
+    "skill_invocation": {
+      "source_file": "codex-rs/core/src/skills.rs",
+      "symbol": "maybe_emit_implicit_skill_invocation",
+      "persisted_field": null,
+      "confidence": "unavailable-unless-persisted",
+      "redaction_class": "metadata"
+    },
+    "subagent_graph": {
+      "source_file": "codex-rs/state/migrations/0021_thread_spawn_edges.sql",
+      "symbol": "thread_spawn_edges",
+      "persisted_field": "parent_thread_id, child_thread_id, status",
+      "confidence": "observed",
+      "redaction_class": "metadata"
+    },
+    "coaching_policy": {
+      "source_file": "contracts/coaching-policy-0.2.0.json",
+      "symbol": "deterministic task, model, and delegation rules",
+      "persisted_field": null,
+      "confidence": "inferred",
+      "redaction_class": "metadata"
+    }
+  }
+}

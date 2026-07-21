@@ -1,0 +1,31 @@
+{
+  "name": "codex-observability",
+  "version": "0.2.7",
+  "description": "Generate and validate source-verified Codex observability dashboards, reports, and KPI frameworks.",
+  "author": {
+    "name": "Luis Gonzalez"
+  },
+  "keywords": ["codex", "observability", "analytics", "data-quality", "tokens", "tools", "sessions"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Observability",
+    "shortDescription": "Inspect Codex history with source-backed coaching.",
+    "longDescription": "Generate private, local bento dashboards across retained Codex history and for individual sessions. Inspect and validate exact token usage, models, reasoning effort, tool activity, subagents, verification, reliability, data quality, KPI definitions, visualizations, and deterministic evidence-backed coaching. Writes are limited to generated reports, report-support context, and a sanitized derived cache.",
+    "developerName": "Luis Gonzalez",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": [
+      "Analyze my latest Codex session.",
+      "Show token efficiency for this Codex session.",
+      "Explain my Codex tool calls and failures.",
+      "Validate the data in my latest Codex session report.",
+      "Design KPIs for measuring my Codex usage.",
+      "Rate my latest Codex session.",
+      "How can I improve my Codex sessions?"
+    ],
+    "brandColor": "#2563EB",
+    "composerIcon": "./assets/telescope.svg",
+    "logo": "./assets/telescope.svg",
+    "logoDark": "./assets/telescope-dark.svg"
+  }
+}

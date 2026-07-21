@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Codex Observability telescope</title>
+  <defs><linearGradient id="g" x1="20" y1="18" x2="104" y2="108" gradientUnits="userSpaceOnUse"><stop stop-color="#2563EB"/><stop offset="1" stop-color="#06B6D4"/></linearGradient></defs>
+  <rect width="128" height="128" rx="28" fill="#EFF6FF"/>
+  <path d="M20 44 79 21l13 33-59 23Z" fill="url(#g)"/>
+  <path d="m83 25 15-6 10 25-15 6" fill="none" stroke="#0F172A" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m55 69 10 19m0 0-23 25m23-25 30 25M65 88v27" fill="none" stroke="#0F172A" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="65" cy="88" r="6" fill="#06B6D4"/>
+</svg>

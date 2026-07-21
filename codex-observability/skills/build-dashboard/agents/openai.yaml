@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Dashboard"
+  short_description: "Create source-backed Codex observability dashboards"
+  default_prompt: "Use $build-dashboard to generate my Codex Observability dashboard."

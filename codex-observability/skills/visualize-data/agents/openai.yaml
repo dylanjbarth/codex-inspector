@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visualize Data"
+  short_description: "Design and QA quantitative charts for analytical work"
+  default_prompt: "Use $visualize-data to improve the quantitative visuals in this Codex Observability report."
