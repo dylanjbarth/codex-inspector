@@ -61,7 +61,7 @@ export function fetchRecordedContext(evidenceId:string,revision:number):Promise<
 
 async function inspectorMutation<T>(path:string,body:unknown,message:string):Promise<T>{
   const response=await fetch(path,{method:'POST',headers:{'content-type':'application/json','X-Inspector-Origin':location.origin},body:JSON.stringify(body)})
-  if(!response.ok){let detail='';try{const problem=await response.json() as {title?:string};detail=problem.title||''}catch{/* bounded fallback */}throw new Error(detail||message)}
+  if(!response.ok){let detail='';try{const problem=await response.json() as {detail?:string;title?:string};detail=problem.detail||problem.title||''}catch{/* bounded fallback */}throw new Error(detail||message)}
   return response.json() as Promise<T>
 }
 export function createReviewPlan(request:ReviewPlanRequest):Promise<ReviewPlan>{return inspectorMutation('/v1/review-plans',request,'Review plan could not be created')}
