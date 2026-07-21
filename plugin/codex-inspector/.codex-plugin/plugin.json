@@ -1,13 +1,24 @@
 {
   "name": "codex-inspector",
   "version": "0.1.0",
-  "description": "Local-first observability for Codex sessions.",
+  "description": "See how you use Codex, understand what happened, and improve what happens next.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "Codex Inspector",
-    "shortDescription": "Local-first observability for Codex sessions",
+    "shortDescription": "Understand and improve Codex",
+    "longDescription": "Turn the Codex sessions already on your Mac into a local dashboard for understanding usage, investigating individual sessions, and getting evidence-backed advice about your workflow.",
     "category": "Productivity",
+    "capabilities": [
+      "Understand token and capacity usage",
+      "Investigate sessions and agent work",
+      "Get evidence-backed workflow advice"
+    ],
+    "defaultPrompt": [
+      "Open Codex Inspector and show me where my recent usage went.",
+      "Inspect this Codex session and help me understand what happened.",
+      "Review my recent Codex work and suggest evidence-backed improvements."
+    ],
     "brandColor": "#183F39",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png"
