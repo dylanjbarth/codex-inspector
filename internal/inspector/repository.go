@@ -63,6 +63,21 @@ type RootTurn struct {
 	CompletedAt *string `json:"completedAt"`
 }
 
+type MapTurn struct {
+	TurnID          string  `json:"turnId"`
+	SessionID       string  `json:"sessionId"`
+	SessionKind     string  `json:"sessionKind"`
+	Ordinal         int     `json:"ordinal"`
+	State           string  `json:"state"`
+	StartedAt       string  `json:"startedAt"`
+	CompletedAt     *string `json:"completedAt"`
+	DirectTokens    *int64  `json:"directTokens"`
+	InclusiveTokens *int64  `json:"inclusiveTokens"`
+	ToolCount       int     `json:"toolCount"`
+	ErrorCount      int     `json:"errorCount"`
+	CompactionCount int     `json:"compactionCount"`
+}
+
 type MapNode struct {
 	SessionID       string `json:"sessionId"`
 	Kind            string `json:"kind"`
@@ -94,6 +109,7 @@ type SessionMap struct {
 	Nodes           []MapNode           `json:"nodes"`
 	Edges           []MapEdge           `json:"edges"`
 	RootTurns       []RootTurn          `json:"rootTurns"`
+	Turns           []MapTurn           `json:"turns"`
 	SpawnTopology   []SpawnTurnTopology `json:"spawnTopology"`
 }
 
@@ -151,6 +167,35 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	if limit > 200 {
 		limit = 200
 	}
+	eligibleOverride, nextCursorOverride := -1, ""
+	if strings.TrimSpace(query) != "" && len(rootIDs) == 0 {
+		candidateIDs := make([]string, 0, 200)
+		for candidateOffset := 0; ; candidateOffset += 200 {
+			_, _, candidates, candidateErr := r.Store.SessionsPage(revision, query, projectID, candidateOffset, 200)
+			if candidateErr != nil {
+				return SessionPage{}, candidateErr
+			}
+			for _, candidate := range candidates {
+				candidateIDs = append(candidateIDs, candidate.ID)
+			}
+			if len(candidates) < 200 {
+				break
+			}
+		}
+		eligibleOverride = len(candidateIDs)
+		if offset > eligibleOverride {
+			offset = eligibleOverride
+		}
+		end := min(offset+limit, eligibleOverride)
+		if end < eligibleOverride {
+			nextCursorOverride = intString(end)
+		}
+		rootIDs = candidateIDs[offset:end]
+		offset = 0
+		if len(rootIDs) == 0 {
+			return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: []SessionSummary{}}, nil
+		}
+	}
 	sessionQuery := latestSessions + `SELECT root.id,rv.purpose,coalesce(l.title,''),coalesce(p.canonical_identity,''),coalesce(min(t.started_at),''),count(t.id),coalesce(max(t.completed_at),max(t.terminal_at),''),count(DISTINCT member.session_id)-1
 		FROM sessions root JOIN sv rv ON rv.session_id=root.id AND rv.root_work_unit_id=root.id
 		LEFT JOIN labels l ON l.session_id=root.id
@@ -185,10 +230,6 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 		if query != "" && len(item.MatchCategories) == 0 {
 			continue
 		}
-		item.DirectTokens, item.DescendantTokens, err = r.rootTotals(ctx, epoch, revision, item.SessionID)
-		if err != nil {
-			return SessionPage{}, err
-		}
 		if len(item.MatchCategories) == 0 {
 			item.MatchCategories = []string{"root session"}
 		}
@@ -196,6 +237,17 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 	}
 	if err = rows.Err(); err != nil {
 		return SessionPage{}, err
+	}
+	totals, err := r.rootTotalsBatch(ctx, epoch, revision, all)
+	if err != nil {
+		return SessionPage{}, err
+	}
+	for index := range all {
+		all[index].DirectTokens = totals[all[index].SessionID].direct
+		all[index].DescendantTokens = totals[all[index].SessionID].descendant
+	}
+	if eligibleOverride >= 0 {
+		return SessionPage{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: Coverage{Fidelity: "exact", Observed: eligibleOverride, Eligible: eligibleOverride}, Items: all, NextCursor: nextCursorOverride}, nil
 	}
 	eligible := len(all)
 	if offset > eligible {
@@ -210,6 +262,88 @@ func (r Repository) Sessions(ctx context.Context, revision int64, query, project
 		page.NextCursor = intString(end)
 	}
 	return page, nil
+}
+
+type sessionTokenTotals struct {
+	direct, descendant *int64
+}
+
+func (r Repository) rootTotalsBatch(ctx context.Context, epoch string, revision int64, sessions []SessionSummary) (map[string]sessionTokenTotals, error) {
+	out := make(map[string]sessionTokenTotals, len(sessions))
+	if len(sessions) == 0 {
+		return out, nil
+	}
+	ids := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		ids = append(ids, session.SessionID)
+	}
+	query := latestSessions + `SELECT sv.root_work_unit_id,sv.session_id,count(t.id),count(u.turn_id),coalesce(sum(u.total_tokens),0) FROM sv JOIN turns t ON t.epoch_id=sv.epoch_id AND t.session_id=sv.session_id AND t.state='completed' AND t.commit_revision<=? LEFT JOIN turn_usage u ON u.epoch_id=t.epoch_id AND u.turn_id=t.id AND u.formula_version=1 AND u.total_tokens IS NOT NULL WHERE sv.epoch_id=? AND sv.root_work_unit_id IN (` + strings.TrimRight(strings.Repeat("?,", len(ids)), ",") + `) GROUP BY sv.root_work_unit_id,sv.session_id`
+	args := []any{epoch, revision, epoch, revision, revision, epoch}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := r.Store.DB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	type accumulator struct {
+		direct, descendant                 int64
+		directObserved, descendantObserved bool
+		descendantEligible                 bool
+	}
+	values := make(map[string]*accumulator, len(ids))
+	for rows.Next() {
+		var rootID, sessionID string
+		var eligible, observed int
+		var total int64
+		if err = rows.Scan(&rootID, &sessionID, &eligible, &observed, &total); err != nil {
+			return nil, err
+		}
+		value := values[rootID]
+		if value == nil {
+			value = &accumulator{}
+			values[rootID] = value
+		}
+		if observed == 0 {
+			if sessionID != rootID && eligible > 0 {
+				value.descendantEligible = true
+			}
+			continue
+		}
+		if sessionID == rootID {
+			value.direct += total
+			value.directObserved = true
+		} else {
+			value.descendant += total
+			value.descendantObserved = true
+			value.descendantEligible = true
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		value := values[id]
+		if value == nil {
+			out[id] = sessionTokenTotals{}
+			continue
+		}
+		var total sessionTokenTotals
+		if value.directObserved {
+			direct := value.direct
+			total.direct = &direct
+		}
+		if value.descendantObserved {
+			descendant := value.descendant
+			total.descendant = &descendant
+		} else if !value.descendantEligible {
+			zero := int64(0)
+			total.descendant = &zero
+		}
+		out[id] = total
+	}
+	return out, nil
 }
 
 func (r Repository) matches(ctx context.Context, epoch string, revision int64, rootID, query string) ([]string, []MatchSnippet, error) {
@@ -605,12 +739,102 @@ func (r Repository) Map(ctx context.Context, revision int64, requestedSessionID 
 	if err != nil {
 		return SessionMap{}, err
 	}
+	mapTurns, err := r.mapTurns(ctx, epoch, revision, rootID, states, spawn)
+	if err != nil {
+		return SessionMap{}, err
+	}
 	coverage := Coverage{Fidelity: "exact", Observed: len(mapNodes), Eligible: len(mapNodes)}
 	if partial {
 		coverage.Fidelity = "derived"
 		coverage.Reason = "some lineage relationships are unresolved"
 	}
-	return SessionMap{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: coverage, RootSessionID: rootID, Nodes: mapNodes, Edges: edges, RootTurns: turns, SpawnTopology: spawn}, nil
+	return SessionMap{SchemaVersion: 2, DatasetEpoch: epoch, AppliedRevision: revision, Coverage: coverage, RootSessionID: rootID, Nodes: mapNodes, Edges: edges, RootTurns: turns, Turns: mapTurns, SpawnTopology: spawn}, nil
+}
+
+func (r Repository) mapTurns(ctx context.Context, epoch string, revision int64, rootID string, states map[string]*nodeState, spawn []SpawnTurnTopology) ([]MapTurn, error) {
+	ids := make([]string, 0, len(states))
+	for id := range states {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return []MapTurn{}, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	query := `SELECT t.session_id,t.id,t.state,coalesce(t.started_at,t.terminal_at),t.completed_at,u.total_tokens,
+		count(DISTINCT CASE WHEN tc.semantic_phase='request' THEN tc.id END),
+		count(DISTINCT CASE WHEN tc.semantic_phase='result' AND (coalesce(tc.exit_code,0)<>0 OR lower(coalesce(tc.status,'')) IN ('error','failed','failure','cancelled','timed_out')) THEN tc.id END),
+		count(DISTINCT c.event_id)
+		FROM turns t
+		LEFT JOIN turn_usage u ON u.epoch_id=t.epoch_id AND u.turn_id=t.id AND u.formula_version=1
+		LEFT JOIN tool_calls tc ON tc.epoch_id=t.epoch_id AND tc.turn_id=t.id
+		LEFT JOIN compactions c ON c.epoch_id=t.epoch_id AND c.turn_id=t.id
+		WHERE t.epoch_id=? AND t.commit_revision<=? AND t.session_id IN (` + placeholders + `)
+		GROUP BY t.session_id,t.id,t.state,t.started_at,t.terminal_at,t.completed_at,u.total_tokens,t.source_order_key
+		ORDER BY t.session_id,t.source_order_key,t.id`
+	args := []any{epoch, revision}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := r.Store.DB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	childrenByTurn := map[string]map[string]bool{}
+	for _, relation := range spawn {
+		if relation.SpawnTurnID == "" || states[relation.ChildSessionID] == nil {
+			continue
+		}
+		if childrenByTurn[relation.SpawnTurnID] == nil {
+			childrenByTurn[relation.SpawnTurnID] = map[string]bool{}
+		}
+		childrenByTurn[relation.SpawnTurnID][relation.ChildSessionID] = true
+	}
+	ordinals := map[string]int{}
+	out := make([]MapTurn, 0)
+	for rows.Next() {
+		var turn MapTurn
+		var completed sql.NullString
+		var direct sql.NullInt64
+		if err = rows.Scan(&turn.SessionID, &turn.TurnID, &turn.State, &turn.StartedAt, &completed, &direct, &turn.ToolCount, &turn.ErrorCount, &turn.CompactionCount); err != nil {
+			return nil, err
+		}
+		turn.Ordinal = ordinals[turn.SessionID]
+		ordinals[turn.SessionID]++
+		turn.SessionKind = "descendant"
+		if turn.SessionID == rootID {
+			turn.SessionKind = "root"
+		} else if state := states[turn.SessionID]; state != nil && state.purpose == "fork" {
+			turn.SessionKind = "fork"
+		} else if state := states[turn.SessionID]; state != nil && state.purpose == "orphan" {
+			turn.SessionKind = "orphan"
+		}
+		if completed.Valid {
+			turn.CompletedAt = &completed.String
+		}
+		var inclusive int64
+		observed := false
+		if direct.Valid {
+			value := direct.Int64
+			turn.DirectTokens = &value
+			inclusive += value
+			observed = true
+		}
+		for childID := range childrenByTurn[turn.TurnID] {
+			if child := states[childID]; child != nil && child.inclusive != nil {
+				inclusive += *child.inclusive
+				observed = true
+			}
+		}
+		if observed {
+			value := inclusive
+			turn.InclusiveTokens = &value
+		}
+		out = append(out, turn)
+	}
+	return out, rows.Err()
 }
 
 func (r Repository) rootTurns(ctx context.Context, epoch string, revision int64, rootID string) ([]RootTurn, error) {

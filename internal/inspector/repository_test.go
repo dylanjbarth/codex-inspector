@@ -99,7 +99,7 @@ func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Nodes) != 2 || len(result.RootTurns) != 2 || len(result.Edges) != 1 {
+	if len(result.Nodes) != 2 || len(result.RootTurns) != 2 || len(result.Turns) != 3 || len(result.Edges) != 1 {
 		t.Fatalf("causal map is incomplete: %#v", result)
 	}
 	var root, child *MapNode
@@ -112,6 +112,19 @@ func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 	}
 	if root == nil || root.DirectTokens == nil || *root.DirectTokens != 2000 || root.InclusiveTokens == nil || *root.InclusiveTokens != 2500 || child == nil || child.DirectTokens == nil || *child.DirectTokens != 500 {
 		t.Fatalf("map totals differ from metric engine: root=%#v child=%#v", root, child)
+	}
+	var rootTurn, descendantTurn *MapTurn
+	for i := range result.Turns {
+		turn := &result.Turns[i]
+		if turn.SessionKind == "root" && rootTurn == nil {
+			rootTurn = turn
+		}
+		if turn.SessionKind == "descendant" {
+			descendantTurn = turn
+		}
+	}
+	if rootTurn == nil || rootTurn.DirectTokens == nil || *rootTurn.DirectTokens != 1200 || rootTurn.InclusiveTokens == nil || *rootTurn.InclusiveTokens != 1200 || descendantTurn == nil || descendantTurn.DirectTokens == nil || *descendantTurn.DirectTokens != 500 || descendantTurn.InclusiveTokens == nil || *descendantTurn.InclusiveTokens != 500 {
+		t.Fatalf("turn-level causal topology is incomplete: root=%#v descendant=%#v all=%#v", rootTurn, descendantTurn, result.Turns)
 	}
 	ledger, err := repository.Ledger(context.Background(), page.AppliedRevision, rootID, result.RootTurns[0].TurnID, 0, 200)
 	if err != nil {

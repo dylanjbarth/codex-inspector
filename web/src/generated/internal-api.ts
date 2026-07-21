@@ -699,6 +699,23 @@ export interface components {
             /** Format: date-time */
             completedAt?: string | null;
         };
+        MapTurn: {
+            turnId: components["schemas"]["OpaqueId"];
+            sessionId: components["schemas"]["OpaqueId"];
+            /** @enum {unknown} */
+            sessionKind: "root" | "descendant" | "fork" | "orphan";
+            ordinal: number;
+            /** @enum {unknown} */
+            state: "completed" | "aborted" | "interrupted" | "reconciled_truncated";
+            startedAt: components["schemas"]["Timestamp"];
+            /** Format: date-time */
+            completedAt?: string | null;
+            directTokens: number | null;
+            inclusiveTokens: number | null;
+            toolCount: number;
+            errorCount: number;
+            compactionCount: number;
+        };
         SpawnTurnTopology: {
             parentSessionId: components["schemas"]["OpaqueId"];
             childSessionId: components["schemas"]["OpaqueId"];
@@ -712,6 +729,7 @@ export interface components {
             nodes: components["schemas"]["MapNode"][];
             edges: components["schemas"]["MapEdge"][];
             rootTurns: components["schemas"]["RootTurn"][];
+            turns: components["schemas"]["MapTurn"][];
             spawnTopology: components["schemas"]["SpawnTurnTopology"][];
         };
         LedgerPage: components["schemas"]["Snapshot"] & {
