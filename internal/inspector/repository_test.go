@@ -134,6 +134,12 @@ func TestMapLedgerAndCompactionEvidenceAreRevisionPinned(t *testing.T) {
 	if rootTurn == nil || rootTurn.DirectTokens == nil || *rootTurn.DirectTokens != 1200 || rootTurn.InclusiveTokens == nil || *rootTurn.InclusiveTokens != 1200 || descendantTurn == nil || descendantTurn.DirectTokens == nil || *descendantTurn.DirectTokens != 500 || descendantTurn.InclusiveTokens == nil || *descendantTurn.InclusiveTokens != 500 {
 		t.Fatalf("turn-level causal topology is incomplete: root=%#v descendant=%#v all=%#v", rootTurn, descendantTurn, result.Turns)
 	}
+	if rootTurn.PromptPreview != "Create the fake widget." {
+		t.Fatalf("root turn did not receive its exact bounded user prompt: %#v", rootTurn)
+	}
+	if descendantTurn.PromptPreview != "" {
+		t.Fatalf("a descendant without a recorded user instruction must retain the fallback label: %#v", descendantTurn)
+	}
 	if rootTurn.ToolCount != 1 || rootTurn.ErrorCount != 0 || rootTurn.CompactionCount != 1 {
 		t.Fatalf("turn activity aggregates changed while avoiding the fact-table cross product: %#v", rootTurn)
 	}

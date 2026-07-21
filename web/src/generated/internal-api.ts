@@ -705,6 +705,7 @@ export interface components {
             sessionId: components["schemas"]["OpaqueId"];
             /** @enum {unknown} */
             sessionKind: "root" | "descendant" | "fork" | "orphan";
+            promptPreview?: string;
             ordinal: number;
             /** @enum {unknown} */
             state: "completed" | "aborted" | "interrupted" | "reconciled_truncated";

@@ -67,6 +67,7 @@ type MapTurn struct {
 	TurnID          string  `json:"turnId"`
 	SessionID       string  `json:"sessionId"`
 	SessionKind     string  `json:"sessionKind"`
+	PromptPreview   string  `json:"promptPreview,omitempty"`
 	Ordinal         int     `json:"ordinal"`
 	State           string  `json:"state"`
 	StartedAt       string  `json:"startedAt"`
@@ -417,6 +418,10 @@ func ftsSearchQuery(query string) string {
 }
 
 func sourceMatchSnippet(path string, start, end int64, expectedHash, category, query string) string {
+	return boundedMatchSnippet(sourceRecordText(path, start, end, expectedHash, category), query, 240)
+}
+
+func sourceRecordText(path string, start, end int64, expectedHash, category string) string {
 	if start < 0 || end <= start || end-start > 2*1024*1024 {
 		return ""
 	}
@@ -447,7 +452,7 @@ func sourceMatchSnippet(path string, start, end int64, expectedHash, category, q
 			text = readableBlocks(record.Payload["output"])
 		}
 	}
-	return boundedMatchSnippet(text, query, 240)
+	return text
 }
 
 func readableBlocks(raw json.RawMessage) string {
@@ -799,7 +804,75 @@ func (r Repository) mapTurns(ctx context.Context, epoch string, revision int64, 
 		}
 		out = append(out, turn)
 	}
-	return out, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, err
+	}
+	previews, err := r.mapTurnPromptPreviews(ctx, epoch, revision, ids, placeholders)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].PromptPreview = previews[out[i].TurnID]
+	}
+	return out, nil
+}
+
+func (r Repository) mapTurnPromptPreviews(ctx context.Context, epoch string, revision int64, sessionIDs []string, placeholders string) (map[string]string, error) {
+	args := make([]any, 0, len(sessionIDs)+3)
+	args = append(args, epoch, revision, revision)
+	for _, id := range sessionIDs {
+		args = append(args, id)
+	}
+	rows, err := r.Store.DB().QueryContext(ctx, `SELECT e.turn_id,v.canonical_path,e.byte_start,e.byte_end,e.content_sha256
+		FROM events e
+		JOIN turns t ON t.epoch_id=e.epoch_id AND t.id=e.turn_id
+		JOIN messages m ON m.epoch_id=e.epoch_id AND m.event_id=e.id AND m.role='user' AND m.readable=1
+		JOIN source_segments sg ON sg.epoch_id=e.epoch_id AND sg.id=e.segment_id
+		JOIN evidence_refs er ON er.epoch_id=e.epoch_id AND er.event_id=e.id
+		JOIN source_artifact_versions v ON v.epoch_id=er.epoch_id AND v.source_id=er.source_id
+		WHERE e.epoch_id=? AND e.commit_revision<=?
+		AND v.revision=(SELECT max(vx.revision) FROM source_artifact_versions vx WHERE vx.epoch_id=v.epoch_id AND vx.source_id=v.source_id AND vx.revision<=?)
+		AND t.session_id IN (`+placeholders+`)
+		ORDER BY e.turn_id,sg.source_order_key,e.record_ordinal,e.semantic_phase`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	previews := make(map[string]string)
+	for rows.Next() {
+		var turnID, path, digest string
+		var start, end int64
+		if err = rows.Scan(&turnID, &path, &start, &end, &digest); err != nil {
+			return nil, err
+		}
+		if previews[turnID] != "" {
+			continue
+		}
+		text := sourceRecordText(path, start, end, digest, "message")
+		if !meaningfulPrompt(text) {
+			continue
+		}
+		previews[turnID] = boundedMatchSnippet(text, "", 160)
+	}
+	return previews, rows.Err()
+}
+
+func meaningfulPrompt(text string) bool {
+	value := strings.TrimSpace(text)
+	if value == "" {
+		return false
+	}
+	lower := strings.ToLower(value)
+	return !strings.HasPrefix(lower, "<environment_context") &&
+		!strings.HasPrefix(lower, "<system") &&
+		!strings.HasPrefix(lower, "<developer") &&
+		!strings.HasPrefix(lower, "<image") &&
+		!strings.HasPrefix(lower, `{"cwd"`) &&
+		!strings.HasPrefix(lower, `{'cwd'`) &&
+		!strings.HasPrefix(lower, "the following is the codex agent history")
 }
 
 type mapTurnCounts struct {

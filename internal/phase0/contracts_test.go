@@ -619,6 +619,9 @@ func TestOpenAPIContractCoverage(t *testing.T) {
 	assertSchemaRequired(t, doc.Components.Schemas, "CapacityPoint", "observedAt", "limitId", "windowMinutes", "usedPercent", "remainingPercent", "resetsAt", "stale")
 	assertSchemaRequired(t, doc.Components.Schemas, "SessionMap", "rootSessionId", "nodes", "edges", "rootTurns", "spawnTopology")
 	assertSchemaRequired(t, doc.Components.Schemas, "RootTurn", "turnId", "ordinal", "state", "startedAt")
+	if properties, _ := doc.Components.Schemas["MapTurn"]["properties"].(map[string]any); properties["promptPreview"] == nil {
+		t.Error("MapTurn is missing its optional exact prompt preview")
+	}
 	assertSchemaRequired(t, doc.Components.Schemas, "SpawnTurnTopology", "parentSessionId", "childSessionId", "spawnTurnId", "edgeKind", "ordinal")
 	assertSchemaRequired(t, doc.Components.Schemas, "ReviewManifestPreview", "schemaVersion", "reviewId", "createdAt", "datasetEpoch", "indexRevision", "scope", "includedSessionIds", "includedTurnIds", "sources", "aggregateMetrics", "coverageGaps", "evidenceRules", "rubric", "model", "reasoning", "evidence", "reportDestination", "reportSchema", "limits")
 	assertSchemaRequired(t, doc.Components.Schemas, "ManifestEvidence", "evidenceId", "sourceId", "sourcePrefixSha256", "eventFingerprint", "availability", "availabilityObservedAt", "availabilityRevision")
