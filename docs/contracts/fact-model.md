@@ -32,24 +32,27 @@ would require a project version table rather than an in-place update.
 
 | Fact | Stable key |
 | --- | --- |
-| source artifact | `dataset_epoch + source_session_id + segment_fingerprint` |
-| logical session | `dataset_epoch + source session_id` |
-| source segment | `session_id + segment_fingerprint` |
+| source artifact | `dataset_epoch + source_thread_id + segment_fingerprint` |
+| logical session | `dataset_epoch + source thread id` (`session_meta.id`, falling back to `session_id`) |
+| source segment | `thread_id + segment_fingerprint` |
 | project | normalized Git remote, else canonical Git root, else normalized cwd |
-| work unit | user-created root `session_id` |
-| turn | `session_id + source turn_id` |
+| work unit | family-level root `session_id`, falling back to the actual root thread ID |
+| turn | `thread_id + source turn_id` |
 | event | `segment_id + record_ordinal + semantic_phase` |
 | message | parent event identity plus message role/phase |
-| tool phase | `session_id + source call_id + semantic_phase` |
+| tool phase | `thread_id + source call_id + semantic_phase` |
 | usage | terminal `turn_id + formula_version` |
 | capacity | parent event plus limit/window identity |
 | evidence | opaque ID resolving to pinned event/source fingerprints and locator |
 
-For `rollout-jsonl/codex-structural/v5`, the immutable segment identity
-fingerprint is SHA-256 over the source session ID, a separator, and exact
+For `rollout-jsonl/codex-structural/v6`, the immutable segment identity
+fingerprint is SHA-256 over the actual source thread ID, a separator, and exact
 complete leading `session_meta` record bytes. Source and segment IDs are
 domain-prefixed hashes over that immutable material. Active/archive kind, path,
 inode, size, and mtime are versioned discovery values, not identity inputs.
+Spawned threads retain the family-level `session_id` as their root work unit
+and use `parent_thread_id` only for their immediate lineage edge. Older records
+without a distinct `id` continue to fall back to `session_id`.
 
 `source_order_key` is exactly
 `<20-digit UTC Unix-nanosecond start>:<64-character segment fingerprint>`.

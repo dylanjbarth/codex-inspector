@@ -462,7 +462,7 @@ func TestAdapterAcceptsStructurallyCompatibleHistoricalVersions(t *testing.T) {
 				t.Fatal(statErr)
 			}
 			batch, parseErr := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
-			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-structural/v5" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
+			if parseErr != nil || batch.Source.State != "supported" || batch.Source.AdapterVersion != "rollout-jsonl/codex-structural/v6" || len(batch.Turns) == 0 || len(batch.Evidence) == 0 {
 				t.Fatalf("batch=%+v turns=%d evidence=%d err=%v", batch.Source, len(batch.Turns), len(batch.Evidence), parseErr)
 			}
 		})
@@ -513,5 +513,46 @@ func TestSelfParentSubagentSegmentRemainsRootWork(t *testing.T) {
 	}
 	if len(batch.Lineage) != 0 {
 		t.Fatalf("self-parent segment emitted lineage: %#v", batch.Lineage)
+	}
+}
+
+func TestThreadIdentitySeparatesModernSubagentsFromTheirLogicalRoot(t *testing.T) {
+	base, err := os.ReadFile(fixture(t, "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name, threadID, parentID, source string
+	}{
+		{"thread spawn", "child-001", "root-001", `"parent_thread_id":"root-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"root-001","depth":1}}}`},
+		{"guardian", "guardian-001", "child-001", `"parent_thread_id":"child-001","source":{"subagent":{"other":"guardian"}}`},
+		{"nested parent fallback", "nested-child-001", "root-001", `"source":{"subagent":{"thread_spawn":{"parent_thread_id":"root-001","depth":1}}}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			data := strings.Replace(string(base), `"id":"root-001","session_id":"root-001"`, `"id":"`+tc.threadID+`","session_id":"root-001"`, 1)
+			data = strings.Replace(data, `"source":"cli"`, tc.source, 1)
+			path := filepath.Join(t.TempDir(), "modern-subagent.jsonl")
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			batch, err := Parse(Candidate{Path: path, Kind: "active_rollout", Size: info.Size(), MTimeNS: info.ModTime().UnixNano()}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if batch.Source.SessionID != tc.threadID || batch.Session == nil || batch.Session.SourceSessionID != tc.threadID {
+				t.Fatalf("actual thread identity was not preserved: source=%#v session=%#v", batch.Source, batch.Session)
+			}
+			if batch.Session.Purpose != "spawned" || batch.Session.RootWorkUnitID != "root-001" {
+				t.Fatalf("subagent ownership was not preserved: %#v", batch.Session)
+			}
+			if len(batch.Lineage) != 1 || batch.Lineage[0].ParentSessionID != "session:"+hash([]byte(tc.parentID)) || batch.Lineage[0].ChildSessionID != batch.Session.ID {
+				t.Fatalf("immediate lineage was not preserved: %#v", batch.Lineage)
+			}
+		})
 	}
 }

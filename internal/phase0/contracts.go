@@ -19,7 +19,7 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-structural/v5"
+	AdapterVersion        = "rollout-jsonl/codex-structural/v6"
 	FormulaVersion        = 1
 )
 
@@ -31,7 +31,9 @@ type SourceDecision struct {
 	Supported       bool
 	Reason          string
 	SessionID       string
+	RootSessionID   string
 	ParentSessionID string
+	Spawned         bool
 	ProjectRemote   string
 	PendingTail     bool
 	Turns           []Turn
@@ -324,7 +326,7 @@ func CalculateMetricsFiltered(sources []SourceDecision, filter MetricFilter) (Me
 	for i := range filtered {
 		filtered[i].Turns = nil
 		kind := "user_root_direct"
-		if filtered[i].ParentSessionID != "" {
+		if filtered[i].Spawned {
 			kind = "descendant"
 		}
 		for _, turn := range normalizedSources[i].Turns {
@@ -534,14 +536,12 @@ func ProbeRollout(r io.Reader) (SourceDecision, error) {
 	if err := json.Unmarshal(rec.Payload, &meta); err != nil {
 		return SourceDecision{Reason: "invalid_session_meta"}, nil
 	}
-	if meta.SessionID == "" {
-		meta.SessionID = meta.ID
-	}
+	threadID := sourceThreadID(meta)
 	if !SupportsCodexVersion(meta.CLIVersion) {
-		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID}, nil
+		return SourceDecision{Reason: "unsupported_codex_version", SessionID: threadID}, nil
 	}
-	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
-		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID}, nil
+	if threadID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
+		return SourceDecision{Reason: "missing_required_session_identity", SessionID: threadID}, nil
 	}
 	remaining := int64(maxCompatibilityProbeBytes - len(line))
 	prefix := io.MultiReader(bytes.NewReader(line), io.LimitReader(reader, remaining))
@@ -581,24 +581,36 @@ func ParseRollout(r io.Reader) (SourceDecision, error) {
 	if err := json.Unmarshal(records[0].Payload, &meta); err != nil {
 		return SourceDecision{Reason: "invalid_session_meta", PendingTail: pendingTail}, nil
 	}
-	if meta.SessionID == "" {
-		meta.SessionID = meta.ID
-	}
+	threadID := sourceThreadID(meta)
 	if !SupportsCodexVersion(meta.CLIVersion) {
-		return SourceDecision{Reason: "unsupported_codex_version", SessionID: meta.SessionID, PendingTail: pendingTail}, nil
+		return SourceDecision{Reason: "unsupported_codex_version", SessionID: threadID, PendingTail: pendingTail}, nil
 	}
-	if meta.SessionID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
-		return SourceDecision{Reason: "missing_required_session_identity", SessionID: meta.SessionID, PendingTail: pendingTail}, nil
+	if threadID == "" || meta.CWD == "" || meta.Originator == "" || (meta.Timestamp != "" && !isRFC3339(meta.Timestamp)) || !validSessionSource(meta.Source) {
+		return SourceDecision{Reason: "missing_required_session_identity", SessionID: threadID, PendingTail: pendingTail}, nil
 	}
 	if reason := validateSupportedRecords(records); reason != "" {
-		return SourceDecision{Reason: reason, SessionID: meta.SessionID, PendingTail: pendingTail}, nil
+		return SourceDecision{Reason: reason, SessionID: threadID, PendingTail: pendingTail}, nil
+	}
+	parentID := meta.ParentThreadID
+	if parentID == "" {
+		parentID = sourceThreadSpawnParent(meta.Source)
+	}
+	spawned := sourceIsSubagent(meta.Source) && parentID != "" && parentID != threadID
+	rootID := threadID
+	if spawned {
+		rootID = meta.SessionID
+		if rootID == "" || rootID == threadID {
+			rootID = parentID
+		}
 	}
 
 	decision := SourceDecision{
 		Supported:       true,
 		Reason:          "supported",
-		SessionID:       meta.SessionID,
-		ParentSessionID: meta.ParentThreadID,
+		SessionID:       threadID,
+		RootSessionID:   rootID,
+		ParentSessionID: parentID,
+		Spawned:         spawned,
 		ProjectRemote:   meta.Git.RepositoryURL,
 		PendingTail:     pendingTail,
 	}
@@ -714,9 +726,12 @@ func NormalizeCorpus(inputs []CorpusInput) (NormalizedCorpus, error) {
 		if !decision.Supported || completedTurnCount(decision.Turns) == 0 {
 			continue
 		}
-		rootID, purpose, contribution := decision.SessionID, "user", "user_root_direct"
-		if decision.ParentSessionID != "" {
-			rootID, purpose, contribution = decision.ParentSessionID, "spawned", "descendant"
+		rootID, purpose, contribution := decision.RootSessionID, "user", "user_root_direct"
+		if rootID == "" {
+			rootID = decision.SessionID
+		}
+		if decision.Spawned {
+			purpose, contribution = "spawned", "descendant"
 		}
 		corpus.Sessions = append(corpus.Sessions, NormalizedSession{
 			SessionID: decision.SessionID, RootWorkUnitID: rootID, ParentSessionID: decision.ParentSessionID,
@@ -1047,6 +1062,32 @@ func validSessionSource(raw json.RawMessage) bool {
 	return json.Unmarshal(threadSpawn, &threadSpawnFields) == nil && threadSpawnFields["parent_thread_id"] != nil
 }
 
+func sourceThreadID(meta metadataPayload) string {
+	if meta.ID != "" {
+		return meta.ID
+	}
+	return meta.SessionID
+}
+
+func sourceIsSubagent(raw json.RawMessage) bool {
+	var source map[string]json.RawMessage
+	return json.Unmarshal(raw, &source) == nil && source["subagent"] != nil
+}
+
+func sourceThreadSpawnParent(raw json.RawMessage) string {
+	var source struct {
+		Subagent struct {
+			ThreadSpawn struct {
+				ParentThreadID string `json:"parent_thread_id"`
+			} `json:"thread_spawn"`
+		} `json:"subagent"`
+	}
+	if json.Unmarshal(raw, &source) != nil {
+		return ""
+	}
+	return source.Subagent.ThreadSpawn.ParentThreadID
+}
+
 func ensureTurn(turns map[string]*Turn, id string) *Turn {
 	if turns[id] == nil {
 		turns[id] = &Turn{ID: id}
@@ -1072,10 +1113,12 @@ func CalculateMetrics(sources []SourceDecision) (Metrics, error) {
 		if !source.Supported {
 			continue
 		}
-		rootID := source.SessionID
+		rootID := source.RootSessionID
+		if rootID == "" {
+			rootID = source.SessionID
+		}
 		kind := "user_root_direct"
-		if source.ParentSessionID != "" {
-			rootID = source.ParentSessionID
+		if source.Spawned {
 			kind = "descendant"
 		}
 		if rootTotals[rootID] == nil {

@@ -86,7 +86,7 @@ func TestSourceFormatUsesFrozenDiscriminator(t *testing.T) {
 		t.Fatalf("unsupported source: %+v", got)
 	}
 	copyFixture("root.jsonl")
-	if got := SourceFormat(); got.Status != "ok" || got.Detail != "rollout-jsonl/codex-structural/v5" {
+	if got := SourceFormat(); got.Status != "ok" || got.Detail != "rollout-jsonl/codex-structural/v6" {
 		t.Fatalf("supported source: %+v", got)
 	}
 }

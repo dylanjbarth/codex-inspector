@@ -12,7 +12,7 @@ const (
 	Protocol       = 1
 	IndexSchema    = 2
 	MinCodexHost   = "0.142.5"
-	SourceAdapter  = "rollout-jsonl/codex-structural/v5"
+	SourceAdapter  = "rollout-jsonl/codex-structural/v6"
 	PluginCLIRange = ">=0.1.0 <0.2.0"
 )
 

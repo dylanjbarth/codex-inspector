@@ -8,7 +8,7 @@ The frozen demo contract is identified by:
 
 - Inspector protocol: `1`
 - index schema: `2` (rebuild-only from v1)
-- rollout adapter: `rollout-jsonl/codex-structural/v5`
+- rollout adapter: `rollout-jsonl/codex-structural/v6`
 - Review artifact contract: `inspector.review/v1`
 - supported release target: macOS arm64
 

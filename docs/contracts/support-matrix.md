@@ -5,7 +5,7 @@
 | Capability | Supported value | Compatibility decision |
 | --- | --- | --- |
 | Codex CLI/host | `codex-cli >=0.142.5` | recent stable and prerelease hosts are accepted |
-| rollout adapter | `rollout-jsonl/codex-structural/v5` | historical sources proceed to the complete structural validator regardless of release age |
+| rollout adapter | `rollout-jsonl/codex-structural/v6` | historical sources proceed to the complete structural validator regardless of release age |
 | proven rollout fixtures | `0.100.0-alpha.10` through `0.145.0-alpha.18` observed locally; canonical fixtures for `0.142.5`, `0.144.0-alpha.4`, `0.144.1`, `0.145.0-alpha.18` | versions are diagnostic cohorts, not an allowlist |
 | session index | legacy append-only `id`/`thread_name`/`updated_at` records; file absent on proof host | optional label input; absence is supported |
 | demo OS | macOS 26.5.1 | exact proof machine |

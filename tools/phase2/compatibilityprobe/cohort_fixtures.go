@@ -102,42 +102,17 @@ func writeNormalizedCohorts(candidates []sources.Candidate, directory string) er
 	selected := map[string]provenCandidate{}
 	selectedParents := map[string]provenCandidate{}
 	canonicalizedRelationships := map[string]bool{}
-	pairVersion := ""
 	for _, version := range versions {
 		for _, option := range options[version] {
 			if option.lineageKind != "spawned" {
 				continue
 			}
 			if parent, exists := usableParent(allBySession[option.parentSession]); exists {
-				pairVersion = version
 				selected[version] = option
 				selectedParents[version] = parent
 				break
 			}
 		}
-		if pairVersion != "" {
-			break
-		}
-	}
-	if pairVersion == "" {
-		var child, parent provenCandidate
-		for _, version := range versions {
-			for _, option := range options[version] {
-				if child.sessionID == "" && option.lineageKind == "spawned" {
-					child = option
-					pairVersion = version
-				}
-				if parent.sessionID == "" && option.lineageKind == "root" {
-					parent = option
-				}
-			}
-		}
-		if child.sessionID == "" || parent.sessionID == "" {
-			return errors.New("no complete local sources are available for a parent-child cohort proof")
-		}
-		selected[pairVersion] = child
-		selectedParents[pairVersion] = parent
-		canonicalizedRelationships[pairVersion] = true
 	}
 	for _, version := range versions {
 		if _, exists := selected[version]; exists {
@@ -146,6 +121,31 @@ func writeNormalizedCohorts(candidates []sources.Candidate, directory string) er
 		for _, option := range options[version] {
 			if option.lineageKind == "root" {
 				selected[version] = option
+				break
+			}
+		}
+	}
+	var canonicalParent provenCandidate
+	for _, version := range versions {
+		for _, option := range options[version] {
+			if option.lineageKind == "root" {
+				canonicalParent = option
+				break
+			}
+		}
+		if canonicalParent.sessionID != "" {
+			break
+		}
+	}
+	for _, version := range versions {
+		if _, exists := selected[version]; exists {
+			continue
+		}
+		for _, option := range options[version] {
+			if option.lineageKind == "spawned" && canonicalParent.sessionID != "" {
+				selected[version] = option
+				selectedParents[version] = canonicalParent
+				canonicalizedRelationships[version] = true
 				break
 			}
 		}
@@ -258,8 +258,8 @@ func candidateIdentity(candidate sources.Candidate) (sessionID, version string) 
 	if json.Unmarshal(bytes.TrimSpace(line), &record) != nil || record.Type != "session_meta" {
 		return "", ""
 	}
-	if record.Payload.SessionID == "" {
-		record.Payload.SessionID = record.Payload.ID
+	if record.Payload.ID != "" {
+		return record.Payload.ID, record.Payload.CLIVersion
 	}
 	return record.Payload.SessionID, record.Payload.CLIVersion
 }

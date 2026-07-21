@@ -56,6 +56,22 @@ func TestSourceDecisions(t *testing.T) {
 	}
 }
 
+func TestSourceDecisionUsesActualThreadIdentityAndFamilyRoot(t *testing.T) {
+	data, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := strings.Replace(string(data), `"id":"root-001","session_id":"root-001"`, `"id":"child-001","session_id":"root-001"`, 1)
+	candidate = strings.Replace(candidate, `"source":"cli"`, `"source":{"subagent":{"thread_spawn":{"parent_thread_id":"root-001","depth":1}}}`, 1)
+	decision, err := ParseRollout(strings.NewReader(candidate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !decision.Supported || decision.SessionID != "child-001" || decision.RootSessionID != "root-001" || decision.ParentSessionID != "root-001" || !decision.Spawned {
+		t.Fatalf("modern thread identity was not preserved: %+v", decision)
+	}
+}
+
 func TestHistoricalCodexVersionsReachStructuralValidation(t *testing.T) {
 	data, err := os.ReadFile(repoPath("fixtures", "synthetic", "root.jsonl"))
 	if err != nil {

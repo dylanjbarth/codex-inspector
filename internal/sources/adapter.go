@@ -23,7 +23,7 @@ import (
 
 const (
 	SupportedCodexVersion = "0.144.1"
-	AdapterVersion        = "rollout-jsonl/codex-structural/v5"
+	AdapterVersion        = "rollout-jsonl/codex-structural/v6"
 )
 
 type wireRecord struct {
@@ -139,13 +139,18 @@ func ParseContextWithProofs(ctx context.Context, candidate Candidate, labels map
 		b.Source.StateReason = "invalid_session_meta"
 		return b, nil
 	}
-	if meta.SessionID == "" {
-		meta.SessionID = meta.ID
+	threadID := meta.ID
+	if threadID == "" {
+		threadID = meta.SessionID
 	}
-	b.Source.SessionID, b.Source.DetectedVersion = meta.SessionID, meta.CLIVersion
-	identityFingerprint := hash(append(append([]byte(meta.SessionID), ':'), records[0].Raw...))
+	logicalRootID := meta.SessionID
+	if logicalRootID == "" {
+		logicalRootID = threadID
+	}
+	b.Source.SessionID, b.Source.DetectedVersion = threadID, meta.CLIVersion
+	identityFingerprint := hash(append(append([]byte(threadID), ':'), records[0].Raw...))
 	b.Source.SegmentFingerprint = identityFingerprint
-	b.Source.ID = "source:" + hash([]byte(meta.SessionID+":"+identityFingerprint))
+	b.Source.ID = "source:" + hash([]byte(threadID+":"+identityFingerprint))
 	b.Source.SegmentID = "segment:" + identityFingerprint
 	if !decision.Supported {
 		b.Source.StateReason = decision.Reason
@@ -168,28 +173,34 @@ func ParseContextWithProofs(ctx context.Context, candidate Candidate, labels map
 	if meta.Git.Worktree != "" {
 		b.Project.Aliases["worktree"] = meta.Git.Worktree
 	}
-	root, purpose, coverage := meta.SessionID, "user", "exact"
+	root, purpose, coverage := threadID, "user", "exact"
 	lineageKind := ""
+	parentThreadID := meta.ParentThreadID
+	if parentThreadID == "" {
+		parentThreadID = sourceThreadSpawnParent(meta.Source)
+	}
 	if strings.Contains(strings.ToLower(meta.Originator), "codex-inspector") {
 		purpose = "inspector_review"
 	}
-	// A resumed segment can identify its own logical session as its parent even
-	// when its source is encoded as a subagent (for example, a guardian). That
-	// is segment continuity, not spawned work. Keep both ownership and purpose
-	// rooted in the logical session, just as we already avoid emitting a
-	// self-lineage edge below.
-	if meta.ParentThreadID != "" && meta.ParentThreadID != meta.SessionID {
+	// Older resumed segments can repeat their actual thread ID as their parent,
+	// even when encoded as a subagent (for example, a guardian). That is segment
+	// continuity, not spawned work. Compare against threadID rather than the
+	// family-level session_id used by modern spawned threads.
+	if parentThreadID != "" && parentThreadID != threadID {
 		if sourceIsSubagent(meta.Source) {
-			root, purpose, lineageKind = meta.ParentThreadID, "spawned", "spawned"
+			root, purpose, lineageKind = logicalRootID, "spawned", "spawned"
+			if logicalRootID == threadID {
+				root = parentThreadID
+			}
 		} else {
-			root, lineageKind = meta.SessionID, "forked_from"
+			root, lineageKind = threadID, "forked_from"
 		}
 	}
-	if meta.ContinuationThreadID != "" && meta.ParentThreadID == "" && meta.ContinuationThreadID != meta.SessionID {
+	if meta.ContinuationThreadID != "" && parentThreadID == "" && meta.ContinuationThreadID != threadID {
 		root, lineageKind = meta.ContinuationThreadID, "continued_as"
 	}
-	sessionID := "session:" + hash([]byte(meta.SessionID))
-	b.Session = &facts.Session{ID: sessionID, SourceSessionID: meta.SessionID, ProjectID: projectID, RootWorkUnitID: root, Purpose: purpose, Originator: meta.Originator, Source: string(meta.Source), Title: labels[meta.SessionID], StartedAt: records[0].Record.Timestamp, LineageCoverage: coverage}
+	sessionID := "session:" + hash([]byte(threadID))
+	b.Session = &facts.Session{ID: sessionID, SourceSessionID: threadID, ProjectID: projectID, RootWorkUnitID: root, Purpose: purpose, Originator: meta.Originator, Source: string(meta.Source), Title: labels[threadID], StartedAt: records[0].Record.Timestamp, LineageCoverage: coverage}
 	segmentOrderKey, err := phase0.SourceOrderKey(records[0].Record.Timestamp, identityFingerprint)
 	if err != nil {
 		b.Source.StateReason = "invalid_session_meta_timestamp"
@@ -197,18 +208,18 @@ func ParseContextWithProofs(ctx context.Context, candidate Candidate, labels map
 	}
 	b.Segment = &facts.Segment{ID: b.Source.SegmentID, SessionID: sessionID, SourceID: b.Source.ID, Fingerprint: identityFingerprint, StartedAt: records[0].Record.Timestamp, SourceOrderKey: segmentOrderKey, Ordinal: 0}
 	if lineageKind != "" {
-		parentID := meta.ParentThreadID
+		parentID := parentThreadID
 		if parentID == "" {
 			parentID = meta.ContinuationThreadID
 		}
-		// Some resumed rollout segments repeat their own logical session ID in
+		// Some resumed rollout segments repeat their own thread ID in
 		// parent_thread_id. That is segment continuity, not a self-lineage edge.
-		if parentID != meta.SessionID {
+		if parentID != threadID {
 			b.Lineage = append(b.Lineage, facts.Lineage{ParentSessionID: "session:" + hash([]byte(parentID)), ChildSessionID: sessionID, Kind: lineageKind})
 			b.Coverage = append(b.Coverage, facts.Coverage{ScopeKind: "session", ScopeID: sessionID, FieldKey: "lineage_reference", Fidelity: "exact", Observed: 1, Eligible: 1, Reason: lineageKind + ":" + parentID})
 		}
 	}
-	b = normalize(b, records, proofs[meta.SessionID])
+	b = normalize(b, records, proofs[threadID])
 	if len(b.Turns) == 0 {
 		b.Project, b.Session, b.Segment = nil, nil, nil
 		b.Lineage, b.Events, b.Messages, b.Tools = nil, nil, nil, nil
@@ -609,6 +620,19 @@ func validSource(raw json.RawMessage) bool {
 func sourceIsSubagent(raw json.RawMessage) bool {
 	var m map[string]json.RawMessage
 	return json.Unmarshal(raw, &m) == nil && m["subagent"] != nil
+}
+func sourceThreadSpawnParent(raw json.RawMessage) string {
+	var source struct {
+		Subagent struct {
+			ThreadSpawn struct {
+				ParentThreadID string `json:"parent_thread_id"`
+			} `json:"thread_spawn"`
+		} `json:"subagent"`
+	}
+	if json.Unmarshal(raw, &source) != nil {
+		return ""
+	}
+	return source.Subagent.ThreadSpawn.ParentThreadID
 }
 func projectIdentity(remote, cwd string) (string, string) {
 	if remote != "" {

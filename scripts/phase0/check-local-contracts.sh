@@ -24,4 +24,4 @@ printf 'codex=%s\n' "${codex_version}"
 printf 'go=%s\n' "${go_version}"
 printf 'os=macOS-%s architecture=%s\n' "${os_version}" "${machine_arch}"
 printf 'active_rollout_count=%s archived_directory=%s session_index=%s\n' "${active_count}" "${archive_state}" "${session_index_state}"
-printf 'supported_adapter=rollout-jsonl/codex-structural/v5\n'
+printf 'supported_adapter=rollout-jsonl/codex-structural/v6\n'
