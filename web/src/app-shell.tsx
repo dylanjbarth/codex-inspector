@@ -1,11 +1,11 @@
 import * as React from 'react'
-import { BarChart3, BookOpenText, ChevronRight, Menu, PanelLeftClose, PanelLeftOpen, RefreshCw } from 'lucide-react'
+import { BarChart3, BookOpenText, ChevronRight, Menu, RefreshCw } from 'lucide-react'
 import type { Status } from './api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { handleInternalLinkClick } from './navigation'
 
 type Props = { status: Status; children: React.ReactNode }
@@ -57,7 +57,6 @@ export function AppShell({ status, children }: Props) {
       <div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" />{!collapsed && <span><strong>Codex Inspector</strong></span>}</div>
       <Nav compact={collapsed} />
       {!collapsed && <RuntimeSummary status={status} />}
-      <Tooltip><TooltipTrigger asChild><Button className="shell-collapse" variant="ghost" size="icon" onClick={() => setCollapsed(value => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</Button></TooltipTrigger><TooltipContent>{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</TooltipContent></Tooltip>
     </aside>
     <div className="shell-content">
       <header className="shell-mobile-header"><Sheet><SheetTrigger asChild><Button variant="outline" size="icon" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent side="left" className="shell-mobile-sheet"><div className="shell-brand"><img className="brand-mark" src="/assets/codex-inspector-logo.png" alt="" /><span><strong>Codex Inspector</strong><small>Local observability</small></span></div><Nav /><RuntimeSummary status={status} /></SheetContent></Sheet><Badge variant="outline">{status.index.state}</Badge></header>
