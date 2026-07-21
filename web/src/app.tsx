@@ -65,10 +65,12 @@ export function App(){
   const [options,setOptions]=React.useState<FilterOptions>({projects:[],models:[],reasoningEfforts:[],contributionKinds:fallbackKinds})
   const [range,setRange]=React.useState('30'),[project,setProject]=React.useState(''),[model,setModel]=React.useState(''),[reasoning,setReasoning]=React.useState(''),[kind,setKind]=React.useState('')
   const [applied,setApplied]=React.useState<number|null>(null),[available,setAvailable]=React.useState<number|null>(null),[metricsLoading,setMetricsLoading]=React.useState(false),[sessionsLoading,setSessionsLoading]=React.useState(false),[now,setNow]=React.useState(Date.now()),[coverageOpen,setCoverageOpen]=React.useState(false),[copied,setCopied]=React.useState(false)
+  const [,setNavigationRevision]=React.useState(0)
   const appliedRef=React.useRef<number|null>(null)
   const datasetEpochRef=React.useRef<string|null>(null)
   const metricsRequestRef=React.useRef(0)
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'
+  React.useEffect(()=>{const update=()=>setNavigationRevision(value=>value+1);addEventListener('popstate',update);return()=>removeEventListener('popstate',update)},[])
   const buildQuery=React.useCallback((revision?:number)=>{const q:DashboardQuery={metricKeys:keys,timezone,grain:range==='all'?'month':Number(range)<=2?'hour':'day',projectIds:project?[project]:undefined,models:model?[model]:undefined,reasoningEfforts:reasoning?[reasoning]:undefined,contributionKinds:kind?[kind]:undefined,requestedRevision:revision};if(range!=='all'){const end=new Date(),start=new Date(end.getTime()-Number(range)*86400000);q.start=start.toISOString();q.end=end.toISOString()}return q},[range,project,model,reasoning,kind,timezone])
   const loadMetrics=React.useCallback(async(revision?:number)=>{const request=++metricsRequestRef.current;setMetricsLoading(true);try{const result=await queryMetrics(buildQuery(revision));if(request===metricsRequestRef.current){setData(result);datasetEpochRef.current=result.datasetEpoch;appliedRef.current=result.appliedRevision;setApplied(result.appliedRevision)}return result}finally{if(request===metricsRequestRef.current)setMetricsLoading(false)}},[buildQuery])
   const refreshStatus=React.useCallback(async()=>{const fresh=await fetchStatus();setStatus(fresh);return fresh},[])
