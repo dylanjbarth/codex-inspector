@@ -168,7 +168,7 @@ verify the local CLI.
 In a terminal, run:
 
 ```sh
-codex plugin marketplace add "dylanjbarth/codex-inspector@v0.1.1"
+codex plugin marketplace add "dylanjbarth/codex-inspector@v0.1.2"
 codex plugin add codex-inspector@codex-inspector-development
 ```
 
@@ -202,7 +202,7 @@ continues through older supported history in the background.
 <summary>Prefer to install the CLI yourself?</summary>
 
 Download the binary and checksum from the supported
-[`v0.1.1` release](https://github.com/dylanjbarth/codex-inspector/releases/tag/v0.1.1),
+[`v0.1.2` release](https://github.com/dylanjbarth/codex-inspector/releases/tag/v0.1.2),
 verify the checksum, and place `codex-inspector` in a user-writable directory on
 your `PATH`. The repository also contains an auditable
 [`install.sh`](install.sh) that performs those steps without `sudo` or shell
@@ -291,3 +291,7 @@ pnpm build
 The [demo runbook](docs/demo-runbook.md) covers the complete release flow. The
 [MVP architecture](docs/architecture/mvp-architecture.md) is the implementation
 reference.
+
+## License
+
+Codex Inspector is open source under the [MIT License](LICENSE).

@@ -34,11 +34,11 @@ while [ "$#" -gt 0 ]; do
 done
 [ -z "${TEST_CURL_MARKER:-}" ] || : >"${TEST_CURL_MARKER}"
 case "${url}" in
-  https://github.com/dylanjbarth/codex-inspector/releases/download/v0.1.1/codex-inspector-darwin-arm64)
+  https://github.com/dylanjbarth/codex-inspector/releases/download/v0.1.2/codex-inspector-darwin-arm64)
     printf '#!/bin/sh\nprintf "installed fixture\\n"\n' >"${output}"
     [ "${TEST_CURL_FAIL:-0}" != 1 ] || exit 22
     ;;
-  https://github.com/dylanjbarth/codex-inspector/releases/download/v0.1.1/codex-inspector-darwin-arm64.sha256)
+  https://github.com/dylanjbarth/codex-inspector/releases/download/v0.1.2/codex-inspector-darwin-arm64.sha256)
     if [ "${TEST_BAD_CHECKSUM:-0}" = 1 ]; then
       printf '%064d  codex-inspector-darwin-arm64\n' 0 >"${output}"
     else
@@ -75,7 +75,7 @@ installed="${success_destination}/codex-inspector"
 [ -x "${installed}" ]
 [ "$(stat -f '%Lp' "${installed}")" = 755 ]
 "${installed}" | grep -q '^installed fixture$'
-grep -q 'codex plugin marketplace add.*v0.1.1' "${success_root}/stdout"
+grep -q 'codex plugin marketplace add.*v0.1.2' "${success_root}/stdout"
 grep -q 'codex-inspector doctor' "${success_root}/stdout"
 grep -q '^profile must remain unchanged$' "${success_root}/home/.zshrc"
 [ ! -e "${success_root}/home/.codex" ]

@@ -72,7 +72,7 @@ port=$(jq -r .port "${inspector_home}/run/server.json")
 origin="http://127.0.0.1:${port}"
 curl --fail --silent --show-error "${origin}/" | grep -q 'Codex Inspector'
 curl --fail --silent --show-error "${origin}/v1/status" > "${proof_root}/dashboard-status.json"
-if ! jq -e '.process.state == "degraded" and .process.cliCompatibility == "unknown" and .index.state == "empty" and .hook.state == "idle" and (.hook.diagnostics | length) == 0' "${proof_root}/dashboard-status.json" >/dev/null; then
+if ! jq -e '.index.state as $index_state | .process.state == "degraded" and .process.cliCompatibility == "unknown" and (["building", "catching_up", "current"] | index($index_state)) != null and .hook.state == "healthy" and (.hook.diagnostics | length) == 0' "${proof_root}/dashboard-status.json" >/dev/null; then
   jq '{process: .process, index: {state: .index.state}, hook: {state: .hook.state, diagnostics: .hook.diagnostics}}' "${proof_root}/dashboard-status.json" >&2
   exit 1
 fi

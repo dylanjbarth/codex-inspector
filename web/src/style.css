@@ -329,6 +329,8 @@ h1,h2,h3,h4,.discovery-results h3,.discovery-result h3,.finding-title h3{font-fa
 .accepted-report>article>p{color:#35404f}
 .accepted-report .citations a{color:#3f49b5;font-weight:600}
 .accepted-report .citations span{border-color:#81b99f;background:#edf8f2;color:#176344;font-weight:650}
+.accepted-report .action-prompt pre{color:#e8eaf0}
+.accepted-report .action-prompt small{color:#aeb4c0}
 @media(prefers-reduced-motion:reduce){.ledger article{scroll-behavior:auto}.ledger-loading-more svg{animation:none}}
 
 /* Keep every primary route on one stable canvas, independent of sidebar state. */

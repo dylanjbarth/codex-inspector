@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-release_version="v0.1.1"
+release_version="v0.1.2"
 repository="dylanjbarth/codex-inspector"
 artifact="codex-inspector-darwin-arm64"
 install_dir="${CODEX_INSPECTOR_INSTALL_DIR:-${HOME}/.local/bin}"
@@ -89,7 +89,7 @@ printf '\nInstalled Codex Inspector %s to:\n  %s/codex-inspector\n' \
 cat <<'NEXT_STEPS'
 
 Next, install the matching Codex plugin (the CLI installer does not install hooks):
-  codex plugin marketplace add "dylanjbarth/codex-inspector@v0.1.1"
+  codex plugin marketplace add "dylanjbarth/codex-inspector@v0.1.2"
   codex plugin add codex-inspector@codex-inspector-development
 
 Start Codex and review and trust the seven Inspector hooks, then run:

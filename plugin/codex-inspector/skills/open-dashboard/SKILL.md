@@ -10,7 +10,7 @@ confirmation before downloading or installing anything. Confirm the machine is
 macOS arm64. Use the auditable installer from
 `https://raw.githubusercontent.com/dylanjbarth/codex-inspector/main/install.sh`
 or download `codex-inspector-darwin-arm64` and its `.sha256` file directly from
-the official `v0.1.1` GitHub Release. Never skip checksum verification.
+the official `v0.1.2` GitHub Release. Never skip checksum verification.
 
 Install only the verified CLI into a user-writable directory already on
 `PATH`, preferably `~/.local/bin` when it is already on `PATH`. Do not use

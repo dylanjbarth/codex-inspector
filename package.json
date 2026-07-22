@@ -1,6 +1,7 @@
 {
   "name": "codex-inspector-workspace",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "build": "pnpm --filter @codex-inspector/web build",
